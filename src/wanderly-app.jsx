@@ -182,6 +182,12 @@ export default function WanderlyApp() {
   const [bookingStates, setBookingStates] = useState({});
   const chatRef = useRef(null);
   const [chatInput, setChatInput] = useState("");
+  const [pollData, setPollData] = useState(POLLS);
+  const [settingsToggles, setSettingsToggles] = useState(() => {
+    const s = {}; Object.keys(CONNECTORS).slice(0, 8).forEach(k => s[k] = true);
+    ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
+    return s;
+  });
 
   const navigate = useCallback((s) => setScreen(s), []);
 
@@ -322,7 +328,7 @@ export default function WanderlyApp() {
               <h4 style={{ fontSize: 14, fontWeight: 500 }}>{s.name}</h4>
               <p style={{ fontSize: 12, color: T.t2 }}>{s.dates} ({s.nights} nights)</p>
             </div>
-            <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }}>Edit</button>
+            <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => alert(`Edit ${s.name} — change dates, rooms, and amenities.`)}>Edit</button>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <Tag bg={T.purpleL} color={T.purple}>{s.type}</Tag>
@@ -330,7 +336,7 @@ export default function WanderlyApp() {
           </div>
         </div>
       ))}
-      <button style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, border: `1.5px dashed ${T.border}`, borderRadius: T.r, color: T.t3, fontSize: 13, cursor: "pointer", background: "none", width: "100%", fontFamily: T.font }}>+ Add another stay</button>
+      <button onClick={() => alert("Add a new accommodation — search hotels, cottages, or Airbnbs.")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, border: `1.5px dashed ${T.border}`, borderRadius: T.r, color: T.t3, fontSize: 13, cursor: "pointer", background: "none", width: "100%", fontFamily: T.font }}>+ Add another stay</button>
     </>
   );
 
@@ -392,7 +398,7 @@ export default function WanderlyApp() {
               ))}
               <div style={{ position: "absolute", left: 170, top: 90, ...css.avatar(T.amber, 20), fontSize: 10, border: "2px solid #fff" }}>⚡</div>
             </div>
-            <div style={{ position: "absolute", bottom: 8, right: 8, ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.9)", fontSize: 10, padding: "4px 8px" }}>
+            <div onClick={() => window.open(`https://www.google.com/maps/search/${day.location}+Lake+District`, "_blank")} style={{ position: "absolute", bottom: 8, right: 8, ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.9)", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>
               Open map ↗
             </div>
           </div>
@@ -483,11 +489,11 @@ export default function WanderlyApp() {
             {item.rating && <p style={{ fontSize: 12, color: T.amber, marginTop: 4 }}>{"★".repeat(Math.floor(item.rating))} {item.rating}</p>}
             {item.price && <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>Price: {item.price}</p>}
             <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-              <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }}>Navigate</button>
-              <button style={{ ...css.btn, ...css.btnSm }}>Call</button>
-              <button style={{ ...css.btn, ...css.btnSm }}>Reviews</button>
-              <button style={{ ...css.btn, ...css.btnSm }}>Menu</button>
-              <button style={{ ...css.btn, ...css.btnSm, color: T.red }}>Remove</button>
+              <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(item.title)}+Lake+District`, "_blank")}>Navigate</button>
+              <button style={{ ...css.btn, ...css.btnSm }} onClick={() => alert(`Calling ${item.title}...`)}>Call</button>
+              <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+reviews`, "_blank")}>Reviews</button>
+              <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+menu`, "_blank")}>Menu</button>
+              <button style={{ ...css.btn, ...css.btnSm, color: T.red }} onClick={() => alert(`${item.title} removed from itinerary.`)}>Remove</button>
             </div>
           </div>
         )}
@@ -569,10 +575,10 @@ export default function WanderlyApp() {
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Group polls</h2>
-        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }}>+ New</button>
+        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => alert("Create a new poll for your travel group!")}>+ New</button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        {POLLS.map(poll => (
+        {pollData.map(poll => (
           <div key={poll.id} style={{ ...css.card, opacity: poll.status === "closed" ? 0.6 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <Tag bg={poll.status === "active" ? T.al : T.s2} color={poll.status === "active" ? T.ad : T.t3}>
@@ -582,7 +588,10 @@ export default function WanderlyApp() {
             </div>
             <p style={{ fontSize: 14, fontWeight: 500, marginBottom: 10 }}>{poll.q}</p>
             {poll.options.map((opt, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: `.5px solid ${opt.voted ? T.a : T.border}`, borderRadius: T.rs, marginBottom: 6, cursor: "pointer", position: "relative", overflow: "hidden", background: opt.voted ? T.al : T.s }}>
+              <div key={i} onClick={() => {
+                if (poll.status === "closed") return;
+                setPollData(prev => prev.map(p => p.id === poll.id ? { ...p, options: p.options.map((o, j) => j === i ? { ...o, voted: !o.voted, pct: Math.min(100, o.pct + (o.voted ? -10 : 10)), voters: o.voted ? o.voters.filter(v => v !== "You") : [...(o.voters||[]), "You"] } : o) } : p));
+              }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: `.5px solid ${opt.voted ? T.a : T.border}`, borderRadius: T.rs, marginBottom: 6, cursor: poll.status === "closed" ? "default" : "pointer", position: "relative", overflow: "hidden", background: opt.voted ? T.al : T.s }}>
                 <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${opt.pct}%`, background: T.al, borderRadius: T.rs, zIndex: 0 }} />
                 <span style={{ position: "relative", zIndex: 1, fontSize: 13, flex: 1 }}>{opt.text}</span>
                 <div style={{ display: "flex", position: "relative", zIndex: 1 }}>
@@ -600,6 +609,7 @@ export default function WanderlyApp() {
           </div>
         ))}
       </div>
+      <TabBar active="trip" onNav={navigate} />
     </div>
   );
 
@@ -609,7 +619,7 @@ export default function WanderlyApp() {
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Memories</h2>
-        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }}>Upload</button>
+        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => alert("Photo upload — select photos from your camera roll to add to trip memories.")}>Upload</button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {/* AI Video */}
@@ -691,7 +701,7 @@ export default function WanderlyApp() {
         <p style={{ fontSize: 14, color: T.t2, marginBottom: 14 }}>Invite friends via link. They'll see timeline, chat, polls, and memories.</p>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: T.s2, borderRadius: T.rs, fontSize: 13, color: T.t2, marginBottom: 16 }}>
           <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>wanderly.app/trip/easter-ld-2026</code>
-          <button style={{ ...css.btn, ...css.btnSm }}>Copy</button>
+          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { navigator.clipboard?.writeText("https://wanderly.app/trip/easter-ld-2026"); alert("Link copied!"); }}>Copy</button>
         </div>
         {[["You", T.a, "Lead traveller", "Admin"], ["James M. + Ella (8)", T.coral, "Joined 2 days ago"], ["Sarah P. + Max (12)", T.blue, "Joined yesterday"], ["Raj K.", T.amber, "Joined yesterday"]].map(([name, color, sub, badge], i) => (
           <div key={i} style={{ ...css.card, display: "flex", alignItems: "center", gap: 12 }}>
@@ -704,6 +714,7 @@ export default function WanderlyApp() {
           </div>
         ))}
       </div>
+      <TabBar active="trip" onNav={navigate} />
     </div>
   );
 
@@ -730,7 +741,7 @@ export default function WanderlyApp() {
           { title: "Rydal Road Charger", sub: "50kW · 2 available · 3 min", tags: [["EV charging", T.al, T.ad]], icon: "⚡", bg: T.al },
           { title: "Stock Ghyll Force", sub: "4.9★ · 5 min walk", tags: [["Waterfall", T.blueL, T.blue], ["Light hike", T.blueL, T.blue]], icon: "⛰️", bg: T.blueL },
         ].map((p, i) => (
-          <div key={i} style={{ ...css.card, display: "flex", gap: 12, cursor: "pointer" }}>
+          <div key={i} onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(p.title)}+Lake+District`, "_blank")} style={{ ...css.card, display: "flex", gap: 12, cursor: "pointer" }}>
             <div style={{ width: 52, height: 52, borderRadius: T.rs, background: p.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{p.icon}</div>
             <div>
               <h4 style={{ fontSize: 14, fontWeight: 500 }}>{p.title}</h4>
@@ -769,17 +780,17 @@ export default function WanderlyApp() {
                 <p style={{ fontSize: 11, color: T.t3 }}>{c.apis.length} endpoints</p>
               </div>
             </div>
-            <div style={{ width: 40, height: 22, borderRadius: 11, background: T.a, position: "relative", cursor: "pointer" }}>
-              <div style={{ position: "absolute", top: 2, left: 20, width: 16, height: 16, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.1)" }} />
+            <div onClick={() => setSettingsToggles(prev => ({ ...prev, [k]: !prev[k] }))} style={{ width: 40, height: 22, borderRadius: 11, background: settingsToggles[k] ? T.a : T.s3, position: "relative", cursor: "pointer", transition: "background .2s" }}>
+              <div style={{ position: "absolute", top: 2, left: settingsToggles[k] ? 20 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.1)", transition: "left .2s" }} />
             </div>
           </div>
         ))}
         <div style={css.sectionTitle}>Notifications</div>
-        {["Booking confirmations", "EV charger alerts", "Traffic & closures", "Daily video generation", "Poll reminders", "Checkout reminders"].map(n => (
-          <div key={n} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `.5px solid ${T.border}` }}>
+        {[["Booking confirmations","n_booking"], ["EV charger alerts","n_ev"], ["Traffic & closures","n_traffic"], ["Daily video generation","n_video"], ["Poll reminders","n_poll"], ["Checkout reminders","n_checkout"]].map(([n, nk]) => (
+          <div key={nk} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `.5px solid ${T.border}` }}>
             <span style={{ fontSize: 14 }}>{n}</span>
-            <div style={{ width: 40, height: 22, borderRadius: 11, background: T.a, position: "relative", cursor: "pointer" }}>
-              <div style={{ position: "absolute", top: 2, left: 20, width: 16, height: 16, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.1)" }} />
+            <div onClick={() => setSettingsToggles(prev => ({ ...prev, [nk]: !prev[nk] }))} style={{ width: 40, height: 22, borderRadius: 11, background: settingsToggles[nk] ? T.a : T.s3, position: "relative", cursor: "pointer", transition: "background .2s" }}>
+              <div style={{ position: "absolute", top: 2, left: settingsToggles[nk] ? 20 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.1)", transition: "left .2s" }} />
             </div>
           </div>
         ))}
