@@ -1119,8 +1119,8 @@ export default function WanderlyApp() {
   const renderChatScreen = () => {
     const aiResponsePatterns = [
       { keywords: ["ev", "charger", "charge", "charging", "electric", "plug"], response: "3 chargers near Ambleside:\n\n1. **Rydal Road** — 50kW CCS, 3 min walk, 2 available\n2. **Tesla Supercharger** — 8 stalls, 8 min drive\n3. **Pod Point, Co-op** — 7kW, 2 min walk\n\nShall I add a charging stop to your itinerary?" },
-      { keywords: ["restaurant", "food", "eat", "dinner", "lunch", "breakfast", "cafe", "dining", "hungry"], response: "For your group near Ambleside:\n\n**The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n**Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n**The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.\n\nWant me to add any of these to your itinerary?" },
-      { keywords: ["kid", "child", "children", "activity", "activities", "play", "fun", "game"], response: "**Max (12):**\n- Brockhole Adventure Park — nets, zip wire\n- Climbing Wall — indoor, ages 6+\n\n**Ella (8):**\n- Brockhole soft play — free\n- Trotters Animal Farm — pony rides\n\n**Both:** Easter egg trail at Wray Castle, 4 PM today.\n\nShall I add any to the timeline?" },
+      { keywords: ["restaurant", "food", "eating", "dinner", "lunch", "breakfast", "cafe", "dining", "hungry", "meal"], response: "For your group near Ambleside:\n\n**The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n**Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n**The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.\n\nWant me to add any of these to your itinerary?" },
+      { keywords: ["kid", "kids", "child", "children", "activities", "play", "playground", "fun", "game", "toddler", "family"], response: "**Max (12):**\n- Brockhole Adventure Park — nets, zip wire\n- Climbing Wall — indoor, ages 6+\n\n**Ella (8):**\n- Brockhole soft play — free\n- Trotters Animal Farm — pony rides\n\n**Both:** Easter egg trail at Wray Castle, 4 PM today.\n\nShall I add any to the timeline?" },
       { keywords: ["poll", "vote", "survey", "decide", "choose", "pick", "opinion"], response: "I'll set up a poll! Some options:\n\n1. **Tomorrow's activity** — Hike vs boat vs rest day\n2. **Dinner choice** — Pick from 3 restaurants\n3. **Custom question** — Write your own\n\nWhich one would you like to create?" },
       { keywords: ["weather", "rain", "sun", "forecast", "temperature", "cold", "warm", "wind"], response: "**Ambleside forecast:**\n\n🌤 Today: 12°C, cloudy, wind 8 mph. Dry until 4 PM, light rain 5-7 PM.\n☀️ Tomorrow: 14°C, partly sunny, perfect for outdoor activities.\n🌧 Day after: 10°C, rain expected from noon.\n\nOutdoor morning is best today. Easter trail at 4 PM should still be dry. Spa or climbing wall as rain backup." },
       { keywords: ["swim", "swimming", "pool", "water park", "lido", "lake swim"], response: "Swimming options near Ambleside:\n\n1. **Lake Windermere** — Wild swimming at Millerground (free, scenic). Water temp ~12°C.\n2. **Ambleside Swimming Pool** — Indoor heated, £6/adult, £3.50/child. Open 7am-9pm.\n3. **Brockhole Aqua Park** — Inflatable course on the lake! £15/person, ages 6+. Book ahead.\n4. **Low Wood Bay Spa** — Infinity pool + lake access. Day pass £45.\n\nShall I add any of these to your itinerary?" },
@@ -1142,11 +1142,18 @@ export default function WanderlyApp() {
       // First check exact matches (for quick-tap buttons)
       const exactMap = { "EV chargers": 0, "Restaurants": 1, "Kids activities": 2, "Create poll": 3, "Weather": 4 };
       if (exactMap[msg] !== undefined) return aiResponsePatterns[exactMap[msg]].response;
-      // Then do keyword matching — score each pattern
+      // Then do keyword matching with word boundaries — score each pattern
+      const words = lower.split(/\s+/);
       let bestMatch = null;
       let bestScore = 0;
       for (const pattern of aiResponsePatterns) {
-        const score = pattern.keywords.filter(kw => lower.includes(kw)).length;
+        let score = 0;
+        for (const kw of pattern.keywords) {
+          // Multi-word keywords: use includes
+          if (kw.includes(" ")) { if (lower.includes(kw)) score += 2; }
+          // Single-word keywords: match whole words only (prevents "eat" matching inside "create")
+          else if (words.some(w => w === kw || w.startsWith(kw) || w.endsWith(kw + "s") || w === kw + "s" || w === kw + "ing" || w === kw + "er" || w === kw + "ed")) score += 1;
+        }
         if (score > bestScore) { bestScore = score; bestMatch = pattern; }
       }
       if (bestMatch && bestScore > 0) return bestMatch.response;
