@@ -281,8 +281,8 @@ export default function WanderlyApp() {
 
   const navigate = useCallback((s) => setScreen(s), []);
 
-  // ─── Screen: Home ───
-  const HomeScreen = () => (
+  // ─── Screen: Home (render function, not component) ───
+  const renderHomeScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "16px 20px 12px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -337,9 +337,9 @@ export default function WanderlyApp() {
     </div>
   );
 
-  // ─── Screen: Create (Step Wizard) ───
+  // ─── Screen: Create (render function) ───
   const wizSteps = ["Details", "Travellers", "Stays", "Preferences"];
-  const CreateScreen = () => (
+  const renderCreateScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("home")}>Cancel</button>
@@ -646,7 +646,7 @@ export default function WanderlyApp() {
   };
 
   // ─── Screen: Trip Dashboard ───
-  const TripScreen = () => {
+  const renderTripScreen = () => {
     const day = DAYS[selectedDay - 1];
     const items = TIMELINE[selectedDay] || [];
     return (
@@ -797,7 +797,7 @@ export default function WanderlyApp() {
   };
 
   // ─── Screen: Chat ───
-  const ChatScreen = () => {
+  const renderChatScreen = () => {
     const aiResponses = {
       "EV chargers": "3 chargers near Ambleside:\n\n1. **Rydal Road** — 50kW CCS, 3 min walk, 2 available\n2. **Tesla Supercharger** — 8 stalls, 8 min drive\n3. **Pod Point, Co-op** — 7kW, 2 min walk",
       "Restaurants": "For your group:\n\n**The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n**Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n**The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.",
@@ -866,7 +866,7 @@ export default function WanderlyApp() {
   };
 
   // ─── Screen: Polls ───
-  const VoteScreen = () => (
+  const renderVoteScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
@@ -910,7 +910,7 @@ export default function WanderlyApp() {
   );
 
   // ─── Screen: Memories ───
-  const MemoriesScreen = () => (
+  const renderMemoriesScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
@@ -986,7 +986,7 @@ export default function WanderlyApp() {
   );
 
   // ─── Screen: Share ───
-  const ShareScreen = () => (
+  const renderShareScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
@@ -1015,7 +1015,7 @@ export default function WanderlyApp() {
   );
 
   // ─── Screen: Explore ───
-  const ExploreScreen = () => (
+  const renderExploreScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
@@ -1052,7 +1052,7 @@ export default function WanderlyApp() {
   );
 
   // ─── Screen: Settings ───
-  const SettingsScreen = () => (
+  const renderSettingsScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
@@ -1099,15 +1099,15 @@ export default function WanderlyApp() {
     <div style={{ maxWidth: 430, margin: "0 auto", height: 900, background: T.bg, borderRadius: 22, border: `.5px solid ${T.border}`, overflow: "hidden", fontFamily: T.font, color: T.t1, boxShadow: "0 8px 40px rgba(0,0,0,0.08)" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
       <div style={{ height: "100%" }}>
-        {screen === "home" && <HomeScreen />}
-        {screen === "create" && <CreateScreen />}
-        {screen === "trip" && <TripScreen />}
-        {screen === "chat" && <ChatScreen />}
-        {screen === "vote" && <VoteScreen />}
-        {screen === "memories" && <MemoriesScreen />}
-        {screen === "share" && <ShareScreen />}
-        {screen === "explore" && <ExploreScreen />}
-        {screen === "settings" && <SettingsScreen />}
+        {screen === "home" && renderHomeScreen()}
+        {screen === "create" && renderCreateScreen()}
+        {screen === "trip" && renderTripScreen()}
+        {screen === "chat" && renderChatScreen()}
+        {screen === "vote" && renderVoteScreen()}
+        {screen === "memories" && renderMemoriesScreen()}
+        {screen === "share" && renderShareScreen()}
+        {screen === "explore" && renderExploreScreen()}
+        {screen === "settings" && renderSettingsScreen()}
       </div>
     </div>
   );
