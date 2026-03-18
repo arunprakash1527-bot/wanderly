@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { supabase } from './supabaseClient';
 
 // ─── Design Tokens ───
 const T = {
@@ -293,6 +294,17 @@ export default function WanderlyApp() {
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
+  // Auth state
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authScreen, setAuthScreen] = useState("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [joinShareCode, setJoinShareCode] = useState("");
+
   // ─── New Trip Wizard State ───
   const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
   const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
@@ -322,6 +334,260 @@ export default function WanderlyApp() {
     setYoungerActSearch("");
     setWizStep(0);
   }, []);
+
+  // Auth listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Check for share code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get('join');
+    if (joinCode) {
+      setScreen('joinPreview');
+      setJoinShareCode(joinCode);
+    }
+  }, []);
+
+  const signInWithGoogle = async () => {
+    setAuthError("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) setAuthError(error.message);
+  };
+
+  const signInWithEmail = async () => {
+    setAuthError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: authPassword,
+    });
+    if (error) setAuthError(error.message);
+  };
+
+  const signUpWithEmail = async () => {
+    setAuthError("");
+    const { error } = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+      options: { data: { full_name: authName || authEmail.split("@")[0] } }
+    });
+    if (error) setAuthError(error.message);
+    else setAuthError("Check your email for a confirmation link!");
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    navigate("home");
+  };
+
+  // Load trips from Supabase
+  const loadTripsFromDB = useCallback(async () => {
+    if (!user) return;
+    setSyncing(true);
+    try {
+      const { data: trips, error } = await supabase
+        .from('trips')
+        .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (trips && trips.length > 0) {
+        const mapped = trips.map(t => ({
+          id: t.id,
+          name: t.name,
+          brief: t.brief,
+          start: t.start_date,
+          end: t.end_date,
+          places: t.places || [],
+          travel: t.travel_modes || [],
+          status: t.status,
+          shareCode: t.share_code,
+          travellers: {
+            adults: (t.trip_travellers || []).filter(tr => tr.role === 'lead' || tr.role === 'adult').map(tr => ({
+              name: tr.name, email: tr.email || "", isLead: tr.role === 'lead', dbId: tr.id, isClaimed: tr.is_claimed
+            })),
+            olderKids: (t.trip_travellers || []).filter(tr => tr.role === 'child_older').map(tr => ({
+              name: tr.name, age: tr.age || 10, dbId: tr.id
+            })),
+            youngerKids: (t.trip_travellers || []).filter(tr => tr.role === 'child_younger').map(tr => ({
+              name: tr.name, age: tr.age || 5, dbId: tr.id
+            })),
+          },
+          stays: (t.trip_stays || []).map(s => ({
+            name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, dbId: s.id
+          })),
+          stayNames: (t.trip_stays || []).map(s => s.name),
+          prefs: t.trip_preferences && t.trip_preferences.length > 0 ? {
+            food: t.trip_preferences[0].food_prefs || [],
+            adultActs: t.trip_preferences[0].adult_activities || [],
+            olderActs: t.trip_preferences[0].older_kid_activities || [],
+            youngerActs: t.trip_preferences[0].younger_kid_activities || [],
+            instructions: t.trip_preferences[0].instructions || "",
+            activities: [...(t.trip_preferences[0].adult_activities || []), ...(t.trip_preferences[0].older_kid_activities || []), ...(t.trip_preferences[0].younger_kid_activities || [])],
+          } : { food: [], adultActs: [], olderActs: [], youngerActs: [], instructions: "", activities: [] },
+          createdAt: t.created_at,
+          dbId: t.id,
+          year: t.start_date ? new Date(t.start_date).getFullYear() : new Date().getFullYear(),
+          timeline: [],
+        }));
+        setCreatedTrips(mapped);
+      }
+    } catch (err) {
+      console.error('Error loading trips:', err);
+    }
+    setSyncing(false);
+  }, [user]);
+
+  // Save trip to Supabase
+  const saveTripToDB = async (tripData) => {
+    if (!user || user.id === 'demo') return tripData;
+
+    try {
+      const { data: trip, error: tripError } = await supabase
+        .from('trips')
+        .insert({
+          name: tripData.name,
+          brief: tripData.brief,
+          start_date: tripData.rawStart || null,
+          end_date: tripData.rawEnd || null,
+          places: tripData.places,
+          travel_modes: Array.from(tripData.travel || []),
+          status: 'draft',
+          lead_user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (tripError) throw tripError;
+
+      const travellerRows = [];
+      if (tripData.travellers?.adults) {
+        tripData.travellers.adults.forEach(a => {
+          travellerRows.push({
+            trip_id: trip.id,
+            user_id: a.isLead ? user.id : null,
+            name: a.name || 'Adult',
+            email: a.email || null,
+            role: a.isLead ? 'lead' : 'adult',
+            is_claimed: a.isLead,
+          });
+        });
+      }
+      if (tripData.travellers?.olderKids) {
+        tripData.travellers.olderKids.forEach(c => {
+          travellerRows.push({
+            trip_id: trip.id,
+            name: c.name || 'Child',
+            role: 'child_older',
+            age: c.age,
+          });
+        });
+      }
+      if (tripData.travellers?.youngerKids) {
+        tripData.travellers.youngerKids.forEach(c => {
+          travellerRows.push({
+            trip_id: trip.id,
+            name: c.name || 'Child',
+            role: 'child_younger',
+            age: c.age,
+          });
+        });
+      }
+      if (travellerRows.length > 0) {
+        await supabase.from('trip_travellers').insert(travellerRows);
+      }
+
+      if (tripData.stays && tripData.stays.length > 0) {
+        const stayRows = tripData.stays.map(s => ({
+          trip_id: trip.id,
+          name: s.name,
+          type: s.type,
+          tags: s.tags || [],
+          rating: s.rating,
+          price: s.price,
+          location: s.location,
+        }));
+        await supabase.from('trip_stays').insert(stayRows);
+      }
+
+      if (tripData.prefs) {
+        await supabase.from('trip_preferences').insert({
+          trip_id: trip.id,
+          food_prefs: Array.from(tripData.prefs.food || []),
+          adult_activities: Array.from(tripData.prefs.adultActs || tripData.prefs.activities || []),
+          older_kid_activities: Array.from(tripData.prefs.olderActs || []),
+          younger_kid_activities: Array.from(tripData.prefs.youngerActs || []),
+          instructions: tripData.prefs.instructions || "",
+        });
+      }
+
+      return { ...tripData, id: trip.id, shareCode: trip.share_code, dbId: trip.id };
+    } catch (err) {
+      console.error('Error saving trip:', err);
+      return tripData;
+    }
+  };
+
+  // Update trip status in Supabase
+  const updateTripStatusInDB = async (tripId, status) => {
+    if (!user || user.id === 'demo' || !tripId) return;
+    try {
+      await supabase.from('trips').update({ status, updated_at: new Date().toISOString() }).eq('id', tripId);
+    } catch (err) {
+      console.error('Error updating trip status:', err);
+    }
+  };
+
+  // Look up trip by share code
+  const lookupTripByShareCode = async (code) => {
+    try {
+      const { data, error } = await supabase
+        .from('trips')
+        .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
+        .eq('share_code', code.toUpperCase())
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error('Error looking up trip:', err);
+      return null;
+    }
+  };
+
+  // Join trip as traveller
+  const joinTripAsTraveller = async (tripId, travellerId, userName) => {
+    if (!user || user.id === 'demo') return false;
+    try {
+      await supabase.from('trip_travellers')
+        .update({ user_id: user.id, is_claimed: true, name: userName, joined_at: new Date().toISOString() })
+        .eq('id', travellerId);
+      return true;
+    } catch (err) {
+      console.error('Error joining trip:', err);
+      return false;
+    }
+  };
+
+  // Load trips when user logs in
+  useEffect(() => {
+    if (user && user.id !== 'demo') {
+      loadTripsFromDB();
+    }
+  }, [user, loadTripsFromDB]);
 
   const createTrip = () => {
     const name = wizTrip.name.trim() || "Untitled Trip";
@@ -357,6 +623,14 @@ export default function WanderlyApp() {
     } else {
       const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
       setCreatedTrips(prev => [newTrip, ...prev]);
+      // Save to Supabase
+      if (user && user.id !== 'demo') {
+        saveTripToDB(newTrip).then(savedTrip => {
+          if (savedTrip.dbId) {
+            setCreatedTrips(prev => prev.map(t => t.id === newTrip.id ? { ...t, dbId: savedTrip.dbId, shareCode: savedTrip.shareCode } : t));
+          }
+        });
+      }
       setEditingTripId(null);
       navigate("home");
     }
@@ -384,6 +658,7 @@ export default function WanderlyApp() {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== id) return { ...t, status: t.status === "live" ? "new" : t.status };
       const timeline = generateTimeline(t);
+      updateTripStatusInDB(t.dbId || t.id, 'live');
       return { ...t, status: "live", timeline };
     }));
   };
@@ -1497,6 +1772,27 @@ export default function WanderlyApp() {
         <div />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        {/* User Profile */}
+        {user && (
+          <div style={{ ...css.card, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: T.a, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 600, fontSize: 16 }}>
+                {(user.user_metadata?.full_name || user.email || "U")[0].toUpperCase()}
+              </div>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500 }}>{user.user_metadata?.full_name || user.email?.split("@")[0] || "Guest"}</p>
+                <p style={{ fontSize: 12, color: T.t2 }}>{user.email || "Demo mode"}</p>
+              </div>
+            </div>
+            {user.id !== 'demo' && (
+              <div style={{ display: "flex", gap: 6 }}>
+                <Tag bg={T.al} color={T.ad}>Synced to cloud</Tag>
+                {syncing && <Tag bg={T.amberL} color={T.amber}>Syncing...</Tag>}
+              </div>
+            )}
+            <button onClick={signOut} style={{ ...css.btn, ...css.btnSm, marginTop: 10, color: T.red }}>Sign out</button>
+          </div>
+        )}
         <div style={css.sectionTitle}>Food preferences</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
           {["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly"].map(o => (
@@ -1571,8 +1867,8 @@ export default function WanderlyApp() {
             <div style={{ ...css.card, marginBottom: 16, borderColor: T.a }}>
               <div style={css.sectionTitle}>Share & Invite</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 10 }}>
-                <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>wanderly.app/join/{trip.shareCode}</code>
-                <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`https://wanderly.app/join/${trip.shareCode}`); }}>Copy link</button>
+                <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${window.location.origin}?join=${trip.shareCode}`}</code>
+                <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}?join=${trip.shareCode}`); }}>Copy link</button>
               </div>
               {trip.travellers.adults.map((a, i) => {
                 const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
@@ -1762,9 +2058,98 @@ export default function WanderlyApp() {
     );
   };
 
+  // ─── Auth Screen ───
+  const renderAuthScreen = () => (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <h1 style={{ fontFamily: T.fontD, fontSize: 32, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Wanderly</h1>
+        <p style={{ fontSize: 13, color: T.t2, marginBottom: 30 }}>Your travel concierge</p>
+
+        <div style={{ width: "100%", maxWidth: 340 }}>
+          {/* Google Sign-in */}
+          <button onClick={signInWithGoogle}
+            style={{ ...css.btn, width: "100%", padding: "12px 16px", marginBottom: 16, justifyContent: "center", gap: 10, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Continue with Google
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <div style={{ flex: 1, height: 1, background: T.border }} />
+            <span style={{ fontSize: 12, color: T.t3 }}>or</span>
+            <div style={{ flex: 1, height: 1, background: T.border }} />
+          </div>
+
+          {/* Email auth */}
+          {authScreen === "signup" && (
+            <div style={{ marginBottom: 10 }}>
+              <input value={authName} onChange={e => setAuthName(e.target.value)} placeholder="Your name"
+                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
+            </div>
+          )}
+          <input value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" type="email"
+            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
+          <input value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" type="password"
+            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
+
+          <button onClick={authScreen === "signup" ? signUpWithEmail : signInWithEmail}
+            style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 14, fontWeight: 500, cursor: "pointer", marginBottom: 10 }}>
+            {authScreen === "signup" ? "Create account" : "Sign in"}
+          </button>
+
+          {authError && (
+            <p style={{ fontSize: 12, color: authError.includes("Check your email") ? T.a : T.red, textAlign: "center", marginBottom: 8 }}>{authError}</p>
+          )}
+
+          <p style={{ fontSize: 12, color: T.t2, textAlign: "center" }}>
+            {authScreen === "signup" ? "Already have an account? " : "Don't have an account? "}
+            <span onClick={() => { setAuthScreen(authScreen === "signup" ? "login" : "signup"); setAuthError(""); }}
+              style={{ color: T.a, cursor: "pointer", fontWeight: 500 }}>
+              {authScreen === "signup" ? "Sign in" : "Sign up"}
+            </span>
+          </p>
+
+          {/* Skip login for demo */}
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: `.5px solid ${T.border}`, textAlign: "center" }}>
+            <button onClick={() => { setUser({ id: 'demo', email: 'demo@wanderly.app' }); setAuthLoading(false); }}
+              style={{ ...css.btn, fontSize: 12, color: T.t3, cursor: "pointer", margin: "0 auto" }}>
+              Skip — explore as guest
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // ─── Render ───
+  const phoneStyle = { maxWidth: 430, margin: "0 auto", height: 900, background: T.bg, borderRadius: 22, border: `.5px solid ${T.border}`, overflow: "hidden", fontFamily: T.font, color: T.t1, boxShadow: "0 8px 40px rgba(0,0,0,0.08)" };
+
+  if (authLoading) {
+    return (
+      <div style={phoneStyle}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ textAlign: "center" }}>
+            <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Wanderly</h1>
+            <p style={{ fontSize: 12, color: T.t2, marginTop: 4 }}>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={phoneStyle}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <div style={{ height: "100%" }}>
+          {renderAuthScreen()}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ maxWidth: 430, margin: "0 auto", height: 900, background: T.bg, borderRadius: 22, border: `.5px solid ${T.border}`, overflow: "hidden", fontFamily: T.font, color: T.t1, boxShadow: "0 8px 40px rgba(0,0,0,0.08)" }}>
+    <div style={phoneStyle}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
       <div style={{ height: "100%" }}>
         {screen === "home" && renderHomeScreen()}
