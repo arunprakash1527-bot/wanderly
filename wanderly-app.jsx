@@ -189,6 +189,47 @@ const ACCOMMODATION_DB = [
   { name: "Shepherds Hut Glamping", type: "Glamping", tags: ["Unique", "Nature", "Couples"], rating: 4.7, price: "££" },
 ];
 
+// ─── Reusable Form Components (outside main component to prevent remount on state changes) ───
+function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max }) {
+  const inputStyle = { width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" };
+  return (
+    <div style={{ marginBottom: 14, ...wrapStyle }}>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
+      {type === "textarea" ? (
+        <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} />
+      ) : (
+        <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} min={min} max={max} style={inputStyle} />
+      )}
+    </div>
+  );
+}
+
+function TabBar({ active, onNav }) {
+  const tabs = [
+    { id: "trip", label: "Timeline", screen: "trip" },
+    { id: "chat", label: "Chat", screen: "chat" },
+    { id: "explore", label: "Explore", screen: "explore" },
+    { id: "memories", label: "Memories", screen: "memories" },
+    { id: "settings", label: "Settings", screen: "settings" },
+  ];
+  if (active === "home") {
+    return (
+      <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
+        {[["home", "Trips"], ["explore", "Explore"], ["settings", "Settings"]].map(([id, label]) => (
+          <button key={id} onClick={() => onNav(id)} style={{ flex: 1, padding: "10px 0 8px", textAlign: "center", fontSize: 11, color: active === id ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: 500 }}>{label}</button>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
+      {tabs.map(t => (
+        <button key={t.id} onClick={() => onNav(t.screen)} style={{ flex: 1, padding: "10px 0 8px", textAlign: "center", fontSize: 11, color: active === t.id ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: 500 }}>{t.label}</button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main App ───
 export default function WanderlyApp() {
   const [screen, setScreen] = useState("home");
@@ -217,6 +258,11 @@ export default function WanderlyApp() {
   const [wizPrefs, setWizPrefs] = useState({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
   const [staySearch, setStaySearch] = useState("");
   const [staySearchOpen, setStaySearchOpen] = useState(false);
+  const [placeInput, setPlaceInput] = useState("");
+  const [foodSearch, setFoodSearch] = useState("");
+  const [adultActSearch, setAdultActSearch] = useState("");
+  const [olderActSearch, setOlderActSearch] = useState("");
+  const [youngerActSearch, setYoungerActSearch] = useState("");
 
   const resetWizard = useCallback(() => {
     setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
@@ -225,6 +271,11 @@ export default function WanderlyApp() {
     setWizPrefs({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
     setStaySearch("");
     setStaySearchOpen(false);
+    setPlaceInput("");
+    setFoodSearch("");
+    setAdultActSearch("");
+    setOlderActSearch("");
+    setYoungerActSearch("");
     setWizStep(0);
   }, []);
 
@@ -305,10 +356,10 @@ export default function WanderlyApp() {
         <p style={{ fontSize: 12, color: T.t3, marginBottom: 16 }}>
           {["Name, dates, and destinations", "Add your travel group", "Where you're staying", "Food, activities, and instructions"][wizStep]}
         </p>
-        {wizStep === 0 && <WizDetails />}
-        {wizStep === 1 && <WizTravellers />}
-        {wizStep === 2 && <WizStays />}
-        {wizStep === 3 && <WizPrefs />}
+        {wizStep === 0 && renderWizDetails()}
+        {wizStep === 1 && renderWizTravellers()}
+        {wizStep === 2 && renderWizStays()}
+        {wizStep === 3 && renderWizPrefs()}
       </div>
       <div style={{ display: "flex", gap: 10, padding: "12px 20px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
         {wizStep > 0 && <button style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
@@ -319,9 +370,8 @@ export default function WanderlyApp() {
     </div>
   );
 
-  // ─── Wizard Step: Details (all empty by default) ───
-  const WizDetails = () => {
-    const [placeInput, setPlaceInput] = useState("");
+  // ─── Wizard Step: Details (render function, not component) ───
+  const renderWizDetails = () => {
     const addPlace = () => {
       const p = placeInput.trim();
       if (p && !wizTrip.places.includes(p)) {
@@ -364,8 +414,8 @@ export default function WanderlyApp() {
     );
   };
 
-  // ─── Wizard Step: Travellers (starts empty) ───
-  const WizTravellers = () => {
+  // ─── Wizard Step: Travellers (render function) ───
+  const renderWizTravellers = () => {
     const addChild = (group) => {
       setWizTravellers(prev => ({ ...prev, [group]: [...prev[group], { name: "", age: group === "olderKids" ? 10 : 5 }] }));
     };
@@ -452,8 +502,8 @@ export default function WanderlyApp() {
     );
   };
 
-  // ─── Wizard Step: Stays (searchable, addable, removable) ───
-  const WizStays = () => {
+  // ─── Wizard Step: Stays (render function) ───
+  const renderWizStays = () => {
     const filteredAccom = staySearch.trim()
       ? ACCOMMODATION_DB.filter(a => a.name.toLowerCase().includes(staySearch.toLowerCase()) || a.type.toLowerCase().includes(staySearch.toLowerCase()) || a.tags.some(t => t.toLowerCase().includes(staySearch.toLowerCase())))
       : [];
@@ -542,13 +592,8 @@ export default function WanderlyApp() {
     );
   };
 
-  // ─── Wizard Step: Preferences (searchable, suggestion-based) ───
-  const WizPrefs = () => {
-    const [foodSearch, setFoodSearch] = useState("");
-    const [adultActSearch, setAdultActSearch] = useState("");
-    const [olderActSearch, setOlderActSearch] = useState("");
-    const [youngerActSearch, setYoungerActSearch] = useState("");
-
+  // ─── Wizard Step: Preferences (render function) ───
+  const renderWizPrefs = () => {
     const allFoodOpts = ["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"];
     const suggestions = ACTIVITY_SUGGESTIONS.default;
 
@@ -562,7 +607,7 @@ export default function WanderlyApp() {
 
     const filterOpts = (opts, search, selected) => {
       const all = [...new Set([...opts, ...selected])];
-      return search.trim() ? all.filter(o => o.toLowerCase().includes(search.toLowerCase())) : opts;
+      return search.trim() ? all.filter(o => o.toLowerCase().includes(search.toLowerCase())) : all;
     };
 
     const renderPrefSection = (label, key, allOpts, searchVal, setSearchVal, placeholder) => (
@@ -815,6 +860,7 @@ export default function WanderlyApp() {
             </button>
           </div>
         </div>
+        <TabBar active="chat" onNav={navigate} />
       </div>
     );
   };
@@ -1046,47 +1092,7 @@ export default function WanderlyApp() {
     </div>
   );
 
-  // ─── Tab Bar ───
-  function TabBar({ active, onNav }) {
-    const tabs = [
-      { id: "trip", label: "Timeline", screen: "trip" },
-      { id: "chat", label: "Chat", screen: "chat" },
-      { id: "explore", label: "Explore", screen: "explore" },
-      { id: "memories", label: "Memories", screen: "memories" },
-      { id: "settings", label: "Settings", screen: "settings" },
-    ];
-    if (active === "home") {
-      return (
-        <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
-          {[["home", "Trips"], ["explore", "Explore"], ["settings", "Settings"]].map(([id, label]) => (
-            <button key={id} onClick={() => onNav(id)} style={{ flex: 1, padding: "10px 0 8px", textAlign: "center", fontSize: 11, color: active === id ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: 500 }}>{label}</button>
-          ))}
-        </div>
-      );
-    }
-    return (
-      <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => onNav(t.screen)} style={{ flex: 1, padding: "10px 0 8px", textAlign: "center", fontSize: 11, color: active === t.id ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: 500 }}>{t.label}</button>
-        ))}
-      </div>
-    );
-  }
-
-  // ─── Reusable Form Components ───
-  function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max }) {
-    const inputStyle = { width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" };
-    return (
-      <div style={{ marginBottom: 14, ...wrapStyle }}>
-        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
-        {type === "textarea" ? (
-          <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} />
-        ) : (
-          <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} min={min} max={max} style={inputStyle} />
-        )}
-      </div>
-    );
-  }
+  // TabBar and ControlledField defined outside component to prevent remounts
 
   // ─── Render ───
   return (
