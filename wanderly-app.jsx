@@ -168,6 +168,27 @@ const GroupTag = ({ type, children }) => {
   return <span style={{ ...css.tag(bg, c), fontSize: 10, padding: "2px 8px" }}>{children}</span>;
 };
 
+// ─── Activity Suggestions by Location ───
+const ACTIVITY_SUGGESTIONS = {
+  default: {
+    adults: ["Light hikes", "Spas & wellness", "Boat trips", "Museums", "Wine tasting", "Photography tours", "Cycling", "Local markets"],
+    olderKids: ["Adventure parks", "Climbing walls", "Zip lining", "Kayaking", "Mountain biking", "Interactive museums", "Bike hire"],
+    youngerKids: ["Playgrounds", "Animal farms", "Soft play", "Story trails", "Mini golf", "Beach activities", "Nature walks"],
+  },
+};
+
+// ─── Accommodation Search Database ───
+const ACCOMMODATION_DB = [
+  { name: "The Grand Hotel", type: "Hotel", tags: ["Pool", "Spa", "Restaurant"], rating: 4.7, price: "£££" },
+  { name: "Lakeside Lodge", type: "Lodge", tags: ["Lake view", "Garden", "BBQ"], rating: 4.5, price: "££" },
+  { name: "Mountain View Cottage", type: "Cottage", tags: ["3 beds", "Fireplace", "Pet friendly"], rating: 4.8, price: "££" },
+  { name: "Riverside B&B", type: "B&B", tags: ["Breakfast", "Central", "Parking"], rating: 4.4, price: "£" },
+  { name: "Woodland Retreat", type: "Cabin", tags: ["Hot tub", "Secluded", "2 beds"], rating: 4.9, price: "£££" },
+  { name: "Town Centre Apartment", type: "Apartment", tags: ["Self-catering", "WiFi", "Parking"], rating: 4.3, price: "££" },
+  { name: "Country Manor House", type: "Hotel", tags: ["4 rooms", "Breakfast", "EV charger"], rating: 4.6, price: "£££" },
+  { name: "Shepherds Hut Glamping", type: "Glamping", tags: ["Unique", "Nature", "Couples"], rating: 4.7, price: "££" },
+];
+
 // ─── Main App ───
 export default function WanderlyApp() {
   const [screen, setScreen] = useState("home");
@@ -184,10 +205,28 @@ export default function WanderlyApp() {
   const [chatInput, setChatInput] = useState("");
   const [pollData, setPollData] = useState(POLLS);
   const [settingsToggles, setSettingsToggles] = useState(() => {
-    const s = {}; Object.keys(CONNECTORS).slice(0, 8).forEach(k => s[k] = true);
+    const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
     ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
     return s;
   });
+
+  // ─── New Trip Wizard State ───
+  const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
+  const [wizTravellers, setWizTravellers] = useState({ adults: 1, olderKids: [], youngerKids: [] });
+  const [wizStays, setWizStays] = useState([]);
+  const [wizPrefs, setWizPrefs] = useState({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
+  const [staySearch, setStaySearch] = useState("");
+  const [staySearchOpen, setStaySearchOpen] = useState(false);
+
+  const resetWizard = useCallback(() => {
+    setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
+    setWizTravellers({ adults: 1, olderKids: [], youngerKids: [] });
+    setWizStays([]);
+    setWizPrefs({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
+    setStaySearch("");
+    setStaySearchOpen(false);
+    setWizStep(0);
+  }, []);
 
   const navigate = useCallback((s) => setScreen(s), []);
 
@@ -199,7 +238,7 @@ export default function WanderlyApp() {
           <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: T.t1 }}>Wanderly</h1>
           <span style={{ fontSize: 11, color: T.t3, fontWeight: 500, letterSpacing: 0.5 }}>TRAVEL CONCIERGE</span>
         </div>
-        <button style={{ ...css.btn, ...css.btnP, ...css.btnSm }} onClick={() => { setWizStep(0); navigate("create"); }}>+ New trip</button>
+        <button style={{ ...css.btn, ...css.btnP, ...css.btnSm }} onClick={() => { resetWizard(); navigate("create"); }}>+ New trip</button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Your upcoming adventures</p>
@@ -227,21 +266,20 @@ export default function WanderlyApp() {
             <span style={{ fontSize: 12, color: T.t3 }}>4 adults · 2 children</span>
           </div>
         </div>
-        <div style={{ ...css.card, border: `1.5px dashed ${T.border}`, background: "none", textAlign: "center", padding: "36px 20px", cursor: "pointer", boxShadow: "none" }} onClick={() => { setWizStep(0); navigate("create"); }}>
+        <div style={{ ...css.card, border: `1.5px dashed ${T.border}`, background: "none", textAlign: "center", padding: "36px 20px", cursor: "pointer", boxShadow: "none" }} onClick={() => { resetWizard(); navigate("create"); }}>
           <div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>+</div>
           <p style={{ fontSize: 14, fontWeight: 500, color: T.t2 }}>Plan your next adventure</p>
           <p style={{ fontSize: 12, color: T.t3, marginTop: 4 }}>Create from scratch or use a template</p>
         </div>
 
-        <div style={{ ...css.sectionTitle, marginTop: 28 }}>Connectors &amp; integrations</div>
-        <p style={{ fontSize: 12, color: T.t3, marginBottom: 12 }}>Wanderly connects to 18 travel services for a seamless experience.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          {Object.entries(CONNECTORS).slice(0, 18).map(([key, c]) => (
-            <div key={key} style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, padding: "10px 8px", textAlign: "center", fontSize: 11, color: T.t2, cursor: "pointer", transition: "all .15s" }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
-              <div style={{ fontWeight: 500, fontSize: 10, color: T.t1, lineHeight: 1.3 }}>{c.name.split(" / ")[0]}</div>
+        <div style={{ ...css.card, marginTop: 16, background: T.al, borderColor: T.a }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "start" }}>
+            <span style={{ fontSize: 20 }}>🤖</span>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 500, color: T.ad }}>Powered by intelligent routing</p>
+              <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>Wanderly automatically connects to 18 travel services — maps, weather, bookings, EV chargers, and more — based on your trip needs.</p>
             </div>
-          ))}
+          </div>
         </div>
       </div>
       <TabBar active="home" onNav={navigate} />
@@ -281,74 +319,286 @@ export default function WanderlyApp() {
     </div>
   );
 
-  const WizDetails = () => (
-    <>
-      <Field label="Trip name" defaultValue={TRIP.name} />
-      <Field label="Brief" type="textarea" defaultValue="Relaxing Easter break in the Lake District with friends. Scenic drives, easy hikes, great food, kids activities." />
-      <div style={{ display: "flex", gap: 10 }}>
-        <Field label="Start" type="date" defaultValue="2026-04-03" style={{ flex: 1 }} />
-        <Field label="End" type="date" defaultValue="2026-04-07" style={{ flex: 1 }} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Places visiting</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
-          {TRIP.places.map(p => (
-            <span key={p} style={{ ...css.chip, ...css.chipActive, paddingRight: 8 }}>{p} <span style={{ opacity: 0.5, cursor: "pointer", marginLeft: 3 }}>×</span></span>
-          ))}
+  // ─── Wizard Step: Details (all empty by default) ───
+  const WizDetails = () => {
+    const [placeInput, setPlaceInput] = useState("");
+    const addPlace = () => {
+      const p = placeInput.trim();
+      if (p && !wizTrip.places.includes(p)) {
+        setWizTrip(prev => ({ ...prev, places: [...prev.places, p] }));
+        setPlaceInput("");
+      }
+    };
+    const removePlace = (place) => setWizTrip(prev => ({ ...prev, places: prev.places.filter(p => p !== place) }));
+    const travelOpts = ["EV car", "Petrol car", "Train", "Walking", "Bicycle"];
+    return (
+      <>
+        <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" />
+        <ControlledField label="Brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="Describe your trip — who's going, what kind of experience you want..." />
+        <div style={{ display: "flex", gap: 10 }}>
+          <ControlledField label="Start date" type="date" value={wizTrip.start} onChange={v => setWizTrip(prev => ({ ...prev, start: v }))} style={{ flex: 1 }} />
+          <ControlledField label="End date" type="date" value={wizTrip.end} onChange={v => setWizTrip(prev => ({ ...prev, end: v }))} style={{ flex: 1 }} min={wizTrip.start || undefined} />
         </div>
-        <input style={{ width: "100%", padding: "9px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" }} placeholder="Add a place..." />
-      </div>
-      <ChipSelect label="Mode of travel" options={["EV car", "Petrol car", "Train", "Walking", "Bicycle"]} active={[0]} />
-    </>
-  );
-
-  const WizTravellers = () => (
-    <>
-      <GroupCounter icon="🧑" label="Adults" sub="Ages 15+" count={4} bg={T.blueL} />
-      <GroupCounter icon="🧒" label="Children 8-14" sub="Older kids" count={1} bg={T.pinkL}>
-        <ChildEntry name="Max" age={12} color={T.pink} ageRange={[8, 14]} />
-      </GroupCounter>
-      <GroupCounter icon="🧒" label="Children 3-8" sub="Younger kids" count={1} bg={T.coralL}>
-        <ChildEntry name="Ella" age={8} color={T.coral} ageRange={[3, 8]} />
-      </GroupCounter>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "10px 14px", background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r }}>
-        <Tag bg={T.blueL} color={T.blue}>4 adults</Tag>
-        <Tag bg={T.pinkL} color={T.pink}>1 child (8-14)</Tag>
-        <Tag bg={T.coralL} color={T.coral}>1 child (3-8)</Tag>
-      </div>
-    </>
-  );
-
-  const WizStays = () => (
-    <>
-      {TRIP.stays.map((s, i) => (
-        <div key={i} style={css.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div>
-              <h4 style={{ fontSize: 14, fontWeight: 500 }}>{s.name}</h4>
-              <p style={{ fontSize: 12, color: T.t2 }}>{s.dates} ({s.nights} nights)</p>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Places visiting</label>
+          {wizTrip.places.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+              {wizTrip.places.map(p => (
+                <span key={p} style={{ ...css.chip, ...css.chipActive, paddingRight: 8 }}>{p} <span onClick={() => removePlace(p)} style={{ opacity: 0.5, cursor: "pointer", marginLeft: 3 }}>×</span></span>
+              ))}
             </div>
-            <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => alert(`Edit ${s.name} — change dates, rooms, and amenities.`)}>Edit</button>
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <Tag bg={T.purpleL} color={T.purple}>{s.type}</Tag>
-            {s.tags.map(t => <Tag key={t} bg={T.purpleL} color={T.purple}>{t}</Tag>)}
+          )}
+          <input value={placeInput} onChange={e => setPlaceInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addPlace()}
+            style={{ width: "100%", padding: "9px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" }} placeholder="Type a place and press Enter..." />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Mode of travel</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {travelOpts.map(o => (
+              <span key={o} onClick={() => setWizTrip(prev => { const s = new Set(prev.travel); s.has(o) ? s.delete(o) : s.add(o); return { ...prev, travel: s }; })}
+                style={{ ...css.chip, ...(wizTrip.travel.has(o) ? css.chipActive : {}) }}>{o}</span>
+            ))}
           </div>
         </div>
-      ))}
-      <button onClick={() => alert("Add a new accommodation — search hotels, cottages, or Airbnbs.")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, border: `1.5px dashed ${T.border}`, borderRadius: T.r, color: T.t3, fontSize: 13, cursor: "pointer", background: "none", width: "100%", fontFamily: T.font }}>+ Add another stay</button>
-    </>
-  );
+      </>
+    );
+  };
 
-  const WizPrefs = () => (
-    <>
-      <ChipSelect label="Food preferences" options={["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free"]} active={[0, 1, 2, 3]} />
-      <ChipSelect label="Activities — Adults" options={["Light hikes", "Spas & wellness", "Boat trips", "Museums", "Pub crawl"]} active={[0, 1, 2, 3]} />
-      <ChipSelect label="Activities — Children 8-14" options={["Adventure parks", "Climbing walls", "Easter trails", "Interactive museums", "Bike hire"]} active={[0, 1, 2]} />
-      <ChipSelect label="Activities — Children 3-8" options={["Playgrounds", "Animal farms", "Soft play", "Story trails", "Easter bunny"]} active={[0, 1, 2, 3]} />
-      <Field label="Special instructions" type="textarea" defaultValue="Dog-friendly places. Top-rated pubs for dinners. Avoid steep trails. Kids get restless after 2 hrs — plan short, fun stops." />
-    </>
-  );
+  // ─── Wizard Step: Travellers (starts empty) ───
+  const WizTravellers = () => {
+    const addChild = (group) => {
+      setWizTravellers(prev => ({ ...prev, [group]: [...prev[group], { name: "", age: group === "olderKids" ? 10 : 5 }] }));
+    };
+    const updateChild = (group, idx, field, val) => {
+      setWizTravellers(prev => ({ ...prev, [group]: prev[group].map((c, i) => i === idx ? { ...c, [field]: val } : c) }));
+    };
+    const removeChild = (group, idx) => {
+      setWizTravellers(prev => ({ ...prev, [group]: prev[group].filter((_, i) => i !== idx) }));
+    };
+    return (
+      <>
+        <div style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, marginBottom: 10, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: T.blueL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧑</div>
+              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Adults</h4><p style={{ fontSize: 12, color: T.t2 }}>Ages 15+</p></div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button style={css.btn} onClick={() => setWizTravellers(prev => ({ ...prev, adults: Math.max(1, prev.adults - 1) }))}>-</button>
+              <span style={{ fontSize: 15, fontWeight: 500, minWidth: 20, textAlign: "center" }}>{wizTravellers.adults}</span>
+              <button style={css.btn} onClick={() => setWizTravellers(prev => ({ ...prev, adults: prev.adults + 1 }))}>+</button>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, marginBottom: 10, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: T.pinkL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧒</div>
+              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Children 8-14</h4><p style={{ fontSize: 12, color: T.t2 }}>Older kids</p></div>
+            </div>
+            <button style={{ ...css.btn, ...css.btnSm }} onClick={() => addChild("olderKids")}>+ Add</button>
+          </div>
+          {wizTravellers.olderKids.length > 0 && (
+            <div style={{ padding: "0 14px 10px", borderTop: `.5px solid ${T.border}` }}>
+              {wizTravellers.olderKids.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+                  <Avatar bg={T.pink} label={c.name ? c.name[0].toUpperCase() : "?"} size={28} />
+                  <input value={c.name} onChange={e => updateChild("olderKids", i, "name", e.target.value)} placeholder="Name"
+                    style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
+                  <select value={c.age} onChange={e => updateChild("olderKids", i, "age", +e.target.value)}
+                    style={{ padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none", width: 56 }}>
+                    {[8,9,10,11,12,13,14].map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <span onClick={() => removeChild("olderKids", i)} style={{ cursor: "pointer", color: T.red, fontSize: 16 }}>×</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, marginBottom: 10, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: T.coralL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧒</div>
+              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Children 3-7</h4><p style={{ fontSize: 12, color: T.t2 }}>Younger kids</p></div>
+            </div>
+            <button style={{ ...css.btn, ...css.btnSm }} onClick={() => addChild("youngerKids")}>+ Add</button>
+          </div>
+          {wizTravellers.youngerKids.length > 0 && (
+            <div style={{ padding: "0 14px 10px", borderTop: `.5px solid ${T.border}` }}>
+              {wizTravellers.youngerKids.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+                  <Avatar bg={T.coral} label={c.name ? c.name[0].toUpperCase() : "?"} size={28} />
+                  <input value={c.name} onChange={e => updateChild("youngerKids", i, "name", e.target.value)} placeholder="Name"
+                    style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
+                  <select value={c.age} onChange={e => updateChild("youngerKids", i, "age", +e.target.value)}
+                    style={{ padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none", width: 56 }}>
+                    {[3,4,5,6,7].map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <span onClick={() => removeChild("youngerKids", i)} style={{ cursor: "pointer", color: T.red, fontSize: 16 }}>×</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "10px 14px", background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r }}>
+          <Tag bg={T.blueL} color={T.blue}>{wizTravellers.adults} adult{wizTravellers.adults !== 1 ? "s" : ""}</Tag>
+          {wizTravellers.olderKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{wizTravellers.olderKids.length} child (8-14)</Tag>}
+          {wizTravellers.youngerKids.length > 0 && <Tag bg={T.coralL} color={T.coral}>{wizTravellers.youngerKids.length} child (3-7)</Tag>}
+        </div>
+      </>
+    );
+  };
+
+  // ─── Wizard Step: Stays (searchable, addable, removable) ───
+  const WizStays = () => {
+    const filteredAccom = staySearch.trim()
+      ? ACCOMMODATION_DB.filter(a => a.name.toLowerCase().includes(staySearch.toLowerCase()) || a.type.toLowerCase().includes(staySearch.toLowerCase()) || a.tags.some(t => t.toLowerCase().includes(staySearch.toLowerCase())))
+      : [];
+
+    const addStay = (accom) => {
+      setWizStays(prev => [...prev, { ...accom, checkIn: wizTrip.start || "", checkOut: wizTrip.end || "" }]);
+      setStaySearch("");
+      setStaySearchOpen(false);
+    };
+
+    const removeStay = (idx) => setWizStays(prev => prev.filter((_, i) => i !== idx));
+
+    const updateStayDate = (idx, field, val) => {
+      setWizStays(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
+    };
+
+    return (
+      <>
+        {wizStays.length === 0 && !staySearchOpen && (
+          <div style={{ textAlign: "center", padding: "20px 10px", color: T.t3, fontSize: 13 }}>
+            <p style={{ marginBottom: 4 }}>No accommodations added yet.</p>
+            <p style={{ fontSize: 12 }}>Search and add where you'll be staying.</p>
+          </div>
+        )}
+        {wizStays.map((s, i) => (
+          <div key={i} style={css.card}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ flex: 1 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 500 }}>{s.name}</h4>
+                {s.rating && <span style={{ fontSize: 11, color: T.amber }}>{"★".repeat(Math.floor(s.rating))} {s.rating}</span>}
+              </div>
+              <button style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.red }} onClick={() => removeStay(i)}>Remove</button>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 10, color: T.t3, marginBottom: 3 }}>Check-in</label>
+                <input type="date" value={s.checkIn} min={wizTrip.start || undefined} max={wizTrip.end || undefined}
+                  onChange={e => updateStayDate(i, "checkIn", e.target.value)}
+                  style={{ width: "100%", padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 10, color: T.t3, marginBottom: 3 }}>Check-out</label>
+                <input type="date" value={s.checkOut} min={s.checkIn || wizTrip.start || undefined} max={wizTrip.end || undefined}
+                  onChange={e => updateStayDate(i, "checkOut", e.target.value)}
+                  style={{ width: "100%", padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <Tag bg={T.purpleL} color={T.purple}>{s.type}</Tag>
+              {s.tags.map(t => <Tag key={t} bg={T.purpleL} color={T.purple}>{t}</Tag>)}
+              {s.price && <Tag bg={T.amberL} color={T.amber}>{s.price}</Tag>}
+            </div>
+          </div>
+        ))}
+
+        {staySearchOpen ? (
+          <div style={{ ...css.card, padding: 12 }}>
+            <input value={staySearch} onChange={e => setStaySearch(e.target.value)} autoFocus
+              style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none", marginBottom: 8 }}
+              placeholder="Search hotels, cottages, B&Bs..." />
+            {staySearch.trim() && filteredAccom.length === 0 && (
+              <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: 8 }}>No results for "{staySearch}". Try a different search.</p>
+            )}
+            {(staySearch.trim() ? filteredAccom : ACCOMMODATION_DB.slice(0, 4)).map((a, i) => (
+              <div key={i} onClick={() => addStay(a)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `.5px solid ${T.border}`, marginBottom: 6, background: T.s, transition: "background .15s" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: T.purpleL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🏨</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500 }}>{a.name}</p>
+                  <p style={{ fontSize: 11, color: T.t3 }}>{a.type} · {a.tags.slice(0, 2).join(" · ")} {a.price && `· ${a.price}`}</p>
+                </div>
+                <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>+ Add</span>
+              </div>
+            ))}
+            <button onClick={() => { setStaySearchOpen(false); setStaySearch(""); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 4 }}>Cancel</button>
+          </div>
+        ) : (
+          <button onClick={() => setStaySearchOpen(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, border: `1.5px dashed ${T.border}`, borderRadius: T.r, color: T.t3, fontSize: 13, cursor: "pointer", background: "none", width: "100%", fontFamily: T.font }}>+ Add accommodation</button>
+        )}
+
+        {!wizTrip.start && !wizTrip.end && wizStays.length > 0 && (
+          <div style={{ marginTop: 8, padding: "8px 12px", background: T.amberL, borderRadius: T.rs, fontSize: 12, color: T.amber }}>
+            ⚠️ Set trip dates in Step 1 to constrain accommodation dates.
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // ─── Wizard Step: Preferences (searchable, suggestion-based) ───
+  const WizPrefs = () => {
+    const [foodSearch, setFoodSearch] = useState("");
+    const [adultActSearch, setAdultActSearch] = useState("");
+    const [olderActSearch, setOlderActSearch] = useState("");
+    const [youngerActSearch, setYoungerActSearch] = useState("");
+
+    const allFoodOpts = ["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"];
+    const suggestions = ACTIVITY_SUGGESTIONS.default;
+
+    const togglePref = (key, item) => {
+      setWizPrefs(prev => { const s = new Set(prev[key]); s.has(item) ? s.delete(item) : s.add(item); return { ...prev, [key]: s }; });
+    };
+
+    const addCustomPref = (key, val, clearFn) => {
+      if (val.trim()) { setWizPrefs(prev => { const s = new Set(prev[key]); s.add(val.trim()); return { ...prev, [key]: s }; }); clearFn(""); }
+    };
+
+    const filterOpts = (opts, search, selected) => {
+      const all = [...new Set([...opts, ...selected])];
+      return search.trim() ? all.filter(o => o.toLowerCase().includes(search.toLowerCase())) : opts;
+    };
+
+    const renderPrefSection = (label, key, allOpts, searchVal, setSearchVal, placeholder) => (
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
+        <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") addCustomPref(key, searchVal, setSearchVal); }}
+          style={{ width: "100%", padding: "8px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s2, outline: "none", marginBottom: 6 }}
+          placeholder={placeholder} />
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {filterOpts(allOpts, searchVal, wizPrefs[key]).map(o => (
+            <span key={o} onClick={() => togglePref(key, o)} style={{ ...css.chip, ...(wizPrefs[key].has(o) ? css.chipActive : {}) }}>{o}</span>
+          ))}
+          {searchVal.trim() && !allOpts.includes(searchVal.trim()) && !wizPrefs[key].has(searchVal.trim()) && (
+            <span onClick={() => addCustomPref(key, searchVal, setSearchVal)} style={{ ...css.chip, borderStyle: "dashed", color: T.a }}>+ Add "{searchVal.trim()}"</span>
+          )}
+        </div>
+      </div>
+    );
+
+    return (
+      <>
+        {renderPrefSection("Food preferences", "food", allFoodOpts, foodSearch, setFoodSearch, "Search or type a food preference...")}
+        {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...")}
+        {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...")}
+        {wizTravellers.youngerKids.length > 0 && renderPrefSection("Activities — Children 3-7", "youngerActs", suggestions.youngerKids, youngerActSearch, setYoungerActSearch, "Search or add a kids activity...")}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Special instructions</label>
+          <textarea value={wizPrefs.instructions} onChange={e => setWizPrefs(prev => ({ ...prev, instructions: e.target.value }))}
+            placeholder="e.g. Dog-friendly places. Top-rated pubs for dinners. Avoid steep trails. Kids get restless after 2 hrs — plan short, fun stops."
+            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 60 }} />
+          <p style={{ fontSize: 11, color: T.t3, marginTop: 4, fontStyle: "italic" }}>Tip: Mention dietary needs, accessibility requirements, pace preferences, or must-visit spots.</p>
+        </div>
+      </>
+    );
+  };
 
   // ─── Screen: Trip Dashboard ───
   const TripScreen = () => {
@@ -770,21 +1020,18 @@ export default function WanderlyApp() {
             <span key={o} style={{ ...css.chip, ...css.chipActive }}>{o}</span>
           ))}
         </div>
-        <div style={css.sectionTitle}>Connected services</div>
-        {Object.entries(CONNECTORS).slice(0, 8).map(([k, c]) => (
-          <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `.5px solid ${T.border}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>{c.icon}</span>
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</p>
-                <p style={{ fontSize: 11, color: T.t3 }}>{c.apis.length} endpoints</p>
-              </div>
+        <div style={css.sectionTitle}>Connectors &amp; integrations</div>
+        <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Wanderly uses intelligent routing to connect the right services automatically. Toggle individual connectors on/off.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
+          {Object.entries(CONNECTORS).map(([key, c]) => (
+            <div key={key} onClick={() => setSettingsToggles(prev => ({ ...prev, [key]: !prev[key] }))}
+              style={{ background: settingsToggles[key] ? T.s : T.s2, border: `.5px solid ${settingsToggles[key] ? T.a : T.border}`, borderRadius: T.rs, padding: "10px 8px", textAlign: "center", fontSize: 11, color: settingsToggles[key] ? T.t1 : T.t3, cursor: "pointer", transition: "all .15s", opacity: settingsToggles[key] ? 1 : 0.5 }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
+              <div style={{ fontWeight: 500, fontSize: 10, lineHeight: 1.3 }}>{c.name.split(" / ")[0]}</div>
+              <div style={{ fontSize: 9, color: settingsToggles[key] ? T.a : T.t3, marginTop: 2 }}>{settingsToggles[key] ? "Active" : "Off"}</div>
             </div>
-            <div onClick={() => setSettingsToggles(prev => ({ ...prev, [k]: !prev[k] }))} style={{ width: 40, height: 22, borderRadius: 11, background: settingsToggles[k] ? T.a : T.s3, position: "relative", cursor: "pointer", transition: "background .2s" }}>
-              <div style={{ position: "absolute", top: 2, left: settingsToggles[k] ? 20 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.1)", transition: "left .2s" }} />
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
         <div style={css.sectionTitle}>Notifications</div>
         {[["Booking confirmations","n_booking"], ["EV charger alerts","n_ev"], ["Traffic & closures","n_traffic"], ["Daily video generation","n_video"], ["Poll reminders","n_poll"], ["Checkout reminders","n_checkout"]].map(([n, nk]) => (
           <div key={nk} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `.5px solid ${T.border}` }}>
@@ -827,64 +1074,16 @@ export default function WanderlyApp() {
   }
 
   // ─── Reusable Form Components ───
-  function Field({ label, type = "text", defaultValue, style: wrapStyle }) {
+  function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max }) {
+    const inputStyle = { width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" };
     return (
       <div style={{ marginBottom: 14, ...wrapStyle }}>
         <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
         {type === "textarea" ? (
-          <textarea defaultValue={defaultValue} style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 60 }} />
+          <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} />
         ) : (
-          <input type={type} defaultValue={defaultValue} style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" }} />
+          <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} min={min} max={max} style={inputStyle} />
         )}
-      </div>
-    );
-  }
-
-  function ChipSelect({ label, options, active = [] }) {
-    const [selected, setSelected] = useState(new Set(active));
-    return (
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {options.map((o, i) => (
-            <span key={o} onClick={() => { const s = new Set(selected); s.has(i) ? s.delete(i) : s.add(i); setSelected(s); }}
-              style={{ ...css.chip, ...(selected.has(i) ? css.chipActive : {}) }}>{o}</span>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  function GroupCounter({ icon, label, sub, count: init, bg, children }) {
-    const [count, setCount] = useState(init);
-    return (
-      <div style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, marginBottom: 10, overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
-            <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>{label}</h4><p style={{ fontSize: 12, color: T.t2 }}>{sub}</p></div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button style={css.btn} onClick={() => setCount(Math.max(0, count - 1))}>-</button>
-            <span style={{ fontSize: 15, fontWeight: 500, minWidth: 20, textAlign: "center" }}>{count}</span>
-            <button style={css.btn} onClick={() => setCount(count + 1)}>+</button>
-          </div>
-        </div>
-        {children && count > 0 && <div style={{ padding: "0 14px 10px", borderTop: `.5px solid ${T.border}` }}>{children}</div>}
-      </div>
-    );
-  }
-
-  function ChildEntry({ name, age, color, ageRange }) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
-        <Avatar bg={color} label={name[0]} size={28} />
-        <input defaultValue={name} style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
-        <select defaultValue={age} style={{ padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none", width: 56 }}>
-          {Array.from({ length: ageRange[1] - ageRange[0] + 1 }, (_, i) => ageRange[0] + i).map(a => (
-            <option key={a}>{a}</option>
-          ))}
-        </select>
       </div>
     );
   }
