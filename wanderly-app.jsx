@@ -275,6 +275,7 @@ export default function WanderlyApp() {
   ]);
   const [bookingStates, setBookingStates] = useState({});
   const chatRef = useRef(null);
+  const photoInputRef = useRef(null);
   const [chatInput, setChatInput] = useState("");
   const [pollData, setPollData] = useState(POLLS);
   const [createdTrips, setCreatedTrips] = useState([]);
@@ -289,9 +290,12 @@ export default function WanderlyApp() {
     return s;
   });
 
+  const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+
   // ─── New Trip Wizard State ───
   const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
-  const [wizTravellers, setWizTravellers] = useState({ adults: 1, olderKids: [], youngerKids: [] });
+  const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
   const [wizStays, setWizStays] = useState([]);
   const [wizPrefs, setWizPrefs] = useState({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
   const [staySearch, setStaySearch] = useState("");
@@ -305,7 +309,7 @@ export default function WanderlyApp() {
 
   const resetWizard = useCallback(() => {
     setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
-    setWizTravellers({ adults: 1, olderKids: [], youngerKids: [] });
+    setWizTravellers({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
     setWizStays([]);
     setWizPrefs({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
     setStaySearch("");
@@ -332,7 +336,7 @@ export default function WanderlyApp() {
       year: wizTrip.start ? new Date(wizTrip.start).getFullYear() : new Date().getFullYear(),
       places: [...wizTrip.places],
       travel: [...wizTrip.travel],
-      travellers: { adults: wizTravellers.adults, olderKids: wizTravellers.olderKids.length, youngerKids: wizTravellers.youngerKids.length },
+      travellers: { adults: wizTravellers.adults.map(a => ({ ...a })), olderKids: wizTravellers.olderKids.map(c => ({ ...c })), youngerKids: wizTravellers.youngerKids.map(c => ({ ...c })) },
       stays: [...wizStays],
       stayNames: wizStays.map(s => s.name || s),
       prefs: { food: [...wizPrefs.food], activities: [...wizPrefs.adultActs, ...wizPrefs.olderActs, ...wizPrefs.youngerActs] },
@@ -351,7 +355,7 @@ export default function WanderlyApp() {
       setEditingTripId(null);
       navigate("createdTrip");
     } else {
-      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [] };
+      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
       setCreatedTrips(prev => [newTrip, ...prev]);
       setEditingTripId(null);
       navigate("home");
@@ -475,9 +479,9 @@ export default function WanderlyApp() {
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
               {trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
               {trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}
-              {trip.travellers.adults > 0 && <Tag bg={T.coralL} color={T.coral}>{trip.travellers.adults} adult{trip.travellers.adults > 1 ? "s" : ""}</Tag>}
-              {trip.travellers.olderKids > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.olderKids} older kid{trip.travellers.olderKids > 1 ? "s" : ""}</Tag>}
-              {trip.travellers.youngerKids > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.youngerKids} younger kid{trip.travellers.youngerKids > 1 ? "s" : ""}</Tag>}
+              {trip.travellers.adults.length > 0 && <Tag bg={T.coralL} color={T.coral}>{trip.travellers.adults.length} adult{trip.travellers.adults.length > 1 ? "s" : ""}</Tag>}
+              {trip.travellers.olderKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.olderKids.length} older kid{trip.travellers.olderKids.length > 1 ? "s" : ""}</Tag>}
+              {trip.travellers.youngerKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.youngerKids.length} younger kid{trip.travellers.youngerKids.length > 1 ? "s" : ""}</Tag>}
               {trip.stayNames.length > 0 && <Tag bg={T.amberL} color={T.amber}>{trip.stayNames.length} stay{trip.stayNames.length > 1 ? "s" : ""}</Tag>}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -643,6 +647,15 @@ export default function WanderlyApp() {
 
   // ─── Wizard Step: Travellers (render function) ───
   const renderWizTravellers = () => {
+    const addAdult = () => {
+      setWizTravellers(prev => ({ ...prev, adults: [...prev.adults, { name: "", email: "", isLead: false }] }));
+    };
+    const updateAdult = (idx, field, val) => {
+      setWizTravellers(prev => ({ ...prev, adults: prev.adults.map((a, i) => i === idx ? { ...a, [field]: val } : a) }));
+    };
+    const removeAdult = (idx) => {
+      setWizTravellers(prev => ({ ...prev, adults: prev.adults.filter((_, i) => i !== idx) }));
+    };
     const addChild = (group) => {
       setWizTravellers(prev => ({ ...prev, [group]: [...prev[group], { name: "", age: group === "olderKids" ? 10 : 5 }] }));
     };
@@ -652,6 +665,12 @@ export default function WanderlyApp() {
     const removeChild = (group, idx) => {
       setWizTravellers(prev => ({ ...prev, [group]: prev[group].filter((_, i) => i !== idx) }));
     };
+    const getInitials = (name) => {
+      if (!name) return "?";
+      const parts = name.trim().split(/\s+/);
+      return parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+    };
+    const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
     return (
       <>
         <div style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, marginBottom: 10, overflow: "hidden" }}>
@@ -660,11 +679,24 @@ export default function WanderlyApp() {
               <div style={{ width: 36, height: 36, borderRadius: 10, background: T.blueL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧑</div>
               <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Adults</h4><p style={{ fontSize: 12, color: T.t2 }}>Ages 15+</p></div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button style={css.btn} onClick={() => setWizTravellers(prev => ({ ...prev, adults: Math.max(1, prev.adults - 1) }))}>-</button>
-              <span style={{ fontSize: 15, fontWeight: 500, minWidth: 20, textAlign: "center" }}>{wizTravellers.adults}</span>
-              <button style={css.btn} onClick={() => setWizTravellers(prev => ({ ...prev, adults: prev.adults + 1 }))}>+</button>
-            </div>
+            <button style={{ ...css.btn, ...css.btnSm }} onClick={addAdult}>+ Add</button>
+          </div>
+          <div style={{ padding: "0 14px 10px", borderTop: `.5px solid ${T.border}` }}>
+            {wizTravellers.adults.map((a, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < wizTravellers.adults.length - 1 ? `.5px solid ${T.border}` : "none" }}>
+                <Avatar bg={adultColors[i % adultColors.length]} label={getInitials(a.name)} size={32} />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input value={a.name} onChange={e => updateAdult(i, "name", e.target.value)} placeholder={a.isLead ? "Your name" : "Name"}
+                      style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
+                    {a.isLead && <span style={{ ...css.tag(T.al, T.ad), fontSize: 9, padding: "2px 6px", whiteSpace: "nowrap" }}>Lead</span>}
+                  </div>
+                  <input value={a.email} onChange={e => updateAdult(i, "email", e.target.value)} placeholder="Email for invite link"
+                    style={{ padding: "5px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s2, outline: "none", color: T.t2 }} />
+                </div>
+                {!a.isLead && <span onClick={() => removeAdult(i)} style={{ cursor: "pointer", color: T.red, fontSize: 16, flexShrink: 0 }}>×</span>}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -720,10 +752,21 @@ export default function WanderlyApp() {
           )}
         </div>
 
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "10px 14px", background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r }}>
-          <Tag bg={T.blueL} color={T.blue}>{wizTravellers.adults} adult{wizTravellers.adults !== 1 ? "s" : ""}</Tag>
-          {wizTravellers.olderKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{wizTravellers.olderKids.length} child (8-14)</Tag>}
-          {wizTravellers.youngerKids.length > 0 && <Tag bg={T.coralL} color={T.coral}>{wizTravellers.youngerKids.length} child (3-7)</Tag>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "10px 14px", background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, alignItems: "center" }}>
+          {wizTravellers.adults.map((a, i) => (
+            <Avatar key={`a-${i}`} bg={adultColors[i % adultColors.length]} label={getInitials(a.name)} size={28} style={{ border: `2px solid ${T.s}` }} />
+          ))}
+          {wizTravellers.olderKids.map((c, i) => (
+            <Avatar key={`ok-${i}`} bg={T.pink} label={c.name ? c.name[0].toUpperCase() : "?"} size={28} style={{ border: `2px solid ${T.s}` }} />
+          ))}
+          {wizTravellers.youngerKids.map((c, i) => (
+            <Avatar key={`yk-${i}`} bg={T.coral} label={c.name ? c.name[0].toUpperCase() : "?"} size={28} style={{ border: `2px solid ${T.s}` }} />
+          ))}
+          <span style={{ fontSize: 12, color: T.t3, marginLeft: 4 }}>
+            {wizTravellers.adults.length} adult{wizTravellers.adults.length !== 1 ? "s" : ""}
+            {wizTravellers.olderKids.length > 0 ? ` · ${wizTravellers.olderKids.length} child (8-14)` : ""}
+            {wizTravellers.youngerKids.length > 0 ? ` · ${wizTravellers.youngerKids.length} child (3-7)` : ""}
+          </span>
         </div>
       </>
     );
@@ -978,7 +1021,9 @@ export default function WanderlyApp() {
               <TimelineItem key={`${selectedDay}-${i}`} item={item} index={i} expanded={expandedItem === i}
                 onToggle={() => setExpandedItem(expandedItem === i ? null : i)}
                 bookingState={bookingStates[`${selectedDay}-${i}`]}
-                onBook={() => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: "confirmed" }))} />
+                onBook={() => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { status: "booked", cost: "" } }))}
+                onSkip={() => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { status: "skipped" } }))}
+                onCostUpdate={(cost) => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { ...prev[`${selectedDay}-${i}`], cost } }))} />
             ))}
           </div>
 
@@ -1015,7 +1060,7 @@ export default function WanderlyApp() {
     );
   };
 
-  const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook }) => {
+  const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, onSkip, onCostUpdate }) => {
     const forMap = { all: "Everyone", adults: "Adults", kids: "Max & Ella", older: "Max (12)", younger: "Ella (8)" };
     return (
       <div style={{ position: "relative", marginBottom: 12, cursor: "pointer" }} onClick={onToggle}>
@@ -1025,18 +1070,28 @@ export default function WanderlyApp() {
         <div style={{ fontSize: 12, color: T.t2 }}>{item.desc}</div>
         {item.for && <div style={{ marginTop: 3 }}><GroupTag type={item.for}>{forMap[item.for]}</GroupTag></div>}
 
-        {/* Booking confirmation */}
+        {/* Booking status tracking */}
         {item.needsBooking && !bookingState && (
-          <div style={{ display: "flex", gap: 8, padding: 10, background: T.amberL, border: `.5px solid ${T.amber}`, borderRadius: T.rs, marginTop: 6, alignItems: "center" }}
+          <div style={{ padding: 10, background: T.amberL, border: `.5px solid ${T.amber}`, borderRadius: T.rs, marginTop: 6 }}
             onClick={e => e.stopPropagation()}>
-            <p style={{ flex: 1, fontSize: 12, color: T.amber }}><strong>Book:</strong> {item.price}</p>
-            <button style={{ ...css.btn, ...css.btnSm, ...css.btnP, fontSize: 11 }} onClick={onBook}>Confirm</button>
-            <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }}>Skip</button>
+            <p style={{ fontSize: 12, color: T.amber, marginBottom: 8 }}><strong>Action needed:</strong> {item.price}</p>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.blue }} onClick={() => window.open(`https://www.google.com/search?q=book+${encodeURIComponent(item.title)}`, "_blank")}>Book externally ↗</button>
+              <button style={{ ...css.btn, ...css.btnSm, ...css.btnP, fontSize: 11 }} onClick={onBook}>Mark as booked</button>
+              <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={onSkip}>Skip</button>
+            </div>
           </div>
         )}
-        {item.needsBooking && bookingState === "confirmed" && (
-          <div style={{ padding: "6px 10px", background: T.al, borderRadius: T.rs, marginTop: 6, fontSize: 12, color: T.ad }}>
-            ✓ Confirmed! Tickets sent to email.
+        {item.needsBooking && bookingState?.status === "booked" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: T.al, borderRadius: T.rs, marginTop: 6 }} onClick={e => e.stopPropagation()}>
+            <span style={{ fontSize: 12, color: T.ad, fontWeight: 500 }}>✓ Booked — marked by you</span>
+            <input placeholder="£ Cost" value={bookingState.cost || ""} onChange={e => onCostUpdate(e.target.value)}
+              style={{ width: 80, padding: "4px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} />
+          </div>
+        )}
+        {item.needsBooking && bookingState?.status === "skipped" && (
+          <div style={{ padding: "6px 10px", background: T.s2, borderRadius: T.rs, marginTop: 6, fontSize: 12, color: T.t3 }}>
+            Skipped
           </div>
         )}
 
@@ -1172,12 +1227,19 @@ export default function WanderlyApp() {
   );
 
   // ─── Screen: Memories ───
+  const handlePhotoUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    const newPhotos = files.map(f => ({ url: URL.createObjectURL(f), name: f.name, day: "Uploaded" }));
+    setUploadedPhotos(prev => [...prev, ...newPhotos]);
+    e.target.value = "";
+  };
   const renderMemoriesScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <input type="file" accept="image/*" multiple ref={photoInputRef} style={{ display: "none" }} onChange={handlePhotoUpload} />
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Memories</h2>
-        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => alert("Photo upload — select photos from your camera roll to add to trip memories.")}>Upload</button>
+        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => photoInputRef.current?.click()}>Upload</button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {/* AI Video */}
@@ -1216,6 +1278,24 @@ export default function WanderlyApp() {
           </div>
         </div>
 
+        {uploadedPhotos.length > 0 && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={css.sectionTitle}>Your uploads</div>
+              <span style={{ fontSize: 12, color: T.t3 }}>{uploadedPhotos.length} photo{uploadedPhotos.length !== 1 ? "s" : ""}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
+              {uploadedPhotos.map((p, i) => (
+                <div key={i} style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative" }}>
+                  <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <span style={{ position: "absolute", bottom: 2, left: 4, color: "#fff", fontSize: 9, fontWeight: 500, textShadow: "0 1px 3px rgba(0,0,0,.6)" }}>{p.name.length > 12 ? p.name.slice(0, 12) + "..." : p.name}</span>
+                </div>
+              ))}
+              <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
+            </div>
+          </div>
+        )}
+
         {MEMORIES.map((m, mi) => (
           <div key={mi}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -1228,7 +1308,7 @@ export default function WanderlyApp() {
                   <span style={{ color: "#fff", fontSize: 10, fontWeight: 500 }}>{p.label}</span>
                 </div>
               ))}
-              <div style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
+              <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
             </div>
           </div>
         ))}
@@ -1359,7 +1439,7 @@ export default function WanderlyApp() {
     const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
     if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
     const isLive = trip.status === "live";
-    const totalTravellers = trip.travellers.adults + trip.travellers.olderKids + trip.travellers.youngerKids;
+    const totalTravellers = trip.travellers.adults.length + trip.travellers.olderKids.length + trip.travellers.youngerKids.length;
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div style={{ background: isLive ? T.ad : T.blue, color: "#fff", padding: "20px 20px 24px" }}>
@@ -1372,7 +1452,7 @@ export default function WanderlyApp() {
             <p style={{ fontSize: 12, opacity: 0.8 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
             <button onClick={() => { /* pre-fill wizard with this trip's data and navigate to edit */
               setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel) });
-              setWizTravellers({ adults: trip.travellers.adults, olderKids: Array(trip.travellers.olderKids).fill(null).map(() => ({ name: "", age: 10 })), youngerKids: Array(trip.travellers.youngerKids).fill(null).map(() => ({ name: "", age: 5 })) });
+              setWizTravellers({ adults: trip.travellers.adults.map(a => ({ ...a })), olderKids: trip.travellers.olderKids.map(c => ({ ...c })), youngerKids: trip.travellers.youngerKids.map(c => ({ ...c })) });
               setWizStays(trip.stays || []);
               setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.activities), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
               setWizStep(0);
@@ -1392,6 +1472,38 @@ export default function WanderlyApp() {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          {isLive && trip.shareCode && (
+            <div style={{ ...css.card, marginBottom: 16, borderColor: T.a }}>
+              <div style={css.sectionTitle}>Share & Invite</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 10 }}>
+                <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>wanderly.app/join/{trip.shareCode}</code>
+                <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`https://wanderly.app/join/${trip.shareCode}`); }}>Copy link</button>
+              </div>
+              {trip.travellers.adults.map((a, i) => {
+                const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
+                const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
+                const status = a.isLead ? "Organiser ✓" : a.email ? "Invite sent" : "Share link to join";
+                const statusColor = a.isLead ? T.ad : a.email ? T.blue : T.t3;
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < trip.travellers.adults.length - 1 ? `.5px solid ${T.border}` : "none" }}>
+                    <Avatar bg={adultColors[i % adultColors.length]} label={getInit(a.name)} size={28} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 13, fontWeight: 500 }}>{a.name || `Adult ${i + 1}`}</p>
+                      <p style={{ fontSize: 11, color: statusColor }}>{status}</p>
+                    </div>
+                    {!a.isLead && !a.email && (
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <input placeholder="Email" style={{ width: 110, padding: "4px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s2, outline: "none" }} />
+                        <button style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.a }}>Send invite</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <button onClick={() => { setSelectedCreatedTrip(trip); navigate("joinPreview"); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 10, fontSize: 11 }}>Preview join page</button>
+            </div>
+          )}
+
           {!isLive && (
             <div style={{ ...css.card, background: T.al, borderColor: T.a, marginBottom: 16, textAlign: "center", padding: "20px 16px" }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🚀</div>
@@ -1494,6 +1606,67 @@ export default function WanderlyApp() {
     );
   };
 
+  // ─── Screen: Join Preview ───
+  const [joinedSlot, setJoinedSlot] = useState(null);
+  const renderJoinPreviewScreen = () => {
+    const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
+    if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
+    const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
+    const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { setJoinedSlot(null); navigate("createdTrip"); }}>Back</button>
+          <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Join preview</h2>
+          <div />
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div style={{ textAlign: "center", marginBottom: 20, padding: "20px 16px", background: T.al, borderRadius: T.r }}>
+            <p style={{ fontSize: 11, color: T.t3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>You have been invited to</p>
+            <h3 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginBottom: 4 }}>{trip.name}</h3>
+            <p style={{ fontSize: 13, color: T.t2 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
+            {trip.places.length > 0 && (
+              <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap", marginTop: 8 }}>
+                {trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
+              </div>
+            )}
+          </div>
+
+          <div style={css.sectionTitle}>Join as:</div>
+          {trip.travellers.adults.filter(a => !a.isLead).map((a, i) => {
+            const realIdx = i + 1;
+            const slotName = a.name || `Adult ${realIdx + 1}`;
+            const isJoined = joinedSlot === realIdx;
+            return (
+              <div key={realIdx} style={{ ...css.card, display: "flex", alignItems: "center", gap: 12 }}>
+                <Avatar bg={adultColors[realIdx % adultColors.length]} label={getInit(slotName)} size={32} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 14, fontWeight: 500 }}>{slotName}</p>
+                  <p style={{ fontSize: 11, color: T.t3 }}>Unclaimed slot</p>
+                </div>
+                {isJoined ? (
+                  <Tag bg={T.al} color={T.ad}>Joined ✓</Tag>
+                ) : (
+                  <button onClick={() => setJoinedSlot(realIdx)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>Join</button>
+                )}
+              </div>
+            );
+          })}
+          {trip.travellers.adults.filter(a => !a.isLead).length === 0 && (
+            <p style={{ fontSize: 13, color: T.t3, textAlign: "center", padding: 16 }}>No unclaimed adult slots available.</p>
+          )}
+
+          {joinedSlot !== null && (
+            <div style={{ ...css.card, background: T.al, borderColor: T.a, textAlign: "center", marginTop: 12, padding: 16 }}>
+              <p style={{ fontSize: 14, fontWeight: 500, color: T.ad }}>Welcome to {trip.name}!</p>
+              <p style={{ fontSize: 12, color: T.t2, marginTop: 4 }}>You have joined this trip successfully. The organiser will be notified.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // ─── Render ───
   return (
     <div style={{ maxWidth: 430, margin: "0 auto", height: 900, background: T.bg, borderRadius: 22, border: `.5px solid ${T.border}`, overflow: "hidden", fontFamily: T.font, color: T.t1, boxShadow: "0 8px 40px rgba(0,0,0,0.08)" }}>
@@ -1509,6 +1682,7 @@ export default function WanderlyApp() {
         {screen === "share" && renderShareScreen()}
         {screen === "explore" && renderExploreScreen()}
         {screen === "settings" && renderSettingsScreen()}
+        {screen === "joinPreview" && renderJoinPreviewScreen()}
       </div>
     </div>
   );
