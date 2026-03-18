@@ -445,6 +445,9 @@ export default function WanderlyApp() {
 
   const navigate = useCallback((s) => setScreen(s), []);
 
+  // Auto-scroll chat to bottom when messages change
+  useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight); }, [chatMessages]);
+
   // ─── Screen: Home (render function, not component) ───
   const renderHomeScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -1077,8 +1080,6 @@ export default function WanderlyApp() {
         setChatMessages(prev => [...prev, { role: "ai", text: response }]);
       }, 800);
     };
-
-    useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight); }, [chatMessages]);
 
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
