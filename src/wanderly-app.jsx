@@ -277,6 +277,7 @@ export default function WanderlyApp() {
   const chatRef = useRef(null);
   const [chatInput, setChatInput] = useState("");
   const [pollData, setPollData] = useState(POLLS);
+  const [createdTrips, setCreatedTrips] = useState([]);
   const [settingsToggles, setSettingsToggles] = useState(() => {
     const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
     ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
@@ -313,6 +314,28 @@ export default function WanderlyApp() {
     setWizStep(0);
   }, []);
 
+  const createTrip = () => {
+    const name = wizTrip.name.trim() || "Untitled Trip";
+    const formatDate = (d) => { if (!d) return ""; const dt = new Date(d); return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+    const newTrip = {
+      id: Date.now(),
+      name,
+      brief: wizTrip.brief,
+      start: formatDate(wizTrip.start),
+      end: formatDate(wizTrip.end),
+      year: wizTrip.start ? new Date(wizTrip.start).getFullYear() : new Date().getFullYear(),
+      places: [...wizTrip.places],
+      travel: [...wizTrip.travel],
+      travellers: { adults: wizTravellers.adults, olderKids: wizTravellers.olderKids.length, youngerKids: wizTravellers.youngerKids.length },
+      stays: wizStays.map(s => s.name),
+      prefs: { food: [...wizPrefs.food], activities: [...wizPrefs.adultActs, ...wizPrefs.olderActs, ...wizPrefs.youngerActs] },
+    };
+    setCreatedTrips(prev => [newTrip, ...prev]);
+    navigate("home");
+  };
+
+  const deleteCreatedTrip = (id) => setCreatedTrips(prev => prev.filter(t => t.id !== id));
+
   const navigate = useCallback((s) => setScreen(s), []);
 
   // ─── Screen: Home (render function, not component) ───
@@ -327,6 +350,30 @@ export default function WanderlyApp() {
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Your upcoming adventures</p>
+
+        {createdTrips.map(trip => (
+          <div key={trip.id} style={{ ...css.card, position: "relative", overflow: "hidden", marginBottom: 12 }}>
+            <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${T.blueL} 0%, transparent 70%)`, pointerEvents: "none" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <div>
+                <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{trip.name}</h3>
+                <p style={{ fontSize: 12, color: T.t2 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
+              </div>
+              <Tag bg={T.blueL} color={T.blue}>New</Tag>
+            </div>
+            {trip.brief && <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>{trip.brief}</p>}
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+              {trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
+              {trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}
+              {trip.travellers.adults > 0 && <Tag bg={T.coralL} color={T.coral}>{trip.travellers.adults} adult{trip.travellers.adults > 1 ? "s" : ""}</Tag>}
+              {trip.travellers.olderKids > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.olderKids} older kid{trip.travellers.olderKids > 1 ? "s" : ""}</Tag>}
+              {trip.travellers.youngerKids > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.youngerKids} younger kid{trip.travellers.youngerKids > 1 ? "s" : ""}</Tag>}
+              {trip.stays.length > 0 && <Tag bg={T.amberL} color={T.amber}>{trip.stays.length} stay{trip.stays.length > 1 ? "s" : ""}</Tag>}
+            </div>
+            <button onClick={() => deleteCreatedTrip(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.red }}>Remove</button>
+          </div>
+        ))}
+
         <div style={{ ...css.card, cursor: "pointer", position: "relative", overflow: "hidden" }} onClick={() => { setSelectedDay(1); navigate("trip"); }}>
           <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${T.al} 0%, transparent 70%)`, pointerEvents: "none" }} />
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
@@ -397,7 +444,7 @@ export default function WanderlyApp() {
       </div>
       <div style={{ display: "flex", gap: 10, padding: "12px 20px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
         {wizStep > 0 && <button style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
-        <button style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 3 ? setWizStep(wizStep + 1) : navigate("trip")}>
+        <button style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 3 ? setWizStep(wizStep + 1) : createTrip()}>
           {wizStep < 3 ? `Next: ${wizSteps[wizStep + 1]}` : "Create trip"}
         </button>
       </div>
