@@ -279,6 +279,10 @@ export default function WanderlyApp() {
   const [pollData, setPollData] = useState(POLLS);
   const [createdTrips, setCreatedTrips] = useState([]);
   const [selectedCreatedTrip, setSelectedCreatedTrip] = useState(null);
+  const [editingTimelineIdx, setEditingTimelineIdx] = useState(null);
+  const [editingTripId, setEditingTripId] = useState(null);
+  const [tripChatInput, setTripChatInput] = useState("");
+  const [tripChatMessages, setTripChatMessages] = useState([]);
   const [settingsToggles, setSettingsToggles] = useState(() => {
     const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
     ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
@@ -318,8 +322,7 @@ export default function WanderlyApp() {
   const createTrip = () => {
     const name = wizTrip.name.trim() || "Untitled Trip";
     const formatDate = (d) => { if (!d) return ""; const dt = new Date(d); return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
-    const newTrip = {
-      id: Date.now(),
+    const tripData = {
       name,
       brief: wizTrip.brief,
       start: formatDate(wizTrip.start),
@@ -331,13 +334,28 @@ export default function WanderlyApp() {
       travel: [...wizTrip.travel],
       travellers: { adults: wizTravellers.adults, olderKids: wizTravellers.olderKids.length, youngerKids: wizTravellers.youngerKids.length },
       stays: [...wizStays],
-      stayNames: wizStays.map(s => s.name),
+      stayNames: wizStays.map(s => s.name || s),
       prefs: { food: [...wizPrefs.food], activities: [...wizPrefs.adultActs, ...wizPrefs.olderActs, ...wizPrefs.youngerActs] },
-      status: "new",
-      timeline: [],
     };
-    setCreatedTrips(prev => [newTrip, ...prev]);
-    navigate("home");
+    if (editingTripId) {
+      // Update existing trip, preserve status and timeline
+      setCreatedTrips(prev => prev.map(t => {
+        if (t.id !== editingTripId) return t;
+        const updated = { ...t, ...tripData };
+        // Regenerate timeline if live
+        if (t.status === "live") updated.timeline = generateTimeline(updated);
+        return updated;
+      }));
+      const updatedTrip = { ...createdTrips.find(t => t.id === editingTripId), ...tripData };
+      setSelectedCreatedTrip(updatedTrip);
+      setEditingTripId(null);
+      navigate("createdTrip");
+    } else {
+      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [] };
+      setCreatedTrips(prev => [newTrip, ...prev]);
+      setEditingTripId(null);
+      navigate("home");
+    }
   };
 
   const deleteCreatedTrip = (id) => setCreatedTrips(prev => prev.filter(t => t.id !== id));
@@ -368,7 +386,61 @@ export default function WanderlyApp() {
 
   const viewCreatedTrip = (trip) => {
     setSelectedCreatedTrip(trip);
+    setEditingTimelineIdx(null);
+    setTripChatMessages([]);
+    setTripChatInput("");
     navigate("createdTrip");
+  };
+
+  const updateTimelineItem = (tripId, idx, field, value) => {
+    setCreatedTrips(prev => prev.map(t => {
+      if (t.id !== tripId) return t;
+      const timeline = t.timeline.map((item, i) => i === idx ? { ...item, [field]: value } : item);
+      return { ...t, timeline };
+    }));
+  };
+
+  const deleteTimelineItem = (tripId, idx) => {
+    setCreatedTrips(prev => prev.map(t => {
+      if (t.id !== tripId) return t;
+      return { ...t, timeline: t.timeline.filter((_, i) => i !== idx) };
+    }));
+    setEditingTimelineIdx(null);
+  };
+
+  const addTimelineItem = (tripId) => {
+    setCreatedTrips(prev => prev.map(t => {
+      if (t.id !== tripId) return t;
+      const newItem = { time: "12:00 PM", title: "New activity", desc: "Tap to edit details", group: "Everyone", color: T.blue };
+      return { ...t, timeline: [...t.timeline, newItem] };
+    }));
+  };
+
+  const handleTripChat = (tripId) => {
+    const msg = tripChatInput.trim();
+    if (!msg) return;
+    setTripChatMessages(prev => [...prev, { role: "user", text: msg }]);
+    setTripChatInput("");
+    const trip = createdTrips.find(t => t.id === tripId);
+    const loc = trip?.places[0] || "your destination";
+    // Simple AI-like responses based on keywords
+    setTimeout(() => {
+      let reply = "";
+      const lower = msg.toLowerCase();
+      if (lower.includes("restaurant") || lower.includes("food") || lower.includes("eat") || lower.includes("lunch") || lower.includes("dinner")) {
+        reply = `Great question! For ${loc}, I'd recommend checking local restaurant guides. I've updated the dinner slot to "Restaurant research needed." You can edit any timeline item by tapping the ✏️ icon next to it.`;
+      } else if (lower.includes("earlier") || lower.includes("later") || lower.includes("time") || lower.includes("move")) {
+        reply = `You can adjust timings by tapping the ✏️ edit icon on any timeline item and changing the time. Would you like me to suggest an alternative schedule?`;
+      } else if (lower.includes("add") || lower.includes("include") || lower.includes("more")) {
+        reply = `I've added a new activity slot to your timeline. Tap the ✏️ icon to customize it with your preferred activity for ${loc}.`;
+        addTimelineItem(tripId);
+      } else if (lower.includes("remove") || lower.includes("delete") || lower.includes("cancel")) {
+        reply = `You can remove any activity by tapping the ✏️ icon and then the 🗑️ delete button. Which activity would you like to remove?`;
+      } else {
+        reply = `Thanks for the input! You can refine your ${loc} itinerary by:\n• Tapping ✏️ on any timeline item to edit it\n• Using the "+ Add activity" button for new items\n• Telling me what you'd like to change`;
+      }
+      setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+    }, 800);
   };
 
   const navigate = useCallback((s) => setScreen(s), []);
@@ -461,8 +533,8 @@ export default function WanderlyApp() {
   const renderCreateScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("home")}>Cancel</button>
-        <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>New trip</h2>
+        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { if (editingTripId) { setEditingTripId(null); navigate("createdTrip"); } else navigate("home"); }}>Cancel</button>
+        <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>{editingTripId ? "Edit trip" : "New trip"}</h2>
         <span style={{ fontSize: 11, color: T.t3 }}>Step {wizStep + 1} of 4</span>
       </div>
       <div style={{ display: "flex", gap: 4, padding: "10px 20px", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
@@ -483,7 +555,7 @@ export default function WanderlyApp() {
       <div style={{ display: "flex", gap: 10, padding: "12px 20px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
         {wizStep > 0 && <button style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
         <button style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 3 ? setWizStep(wizStep + 1) : createTrip()}>
-          {wizStep < 3 ? `Next: ${wizSteps[wizStep + 1]}` : "Create trip"}
+          {wizStep < 3 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
         </button>
       </div>
     </div>
@@ -500,7 +572,7 @@ export default function WanderlyApp() {
       setPlaceSuggestionsOpen(false);
     };
     const removePlace = (place) => setWizTrip(prev => ({ ...prev, places: prev.places.filter(p => p !== place) }));
-    const travelOpts = ["EV vehicle", "Non-EV vehicle", "Train", "Walking", "Bicycle"];
+    const travelOpts = ["Flight", "EV vehicle", "Non-EV vehicle", "Train", "Walking", "Bicycle"];
     const filteredPlaces = placeInput.trim().length > 0
       ? LOCATION_SUGGESTIONS.filter(loc =>
           loc.toLowerCase().includes(placeInput.trim().toLowerCase()) && !wizTrip.places.includes(loc)
@@ -1295,7 +1367,18 @@ export default function WanderlyApp() {
             {isLive ? <Tag bg="rgba(255,255,255,0.2)" color="#fff">🟢 Live</Tag> : <Tag bg="rgba(255,255,255,0.2)" color="#fff">New</Tag>}
           </div>
           <h2 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400 }}>{trip.name}</h2>
-          <p style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+            <p style={{ fontSize: 12, opacity: 0.8 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
+            <button onClick={() => { /* pre-fill wizard with this trip's data and navigate to edit */
+              setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel) });
+              setWizTravellers({ adults: trip.travellers.adults, olderKids: Array(trip.travellers.olderKids).fill(null).map(() => ({ name: "", age: 10 })), youngerKids: Array(trip.travellers.youngerKids).fill(null).map(() => ({ name: "", age: 5 })) });
+              setWizStays(trip.stays || []);
+              setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.activities), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
+              setWizStep(0);
+              setEditingTripId(trip.id);
+              navigate("create");
+            }} style={{ ...css.btn, ...css.btnSm, color: "#fff", opacity: 0.8, fontSize: 11 }}>✏️ Edit details</button>
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 4, padding: "10px 20px", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
@@ -1319,23 +1402,66 @@ export default function WanderlyApp() {
 
           {isLive && trip.timeline.length > 0 && (
             <>
-              <div style={css.sectionTitle}>Day 1 Itinerary</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={css.sectionTitle}>Day 1 Itinerary</div>
+                <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a }}>+ Add activity</button>
+              </div>
               {trip.timeline.map((item, i) => (
-                <div key={i} style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                <div key={i} style={{ display: "flex", gap: 12, marginBottom: editingTimelineIdx === i ? 8 : 16 }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14 }}>
                     <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
                     {i < trip.timeline.length - 1 && <div style={{ width: 1.5, flex: 1, background: T.border, marginTop: 4 }} />}
                   </div>
                   <div style={{ flex: 1, paddingBottom: 4 }}>
-                    <p style={{ fontSize: 11, color: T.t3, marginBottom: 2 }}>{item.time}</p>
-                    <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
-                    <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
-                    <Tag bg={T.al} color={T.ad}>{item.group}</Tag>
+                    {editingTimelineIdx === i ? (
+                      <div style={{ ...css.card, padding: 10, marginBottom: 4 }}>
+                        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                          <input value={item.time} onChange={e => updateTimelineItem(trip.id, i, "time", e.target.value)}
+                            style={{ width: 90, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Time" />
+                          <input value={item.title} onChange={e => updateTimelineItem(trip.id, i, "title", e.target.value)}
+                            style={{ flex: 1, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Title" />
+                        </div>
+                        <input value={item.desc} onChange={e => updateTimelineItem(trip.id, i, "desc", e.target.value)}
+                          style={{ width: "100%", padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", marginBottom: 6 }} placeholder="Description" />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => setEditingTimelineIdx(null)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 10 }}>✓ Done</button>
+                          <button onClick={() => deleteTimelineItem(trip.id, i)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.red }}>🗑️ Delete</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 11, color: T.t3, marginBottom: 2 }}>{item.time}</p>
+                          <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
+                          <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
+                          <Tag bg={T.al} color={T.ad}>{item.group}</Tag>
+                        </div>
+                        <button onClick={() => setEditingTimelineIdx(i)} style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "2px 6px", opacity: 0.5 }}>✏️</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
-              <div style={{ ...css.card, background: T.s2, textAlign: "center", padding: 16, marginTop: 8 }}>
-                <p style={{ fontSize: 12, color: T.t3 }}>✨ This is a preview itinerary. Chat with Wanderly AI to refine your plans.</p>
+
+              <div style={{ ...css.card, marginTop: 8, padding: 12 }}>
+                <div style={css.sectionTitle}>Refine with AI</div>
+                <div style={{ maxHeight: 150, overflowY: "auto", marginBottom: 8 }}>
+                  {tripChatMessages.length === 0 && (
+                    <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: "8px 0" }}>Ask Wanderly to adjust your itinerary — change times, add activities, find restaurants, and more.</p>
+                  )}
+                  {tripChatMessages.map((msg, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 6 }}>
+                      <div style={{ maxWidth: "85%", padding: "8px 10px", borderRadius: 12, fontSize: 12, lineHeight: 1.4, background: msg.role === "user" ? T.a : T.s2, color: msg.role === "user" ? "#fff" : T.t1, whiteSpace: "pre-line" }}>{msg.text}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input value={tripChatInput} onChange={e => setTripChatInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
+                    style={{ flex: 1, padding: "8px 10px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none" }}
+                    placeholder="e.g. Add a museum visit in the afternoon..." />
+                  <button onClick={() => handleTripChat(trip.id)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>Send</button>
+                </div>
               </div>
             </>
           )}
