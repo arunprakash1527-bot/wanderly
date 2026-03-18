@@ -299,6 +299,8 @@ export default function WanderlyApp() {
 
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState(null);
+  const [videoSettings, setVideoSettings] = useState(new Set(["Music overlay", "AI narration", "Date stamps"]));
 
   // Auth state
   const [user, setUser] = useState(null);
@@ -1605,11 +1607,33 @@ export default function WanderlyApp() {
   // ─── Screen: Memories ───
   const handlePhotoUpload = (e) => {
     const files = Array.from(e.target.files || []);
-    const newPhotos = files.map(f => ({ url: URL.createObjectURL(f), name: f.name, day: "Uploaded" }));
+    const newPhotos = files.map(f => ({ id: Date.now() + "_" + Math.random().toString(36).slice(2, 8), url: URL.createObjectURL(f), name: f.name, day: "Untagged", liked: false, caption: "", uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }));
     setUploadedPhotos(prev => [...prev, ...newPhotos]);
     e.target.value = "";
   };
-  const renderMemoriesScreen = () => (
+  const renderMemoriesScreen = () => {
+    const totalPhotos = uploadedPhotos.length;
+    const likedCount = uploadedPhotos.filter(p => p.liked).length;
+    const daysWithPhotos = new Set(uploadedPhotos.filter(p => p.day !== "Untagged").map(p => p.day)).size;
+    const untaggedPhotos = uploadedPhotos.filter(p => p.day === "Untagged");
+    const dayGroups = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5"];
+    const taggedByDay = {};
+    dayGroups.forEach(d => { taggedByDay[d] = uploadedPhotos.filter(p => p.day === d); });
+
+    const renderPhotoThumb = (p, idx) => (
+      <div key={idx} style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative", border: p.liked ? `2px solid ${T.red}` : "none" }} onClick={() => setViewingPhoto(p)}>
+        <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <span style={{ position: "absolute", bottom: 2, left: 4, color: "#fff", fontSize: 9, fontWeight: 500, textShadow: "0 1px 3px rgba(0,0,0,.6)" }}>{p.name.length > 12 ? p.name.slice(0, 12) + "..." : p.name}</span>
+        <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, liked: !ph.liked } : ph)); }} style={{ position: "absolute", top: 4, left: 4, fontSize: 14, cursor: "pointer", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}>{p.liked ? "\u2764\uFE0F" : "\uD83E\uDD0D"}</span>
+        <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.filter(ph => ph.id !== p.id)); }} style={{ position: "absolute", top: 2, right: 4, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,.6)", lineHeight: 1 }}>&times;</span>
+      </div>
+    );
+
+    const renderUploadBox = () => (
+      <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
+    );
+
+    return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <input type="file" accept="image/*" multiple ref={photoInputRef} style={{ display: "none" }} onChange={handlePhotoUpload} />
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1618,6 +1642,15 @@ export default function WanderlyApp() {
         <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => photoInputRef.current?.click()}>Upload</button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        {/* Trip Stats Banner */}
+        <div style={{ ...css.card, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <span style={{ fontSize: 13, color: T.t2 }}>{"\uD83D\uDCF8"} {totalPhotos} photo{totalPhotos !== 1 ? "s" : ""}</span>
+          <span style={{ fontSize: 13, color: T.t3 }}>&middot;</span>
+          <span style={{ fontSize: 13, color: T.t2 }}>{"\u2764\uFE0F"} {likedCount} favourite{likedCount !== 1 ? "s" : ""}</span>
+          <span style={{ fontSize: 13, color: T.t3 }}>&middot;</span>
+          <span style={{ fontSize: 13, color: T.t2 }}>{"\uD83D\uDCC5"} {daysWithPhotos} day{daysWithPhotos !== 1 ? "s" : ""}</span>
+        </div>
+
         {/* AI Video */}
         <div style={{ ...css.card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
           <div style={{ height: 180, background: `linear-gradient(135deg, ${T.ad}, ${T.a}, #085041)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#fff" }}>
@@ -1642,7 +1675,7 @@ export default function WanderlyApp() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <p style={{ fontSize: 14, fontWeight: 500 }}>Easter Lake District 2026</p>
-                <p style={{ fontSize: 12, color: T.t2 }}>Auto-generated from 12 photos</p>
+                <p style={{ fontSize: 12, color: T.t2 }}>Auto-generated from {totalPhotos} photos</p>
               </div>
               <button style={{ ...css.btn, ...css.btnSm }}>Share</button>
             </div>
@@ -1654,54 +1687,61 @@ export default function WanderlyApp() {
           </div>
         </div>
 
-        {uploadedPhotos.length > 0 && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={css.sectionTitle}>Your uploads</div>
-              <span style={{ fontSize: 12, color: T.t3 }}>{uploadedPhotos.length} photo{uploadedPhotos.length !== 1 ? "s" : ""}</span>
+        {/* Day-grouped photos */}
+        {dayGroups.map(dayLabel => {
+          const dayPhotos = taggedByDay[dayLabel];
+          return (
+            <div key={dayLabel}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={css.sectionTitle}>{dayLabel}</div>
+                <span style={{ fontSize: 12, color: T.t3 }}>{dayPhotos.length} photo{dayPhotos.length !== 1 ? "s" : ""}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
+                {dayPhotos.length > 0 ? (
+                  <>
+                    {dayPhotos.map((p, i) => renderPhotoThumb(p, i))}
+                    {renderUploadBox()}
+                  </>
+                ) : (
+                  renderUploadBox()
+                )}
+              </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
-              {uploadedPhotos.map((p, i) => (
-                <div key={i} style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative" }}>
-                  <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  <span style={{ position: "absolute", bottom: 2, left: 4, color: "#fff", fontSize: 9, fontWeight: 500, textShadow: "0 1px 3px rgba(0,0,0,.6)" }}>{p.name.length > 12 ? p.name.slice(0, 12) + "..." : p.name}</span>
-                </div>
-              ))}
-              <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
-            </div>
-          </div>
-        )}
+          );
+        })}
 
-        {MEMORIES.map((m, mi) => (
-          <div key={mi}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={css.sectionTitle}>{m.label}</div>
-              <span style={{ fontSize: 12, color: T.t3 }}>{m.count} photos</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
-              {m.photos.map((p, i) => (
-                <div key={i} style={{ aspectRatio: "1", borderRadius: T.rs, background: p.color, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                  <span style={{ color: "#fff", fontSize: 10, fontWeight: 500 }}>{p.label}</span>
-                </div>
-              ))}
-              <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
-            </div>
+        {/* Untagged / Your Uploads */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={css.sectionTitle}>Your Uploads</div>
+            <span style={{ fontSize: 12, color: T.t3 }}>{untaggedPhotos.length} photo{untaggedPhotos.length !== 1 ? "s" : ""}</span>
           </div>
-        ))}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 16 }}>
+            {untaggedPhotos.length > 0 ? (
+              <>
+                {untaggedPhotos.map((p, i) => renderPhotoThumb(p, i))}
+                {renderUploadBox()}
+              </>
+            ) : (
+              renderUploadBox()
+            )}
+          </div>
+        </div>
 
         <div style={{ ...css.card, textAlign: "center", padding: 20 }}>
           <p style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>AI video settings</p>
           <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Customise your highlight reel</p>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-            {["Music overlay", "AI narration", "Date stamps", "Slow-mo", "Boomerangs"].map((o, i) => (
-              <span key={o} style={{ ...css.chip, ...(i < 3 ? css.chipActive : {}) }}>{o}</span>
+            {["Music overlay", "AI narration", "Date stamps", "Slow-mo", "Boomerangs"].map((o) => (
+              <span key={o} onClick={() => setVideoSettings(prev => { const next = new Set(prev); if (next.has(o)) next.delete(o); else next.add(o); return next; })} style={{ ...css.chip, ...(videoSettings.has(o) ? css.chipActive : {}), cursor: "pointer" }}>{o}</span>
             ))}
           </div>
         </div>
       </div>
       <TabBar active="memories" onNav={navigate} />
     </div>
-  );
+    );
+  };
 
   // ─── Screen: Share ───
   const renderShareScreen = () => (
@@ -2170,6 +2210,73 @@ export default function WanderlyApp() {
         {screen === "settings" && renderSettingsScreen()}
         {screen === "joinPreview" && renderJoinPreviewScreen()}
       </div>
+      {viewingPhoto && (() => {
+        const photo = viewingPhoto;
+        return (
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 1000, display: "flex", flexDirection: "column", overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px" }}>
+              <button onClick={() => setViewingPhoto(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 28, cursor: "pointer", lineHeight: 1 }}>&times;</button>
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 16px 16px", gap: 12 }}>
+              <img src={photo.url} alt={photo.name} style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: T.rs }} />
+              <div style={{ width: "100%", maxWidth: 400 }}>
+                <p style={{ color: "#fff", fontSize: 13, fontWeight: 500, marginBottom: 2 }}>{photo.name}</p>
+                <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, marginBottom: 10 }}>Uploaded {photo.uploadDate || "—"}</p>
+                <input
+                  type="text"
+                  value={photo.caption || ""}
+                  placeholder="Add a caption..."
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setUploadedPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, caption: val } : p));
+                    setViewingPhoto(prev => ({ ...prev, caption: val }));
+                  }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: T.rs, border: `.5px solid rgba(255,255,255,0.2)`, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: T.font, fontSize: 13, outline: "none", marginBottom: 10 }}
+                />
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, display: "block", marginBottom: 4 }}>Assign to day</label>
+                  <select
+                    value={photo.day || "Untagged"}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setUploadedPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, day: val } : p));
+                      setViewingPhoto(prev => ({ ...prev, day: val }));
+                    }}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: T.rs, border: `.5px solid rgba(255,255,255,0.2)`, background: "rgba(255,255,255,0.15)", color: "#fff", fontFamily: T.font, fontSize: 13, outline: "none" }}
+                  >
+                    <option value="Untagged" style={{ color: "#000" }}>Untagged</option>
+                    <option value="Day 1" style={{ color: "#000" }}>Day 1</option>
+                    <option value="Day 2" style={{ color: "#000" }}>Day 2</option>
+                    <option value="Day 3" style={{ color: "#000" }}>Day 3</option>
+                    <option value="Day 4" style={{ color: "#000" }}>Day 4</option>
+                    <option value="Day 5" style={{ color: "#000" }}>Day 5</option>
+                  </select>
+                </div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                  <button
+                    onClick={() => {
+                      setUploadedPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, liked: !p.liked } : p));
+                      setViewingPhoto(prev => ({ ...prev, liked: !prev.liked }));
+                    }}
+                    style={{ ...css.btn, background: photo.liked ? T.redL : "rgba(255,255,255,0.1)", color: photo.liked ? T.red : "#fff", borderColor: photo.liked ? T.red : "rgba(255,255,255,0.2)" }}
+                  >
+                    {photo.liked ? "\u2764\uFE0F Liked" : "\uD83E\uDD0D Like"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUploadedPhotos(prev => prev.filter(p => p.id !== photo.id));
+                      setViewingPhoto(null);
+                    }}
+                    style={{ ...css.btn, background: "rgba(217,62,62,0.15)", color: T.red, borderColor: T.red }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
