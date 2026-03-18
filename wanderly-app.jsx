@@ -1117,12 +1117,42 @@ export default function WanderlyApp() {
 
   // ─── Screen: Chat ───
   const renderChatScreen = () => {
-    const aiResponses = {
-      "EV chargers": "3 chargers near Ambleside:\n\n1. **Rydal Road** — 50kW CCS, 3 min walk, 2 available\n2. **Tesla Supercharger** — 8 stalls, 8 min drive\n3. **Pod Point, Co-op** — 7kW, 2 min walk",
-      "Restaurants": "For your group:\n\n**The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n**Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n**The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.",
-      "Kids activities": "**Max (12):**\n- Brockhole Adventure Park — nets, zip wire\n- Climbing Wall — indoor, ages 6+\n\n**Ella (8):**\n- Brockhole soft play — free\n- Trotters Animal Farm — pony rides\n\n**Both:** Easter egg trail at Wray Castle, 4 PM today",
-      "Create poll": "I'll set up a poll! Some options:\n\n1. **Tomorrow's activity** — Hike vs boat vs rest day\n2. **Dinner choice** — Pick from 3 restaurants\n3. **Custom question** — Write your own\n\nWhich one?",
-      "Weather": "Ambleside: 12°C, cloudy, wind 8 mph.\n\nDry until 4 PM, light rain 5-7 PM.\n\nOutdoor morning is best. Easter trail at 4 PM should be dry. Spa or climbing wall as rain backup.",
+    const aiResponsePatterns = [
+      { keywords: ["ev", "charger", "charge", "charging", "electric", "plug"], response: "3 chargers near Ambleside:\n\n1. **Rydal Road** — 50kW CCS, 3 min walk, 2 available\n2. **Tesla Supercharger** — 8 stalls, 8 min drive\n3. **Pod Point, Co-op** — 7kW, 2 min walk\n\nShall I add a charging stop to your itinerary?" },
+      { keywords: ["restaurant", "food", "eat", "dinner", "lunch", "breakfast", "cafe", "dining", "hungry"], response: "For your group near Ambleside:\n\n**The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n**Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n**The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.\n\nWant me to add any of these to your itinerary?" },
+      { keywords: ["kid", "child", "children", "activity", "activities", "play", "fun", "game"], response: "**Max (12):**\n- Brockhole Adventure Park — nets, zip wire\n- Climbing Wall — indoor, ages 6+\n\n**Ella (8):**\n- Brockhole soft play — free\n- Trotters Animal Farm — pony rides\n\n**Both:** Easter egg trail at Wray Castle, 4 PM today.\n\nShall I add any to the timeline?" },
+      { keywords: ["poll", "vote", "survey", "decide", "choose", "pick", "opinion"], response: "I'll set up a poll! Some options:\n\n1. **Tomorrow's activity** — Hike vs boat vs rest day\n2. **Dinner choice** — Pick from 3 restaurants\n3. **Custom question** — Write your own\n\nWhich one would you like to create?" },
+      { keywords: ["weather", "rain", "sun", "forecast", "temperature", "cold", "warm", "wind"], response: "**Ambleside forecast:**\n\n🌤 Today: 12°C, cloudy, wind 8 mph. Dry until 4 PM, light rain 5-7 PM.\n☀️ Tomorrow: 14°C, partly sunny, perfect for outdoor activities.\n🌧 Day after: 10°C, rain expected from noon.\n\nOutdoor morning is best today. Easter trail at 4 PM should still be dry. Spa or climbing wall as rain backup." },
+      { keywords: ["swim", "swimming", "pool", "water park", "lido", "lake swim"], response: "Swimming options near Ambleside:\n\n1. **Lake Windermere** — Wild swimming at Millerground (free, scenic). Water temp ~12°C.\n2. **Ambleside Swimming Pool** — Indoor heated, £6/adult, £3.50/child. Open 7am-9pm.\n3. **Brockhole Aqua Park** — Inflatable course on the lake! £15/person, ages 6+. Book ahead.\n4. **Low Wood Bay Spa** — Infinity pool + lake access. Day pass £45.\n\nShall I add any of these to your itinerary?" },
+      { keywords: ["hike", "hiking", "walk", "walking", "trail", "trek", "mountain", "fell", "climb"], response: "Walks near Ambleside:\n\n🟢 **Easy:** Loughrigg Tarn circular — 1.5 miles, flat, great for kids\n🟡 **Medium:** Stock Ghyll Force waterfall — 2 miles, rocky but rewarding\n🔴 **Hard:** Helvellyn via Striding Edge — 8 miles, adults only, spectacular\n\n**Best for your group:** Loughrigg Tarn in the morning when it's dry. Want me to add it?" },
+      { keywords: ["boat", "cruise", "ferry", "sail", "windermere", "lake"], response: "Boat trips on Windermere:\n\n⛵ **Windermere Lake Cruises** — 45 min, £12/adult, £6/child. Departs hourly from Ambleside pier.\n🚤 **Private rowing boat hire** — £20/hour, seats 4. Great for families.\n🛥️ **Cross-lake ferry** — Bowness to Far Sawrey, £7 return. Visit Beatrix Potter's house.\n\nThe 11 AM cruise has the best views. Book?" },
+      { keywords: ["spa", "relax", "massage", "wellness", "pamper"], response: "Spa options near Ambleside:\n\n💆 **Low Wood Bay Spa** — 4.5★, lakeside infinity pool + treatments. Day pass £45.\n🧖 **The Samling Hotel Spa** — 4.8★, luxury. Half day from £80.\n♨️ **Ambleside Salutation Hotel** — 4.2★, small spa + pool. £25 day pass.\n\nPerfect for the rainy afternoon. Want me to book a slot?" },
+      { keywords: ["shop", "shopping", "buy", "market", "souvenir", "gift"], response: "Shopping in the area:\n\n🛍 **Ambleside village** — Indie shops, outdoor gear, fudge shop, art galleries\n🏪 **Keswick Market** — Saturdays, local produce & crafts\n🎁 **World of Beatrix Potter** — Gift shop in Bowness, kids will love it\n🧀 **Hawkshead Relish** — Award-winning chutneys, great gifts\n\nAmbleside shops are walkable from your stay." },
+      { keywords: ["budget", "cost", "spend", "money", "expensive", "cheap", "price"], response: "**Trip budget estimate:**\n\n🏠 Accommodation: ~£180/night × 4 = **£720**\n🍽 Food (family of 6): ~£80/day × 5 = **£400**\n🎫 Activities: ~£150 total\n⛽ EV charging: ~£30 total\n\n**Estimated total: ~£1,300**\n\nWant me to track actual costs as you go?" },
+      { keywords: ["park", "parking", "car park", "where to park"], response: "Parking near Ambleside:\n\n🅿️ **Rydal Road car park** — £8/day, closest to town, has EV chargers\n🅿️ **Miller Ground** — Free after 6 PM, lakeside\n🅿️ **White Platts** — £6/day, 5 min walk to centre\n\n⚡ EV tip: Rydal Road has 50kW chargers, charge while you explore!" },
+      { keywords: ["cancel", "change", "reschedule", "move", "swap", "edit", "modify", "update"], response: "Sure! What would you like to change?\n\n1. **Swap an activity** — Replace something in the timeline\n2. **Move a time slot** — Shift an activity earlier or later\n3. **Cancel a booking** — Remove a booked item\n4. **Add something new** — Insert a new activity\n\nJust tell me what to adjust and I'll update the itinerary." },
+      { keywords: ["help", "what can", "how do", "explain", "guide"], response: "Here's what I can help with:\n\n🗺 **Plan** — Suggest activities, restaurants, routes\n📅 **Schedule** — Add, move, or remove timeline items\n⛅ **Weather** — Real-time forecasts and backup plans\n⚡ **EV** — Find chargers along your route\n🗳 **Polls** — Create group votes for decisions\n💰 **Budget** — Track trip spending\n📍 **Navigate** — Directions to any location\n\nJust ask in plain English!" },
+      { keywords: ["thank", "thanks", "cheers", "great", "perfect", "awesome", "brilliant"], response: "You're welcome! 😊 Enjoy your Lake District adventure. I'm here whenever you need anything — just ask!" },
+      { keywords: ["morning", "today", "plan for today", "what's next", "itinerary", "schedule"], response: "**Today's plan:**\n\n🕙 10:00 — Arrive Windermere, check in\n🕧 12:30 — Lunch at Francine's (veggie + non-veg)\n🕝 2:30 — Lake Windermere walk (everyone)\n🕔 5:00 — Settle into hotel\n🕖 7:00 — Dinner (TBC)\n\n⛅ Weather looks good until 4 PM. Want to adjust anything?" },
+      { keywords: ["emergency", "hospital", "doctor", "pharmacy", "medical", "urgent", "police"], response: "**Emergency contacts:**\n\n🚑 **999** — Emergency services\n🏥 **Ambleside Health Centre** — 015394 32693, Mon-Fri 8am-6pm\n💊 **Ambleside Pharmacy** — 015394 33594, closes 5:30 PM\n🏥 **Nearest A&E** — Westmorland General, Kendal (20 min drive)\n🚔 **Non-emergency police** — 101\n\nStay safe out there!" },
+    ];
+
+    const findResponse = (msg) => {
+      const lower = msg.toLowerCase();
+      // First check exact matches (for quick-tap buttons)
+      const exactMap = { "EV chargers": 0, "Restaurants": 1, "Kids activities": 2, "Create poll": 3, "Weather": 4 };
+      if (exactMap[msg] !== undefined) return aiResponsePatterns[exactMap[msg]].response;
+      // Then do keyword matching — score each pattern
+      let bestMatch = null;
+      let bestScore = 0;
+      for (const pattern of aiResponsePatterns) {
+        const score = pattern.keywords.filter(kw => lower.includes(kw)).length;
+        if (score > bestScore) { bestScore = score; bestMatch = pattern; }
+      }
+      if (bestMatch && bestScore > 0) return bestMatch.response;
+      // Smart fallback based on message length and content
+      if (lower.includes("?")) return `Great question! Let me look into that for your Lake District trip.\n\nBased on your group (4 adults + 2 children) near Ambleside, I'd suggest checking the **Explore** tab for curated options, or try asking about:\n\n• Restaurants & food\n• Activities for kids or adults\n• Weather & planning\n• Boats, hikes, or attractions\n• Budget & costs`;
+      return `Got it! I'll look into "${msg}" for your trip.\n\nHere are some things I can help with right now:\n\n🍽 **Food** — Restaurant suggestions for your group\n🏔 **Activities** — Walks, boats, kids' fun, spa\n⚡ **EV charging** — Nearest chargers\n⛅ **Weather** — Forecast & backup plans\n🗳 **Polls** — Group decision making\n\nJust ask about any of these!`;
     };
 
     const sendMessage = (text) => {
@@ -1131,7 +1161,7 @@ export default function WanderlyApp() {
       setChatInput("");
       setChatMessages(prev => [...prev, { role: "user", text: msg }]);
       setTimeout(() => {
-        const response = aiResponses[msg] || "Based on your group and location near Ambleside, I'll find the best options. What are you looking for?";
+        const response = findResponse(msg.trim());
         setChatMessages(prev => [...prev, { role: "ai", text: response }]);
       }, 800);
     };
