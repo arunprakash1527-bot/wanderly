@@ -177,17 +177,38 @@ const ACTIVITY_SUGGESTIONS = {
   },
 };
 
-// ─── Accommodation Search Database ───
-const ACCOMMODATION_DB = [
-  { name: "The Grand Hotel", type: "Hotel", tags: ["Pool", "Spa", "Restaurant"], rating: 4.7, price: "£££" },
-  { name: "Lakeside Lodge", type: "Lodge", tags: ["Lake view", "Garden", "BBQ"], rating: 4.5, price: "££" },
-  { name: "Mountain View Cottage", type: "Cottage", tags: ["3 beds", "Fireplace", "Pet friendly"], rating: 4.8, price: "££" },
-  { name: "Riverside B&B", type: "B&B", tags: ["Breakfast", "Central", "Parking"], rating: 4.4, price: "£" },
-  { name: "Woodland Retreat", type: "Cabin", tags: ["Hot tub", "Secluded", "2 beds"], rating: 4.9, price: "£££" },
-  { name: "Town Centre Apartment", type: "Apartment", tags: ["Self-catering", "WiFi", "Parking"], rating: 4.3, price: "££" },
-  { name: "Country Manor House", type: "Hotel", tags: ["4 rooms", "Breakfast", "EV charger"], rating: 4.6, price: "£££" },
-  { name: "Shepherds Hut Glamping", type: "Glamping", tags: ["Unique", "Nature", "Couples"], rating: 4.7, price: "££" },
+// ─── Dynamic Accommodation Generator (location-aware) ───
+const ACCOM_TEMPLATES = [
+  { suffix: "Boutique Hotel", type: "Hotel", baseTags: ["Pool", "Spa", "Restaurant"], baseRating: 4.7, price: "£££" },
+  { suffix: "Lodge & Suites", type: "Lodge", baseTags: ["Garden", "Bar", "Parking"], baseRating: 4.5, price: "££" },
+  { suffix: "Country Cottage", type: "Cottage", baseTags: ["3 beds", "Fireplace", "Pet friendly"], baseRating: 4.8, price: "££" },
+  { suffix: "B&B", type: "B&B", baseTags: ["Breakfast", "Central", "Parking"], baseRating: 4.6, price: "£" },
+  { suffix: "Retreat & Spa", type: "Hotel", baseTags: ["Hot tub", "Wellness", "Fine dining"], baseRating: 4.9, price: "£££" },
+  { suffix: "Serviced Apartment", type: "Apartment", baseTags: ["Self-catering", "WiFi", "Kitchen"], baseRating: 4.3, price: "££" },
+  { suffix: "Manor House", type: "Hotel", baseTags: ["4 rooms", "Breakfast", "EV charger"], baseRating: 4.6, price: "£££" },
+  { suffix: "Glamping Pod", type: "Glamping", baseTags: ["Unique", "Nature", "Stargazing"], baseRating: 4.7, price: "££" },
+  { suffix: "Inn", type: "Inn", baseTags: ["Pub", "Traditional", "Dog friendly"], baseRating: 4.4, price: "£" },
+  { suffix: "Guest House", type: "Guest House", baseTags: ["Homely", "Garden", "Breakfast"], baseRating: 4.5, price: "£" },
 ];
+
+function generateLocalAccommodations(places) {
+  if (!places || places.length === 0) return [];
+  const results = [];
+  places.forEach(place => {
+    const placeName = place.trim();
+    ACCOM_TEMPLATES.forEach(tmpl => {
+      results.push({
+        name: `${placeName} ${tmpl.suffix}`,
+        type: tmpl.type,
+        tags: [...tmpl.baseTags],
+        rating: tmpl.baseRating,
+        price: tmpl.price,
+        location: placeName,
+      });
+    });
+  });
+  return results.sort((a, b) => b.rating - a.rating);
+}
 
 // ─── Reusable Form Components (outside main component to prevent remount on state changes) ───
 function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max }) {
@@ -380,7 +401,7 @@ export default function WanderlyApp() {
       }
     };
     const removePlace = (place) => setWizTrip(prev => ({ ...prev, places: prev.places.filter(p => p !== place) }));
-    const travelOpts = ["EV car", "Petrol car", "Train", "Walking", "Bicycle"];
+    const travelOpts = ["EV vehicle", "Non-EV vehicle", "Train", "Walking", "Bicycle"];
     return (
       <>
         <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" />
@@ -502,11 +523,14 @@ export default function WanderlyApp() {
     );
   };
 
-  // ─── Wizard Step: Stays (render function) ───
+  // ─── Wizard Step: Stays (location-aware, sorted by rating) ───
   const renderWizStays = () => {
+    const localAccom = generateLocalAccommodations(wizTrip.places);
+    const locationName = wizTrip.places.length > 0 ? wizTrip.places.join(", ") : "";
+
     const filteredAccom = staySearch.trim()
-      ? ACCOMMODATION_DB.filter(a => a.name.toLowerCase().includes(staySearch.toLowerCase()) || a.type.toLowerCase().includes(staySearch.toLowerCase()) || a.tags.some(t => t.toLowerCase().includes(staySearch.toLowerCase())))
-      : [];
+      ? localAccom.filter(a => a.name.toLowerCase().includes(staySearch.toLowerCase()) || a.type.toLowerCase().includes(staySearch.toLowerCase()) || a.tags.some(t => t.toLowerCase().includes(staySearch.toLowerCase())))
+      : localAccom.slice(0, 6);
 
     const addStay = (accom) => {
       setWizStays(prev => [...prev, { ...accom, checkIn: wizTrip.start || "", checkOut: wizTrip.end || "" }]);
@@ -520,12 +544,24 @@ export default function WanderlyApp() {
       setWizStays(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
     };
 
+    const openLiveSearch = () => {
+      const query = staySearch.trim() || (locationName ? `hotels near ${locationName}` : "hotels");
+      window.open(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(query)}`, "_blank");
+    };
+
+    const openGoogleSearch = () => {
+      const query = staySearch.trim() || (locationName ? `accommodation near ${locationName}` : "accommodation");
+      window.open(`https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`, "_blank");
+    };
+
     return (
       <>
         {wizStays.length === 0 && !staySearchOpen && (
           <div style={{ textAlign: "center", padding: "20px 10px", color: T.t3, fontSize: 13 }}>
             <p style={{ marginBottom: 4 }}>No accommodations added yet.</p>
-            <p style={{ fontSize: 12 }}>Search and add where you'll be staying.</p>
+            <p style={{ fontSize: 12 }}>{wizTrip.places.length > 0
+              ? `Showing suggestions near ${locationName}. Search or browse live options.`
+              : "Add places in Step 1 to get localised suggestions."}</p>
           </div>
         )}
         {wizStays.map((s, i) => (
@@ -533,7 +569,10 @@ export default function WanderlyApp() {
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <div style={{ flex: 1 }}>
                 <h4 style={{ fontSize: 14, fontWeight: 500 }}>{s.name}</h4>
-                {s.rating && <span style={{ fontSize: 11, color: T.amber }}>{"★".repeat(Math.floor(s.rating))} {s.rating}</span>}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {s.rating && <span style={{ fontSize: 11, color: T.amber }}>{"★".repeat(Math.floor(s.rating))} {s.rating}</span>}
+                  {s.location && <span style={{ fontSize: 10, color: T.t3 }}>· {s.location}</span>}
+                </div>
               </div>
               <button style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.red }} onClick={() => removeStay(i)}>Remove</button>
             </div>
@@ -563,21 +602,30 @@ export default function WanderlyApp() {
           <div style={{ ...css.card, padding: 12 }}>
             <input value={staySearch} onChange={e => setStaySearch(e.target.value)} autoFocus
               style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none", marginBottom: 8 }}
-              placeholder="Search hotels, cottages, B&Bs..." />
-            {staySearch.trim() && filteredAccom.length === 0 && (
-              <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: 8 }}>No results for "{staySearch}". Try a different search.</p>
+              placeholder={locationName ? `Search stays near ${locationName}...` : "Search hotels, cottages, B&Bs..."} />
+            {wizTrip.places.length === 0 && (
+              <div style={{ padding: "8px 10px", background: T.amberL, borderRadius: T.rs, fontSize: 12, color: T.amber, marginBottom: 8 }}>
+                Add places in Step 1 to get localised suggestions.
+              </div>
             )}
-            {(staySearch.trim() ? filteredAccom : ACCOMMODATION_DB.slice(0, 4)).map((a, i) => (
+            {filteredAccom.length === 0 && staySearch.trim() && (
+              <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: 8 }}>No local matches for "{staySearch}".</p>
+            )}
+            {filteredAccom.map((a, i) => (
               <div key={i} onClick={() => addStay(a)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `.5px solid ${T.border}`, marginBottom: 6, background: T.s, transition: "background .15s" }}>
                 <div style={{ width: 36, height: 36, borderRadius: 8, background: T.purpleL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🏨</div>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 13, fontWeight: 500 }}>{a.name}</p>
-                  <p style={{ fontSize: 11, color: T.t3 }}>{a.type} · {a.tags.slice(0, 2).join(" · ")} {a.price && `· ${a.price}`}</p>
+                  <p style={{ fontSize: 11, color: T.t3 }}>{a.type} · {a.tags.slice(0, 2).join(" · ")} {a.price && `· ${a.price}`} · ★{a.rating}</p>
                 </div>
                 <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>+ Add</span>
               </div>
             ))}
-            <button onClick={() => { setStaySearchOpen(false); setStaySearch(""); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 4 }}>Cancel</button>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <button onClick={openLiveSearch} style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>Search Booking.com</button>
+              <button onClick={openGoogleSearch} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>Google Hotels</button>
+            </div>
+            <button onClick={() => { setStaySearchOpen(false); setStaySearch(""); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 6 }}>Cancel</button>
           </div>
         ) : (
           <button onClick={() => setStaySearchOpen(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, border: `1.5px dashed ${T.border}`, borderRadius: T.r, color: T.t3, fontSize: 13, cursor: "pointer", background: "none", width: "100%", fontFamily: T.font }}>+ Add accommodation</button>
@@ -585,7 +633,7 @@ export default function WanderlyApp() {
 
         {!wizTrip.start && !wizTrip.end && wizStays.length > 0 && (
           <div style={{ marginTop: 8, padding: "8px 12px", background: T.amberL, borderRadius: T.rs, fontSize: 12, color: T.amber }}>
-            ⚠️ Set trip dates in Step 1 to constrain accommodation dates.
+            Set trip dates in Step 1 to constrain accommodation dates.
           </div>
         )}
       </>
