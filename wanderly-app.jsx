@@ -168,6 +168,17 @@ const GroupTag = ({ type, children }) => {
   return <span style={{ ...css.tag(bg, c), fontSize: 10, padding: "2px 8px" }}>{children}</span>;
 };
 
+// ─── Location Suggestions Database ───
+const LOCATION_SUGGESTIONS = [
+  "London", "Manchester", "Birmingham", "Edinburgh", "Glasgow", "Liverpool", "Bristol", "Leeds", "Sheffield", "Newcastle",
+  "Cambridge", "Oxford", "Bath", "Brighton", "York", "Cardiff", "Belfast", "Nottingham", "Southampton", "Leicester",
+  "Windermere", "Ambleside", "Keswick", "Grasmere", "Lake District", "Cotswolds", "Peak District", "Cornwall", "Devon", "Dorset",
+  "Welwyn Garden City", "St Albans", "Hertford", "Hatfield", "Stevenage", "Watford", "Hitchin", "Letchworth",
+  "Paris", "Amsterdam", "Barcelona", "Rome", "Berlin", "Prague", "Vienna", "Lisbon", "Dublin", "Zurich",
+  "New York", "Los Angeles", "San Francisco", "Tokyo", "Sydney", "Dubai", "Singapore", "Bangkok", "Bali", "Maldives",
+  "Scotland", "Wales", "Northern Ireland", "England", "UK", "France", "Spain", "Italy", "Germany", "Portugal",
+];
+
 // ─── Activity Suggestions by Location ───
 const ACTIVITY_SUGGESTIONS = {
   default: {
@@ -280,6 +291,7 @@ export default function WanderlyApp() {
   const [staySearch, setStaySearch] = useState("");
   const [staySearchOpen, setStaySearchOpen] = useState(false);
   const [placeInput, setPlaceInput] = useState("");
+  const [placeSuggestionsOpen, setPlaceSuggestionsOpen] = useState(false);
   const [foodSearch, setFoodSearch] = useState("");
   const [adultActSearch, setAdultActSearch] = useState("");
   const [olderActSearch, setOlderActSearch] = useState("");
@@ -293,6 +305,7 @@ export default function WanderlyApp() {
     setStaySearch("");
     setStaySearchOpen(false);
     setPlaceInput("");
+    setPlaceSuggestionsOpen(false);
     setFoodSearch("");
     setAdultActSearch("");
     setOlderActSearch("");
@@ -393,15 +406,21 @@ export default function WanderlyApp() {
 
   // ─── Wizard Step: Details (render function, not component) ───
   const renderWizDetails = () => {
-    const addPlace = () => {
-      const p = placeInput.trim();
-      if (p && !wizTrip.places.includes(p)) {
-        setWizTrip(prev => ({ ...prev, places: [...prev.places, p] }));
-        setPlaceInput("");
+    const addPlace = (p) => {
+      const place = (p || placeInput).trim();
+      if (place && !wizTrip.places.includes(place)) {
+        setWizTrip(prev => ({ ...prev, places: [...prev.places, place] }));
       }
+      setPlaceInput("");
+      setPlaceSuggestionsOpen(false);
     };
     const removePlace = (place) => setWizTrip(prev => ({ ...prev, places: prev.places.filter(p => p !== place) }));
     const travelOpts = ["EV vehicle", "Non-EV vehicle", "Train", "Walking", "Bicycle"];
+    const filteredPlaces = placeInput.trim().length > 0
+      ? LOCATION_SUGGESTIONS.filter(loc =>
+          loc.toLowerCase().includes(placeInput.trim().toLowerCase()) && !wizTrip.places.includes(loc)
+        ).slice(0, 8)
+      : [];
     return (
       <>
         <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" />
@@ -410,8 +429,8 @@ export default function WanderlyApp() {
           <ControlledField label="Start date" type="date" value={wizTrip.start} onChange={v => setWizTrip(prev => ({ ...prev, start: v }))} style={{ flex: 1 }} />
           <ControlledField label="End date" type="date" value={wizTrip.end} onChange={v => setWizTrip(prev => ({ ...prev, end: v }))} style={{ flex: 1 }} min={wizTrip.start || undefined} />
         </div>
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Places visiting</label>
+        <div style={{ marginBottom: 14, position: "relative" }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Locations visiting</label>
           {wizTrip.places.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
               {wizTrip.places.map(p => (
@@ -419,8 +438,35 @@ export default function WanderlyApp() {
               ))}
             </div>
           )}
-          <input value={placeInput} onChange={e => setPlaceInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addPlace()}
-            style={{ width: "100%", padding: "9px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" }} placeholder="Type a place and press Enter..." />
+          <input value={placeInput}
+            onChange={e => { setPlaceInput(e.target.value); setPlaceSuggestionsOpen(true); }}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addPlace(); } }}
+            onFocus={() => { if (placeInput.trim()) setPlaceSuggestionsOpen(true); }}
+            onBlur={() => setTimeout(() => setPlaceSuggestionsOpen(false), 200)}
+            style={{ width: "100%", padding: "9px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" }}
+            placeholder="Search locations — e.g. London, UK, Lake District..." />
+          {placeSuggestionsOpen && filteredPlaces.length > 0 && (
+            <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", maxHeight: 200, overflowY: "auto", marginTop: 2 }}>
+              {filteredPlaces.map(loc => (
+                <div key={loc} onMouseDown={e => e.preventDefault()} onClick={() => addPlace(loc)}
+                  style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", borderBottom: `.5px solid ${T.border}`, fontFamily: T.font, transition: "background .1s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = T.s2}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  📍 {loc}
+                </div>
+              ))}
+            </div>
+          )}
+          {placeSuggestionsOpen && placeInput.trim().length > 0 && filteredPlaces.length === 0 && (
+            <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", marginTop: 2 }}>
+              <div onMouseDown={e => e.preventDefault()} onClick={() => addPlace()}
+                style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", fontFamily: T.font, color: T.a }}
+                onMouseEnter={e => e.currentTarget.style.background = T.s2}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                + Add "{placeInput.trim()}" as custom location
+              </div>
+            </div>
+          )}
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Mode of travel</label>
@@ -561,7 +607,7 @@ export default function WanderlyApp() {
             <p style={{ marginBottom: 4 }}>No accommodations added yet.</p>
             <p style={{ fontSize: 12 }}>{wizTrip.places.length > 0
               ? `Showing suggestions near ${locationName}. Search or browse live options.`
-              : "Add places in Step 1 to get localised suggestions."}</p>
+              : "Add locations in Step 1 to get localised suggestions."}</p>
           </div>
         )}
         {wizStays.map((s, i) => (
@@ -603,13 +649,19 @@ export default function WanderlyApp() {
             <input value={staySearch} onChange={e => setStaySearch(e.target.value)} autoFocus
               style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none", marginBottom: 8 }}
               placeholder={locationName ? `Search stays near ${locationName}...` : "Search hotels, cottages, B&Bs..."} />
-            {wizTrip.places.length === 0 && (
+            {wizTrip.places.length === 0 && !staySearch.trim() && (
               <div style={{ padding: "8px 10px", background: T.amberL, borderRadius: T.rs, fontSize: 12, color: T.amber, marginBottom: 8 }}>
-                Add places in Step 1 to get localised suggestions.
+                Add locations in Step 1 to get localised suggestions.
               </div>
             )}
             {filteredAccom.length === 0 && staySearch.trim() && (
-              <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: 8 }}>No local matches for "{staySearch}".</p>
+              <div style={{ textAlign: "center", padding: 8 }}>
+                <p style={{ fontSize: 12, color: T.t3, marginBottom: 6 }}>No local matches for "{staySearch}".</p>
+                <button onClick={() => {
+                  const q = locationName ? `${staySearch.trim()} near ${locationName}` : staySearch.trim();
+                  window.open(`https://www.google.com/search?q=${encodeURIComponent(q + " accommodation")}`, "_blank");
+                }} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, margin: "0 auto" }}>🔍 Search Google for "{staySearch.trim()}"</button>
+              </div>
             )}
             {filteredAccom.map((a, i) => (
               <div key={i} onClick={() => addStay(a)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `.5px solid ${T.border}`, marginBottom: 6, background: T.s, transition: "background .15s" }}>
@@ -622,8 +674,12 @@ export default function WanderlyApp() {
               </div>
             ))}
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              <button onClick={openLiveSearch} style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>Search Booking.com</button>
-              <button onClick={openGoogleSearch} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>Google Hotels</button>
+              <button onClick={openLiveSearch} style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
+                {staySearch.trim() ? `Booking.com: "${staySearch.trim()}"` : locationName ? `Booking.com: ${locationName}` : "Search Booking.com"}
+              </button>
+              <button onClick={openGoogleSearch} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
+                {staySearch.trim() ? `Google: "${staySearch.trim()}"` : locationName ? `Google: ${locationName}` : "Google Hotels"}
+              </button>
             </div>
             <button onClick={() => { setStaySearchOpen(false); setStaySearch(""); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 6 }}>Cancel</button>
           </div>
