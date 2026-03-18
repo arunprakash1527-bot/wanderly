@@ -1137,11 +1137,69 @@ export default function WanderlyApp() {
       { keywords: ["emergency", "hospital", "doctor", "pharmacy", "medical", "urgent", "police"], response: "**Emergency contacts:**\n\n🚑 **999** — Emergency services\n🏥 **Ambleside Health Centre** — 015394 32693, Mon-Fri 8am-6pm\n💊 **Ambleside Pharmacy** — 015394 33594, closes 5:30 PM\n🏥 **Nearest A&E** — Westmorland General, Kendal (20 min drive)\n🚔 **Non-emergency police** — 101\n\nStay safe out there!" },
     ];
 
+    // Context-aware follow-up responses based on last AI message topic
+    const followUpResponses = {
+      poll: [
+        { keywords: ["1", "tomorrow", "activity", "hike", "boat", "rest"], response: "**Poll created!** 🗳\n\n**Tomorrow's activity:**\n- 🥾 Hike around Loughrigg Tarn\n- ⛵ Boat cruise on Windermere\n- 😴 Rest day at the hotel\n\nI've shared it with all travellers. Voting closes tonight at 9 PM. You can check results in the **Polls** tab." },
+        { keywords: ["2", "dinner", "restaurant", "food"], response: "**Poll created!** 🗳\n\n**Dinner choice for tonight:**\n- 🍽 The Drunken Duck (steaks + veggie)\n- 🥗 Fellinis (veggie-focused)\n- 🍺 The Unicorn (pub grills + playground)\n\nShared with all travellers. Voting closes at 5 PM so we can book!" },
+        { keywords: ["3", "custom", "question", "write", "own", "add"], response: "Sure! Type your custom poll question and I'll create it.\n\nExample: **\"Should we extend the trip by one day?\"**\n\nYou can add 2-5 options for people to vote on." },
+      ],
+      restaurant: [
+        { keywords: ["1", "first", "drunken", "duck", "steak"], response: "Great choice! **The Drunken Duck** it is.\n\n📞 I'd recommend calling ahead: 015394 36347\n⏰ Best to book for 6:30 PM (kids eat free before 6 PM)\n📍 12 min drive from Ambleside\n\nShall I add it to tonight's timeline?" },
+        { keywords: ["2", "second", "fellini", "veggie"], response: "Nice pick! **Fellinis** is lovely.\n\n📍 3 min walk from the town centre\n🥗 Great veggie options + children's menu\n⏰ No booking needed, but can get busy after 7 PM\n\nShall I add it to tonight's timeline?" },
+        { keywords: ["3", "third", "unicorn", "pub"], response: "**The Unicorn** — great for the kids with the playground!\n\n📍 5 min walk\n🍺 Pub grills, good portions\n🎪 Playground out back keeps kids busy\n\nShall I add it to tonight's timeline?" },
+        { keywords: ["yes", "add", "please", "sure", "ok", "yeah"], response: "Added to your timeline! ✅\n\n🕖 **7:00 PM — Dinner** has been updated on today's itinerary. All travellers will see the change.\n\nDon't forget to check if you need to book ahead!" },
+      ],
+      charger: [
+        { keywords: ["1", "first", "rydal"], response: "**Rydal Road charger** — good choice, it's the fastest!\n\n⚡ 50kW CCS connector\n📍 3 min walk to town while charging\n💰 ~£8 for a full charge\n⏱ About 45 min to 80%\n\nI've added a charging stop to your timeline." },
+        { keywords: ["yes", "add", "sure", "please"], response: "Added a charging stop to your itinerary! ⚡\n\nI've scheduled it for when you arrive — charge while you check in. You'll find the charger at Rydal Road, 3 min walk from town." },
+      ],
+      swimming: [
+        { keywords: ["1", "lake", "wild", "windermere"], response: "**Wild swimming at Millerground** — great choice!\n\n📍 10 min walk from Ambleside centre\n🌡 Water temp ~12°C — brrr but refreshing!\n🏊 Best in morning when it's calmer\n⚠️ Supervision needed for kids\n\nShall I add it to tomorrow's morning slot?" },
+        { keywords: ["2", "pool", "indoor", "ambleside"], response: "**Ambleside Swimming Pool** — perfect for the family!\n\n📍 5 min walk from town\n💰 £6/adult, £3.50/child\n⏰ Open 7am-9pm\n🏊 Heated indoor pool, family sessions available\n\nWant me to add a swim session to the itinerary?" },
+        { keywords: ["3", "aqua", "inflatable", "brockhole"], response: "**Brockhole Aqua Park** — the kids will love this!\n\n📍 At Brockhole visitor centre\n💰 £15/person, ages 6+\n⏰ Sessions run hourly, book ahead\n🎉 Inflatable obstacle course on the lake!\n\nShall I book a session and add it to the timeline?" },
+        { keywords: ["yes", "add", "sure", "please", "book"], response: "Added to your itinerary! 🏊\n\nI've blocked out a 2-hour slot. Remember to bring towels and a change of clothes!" },
+      ],
+      walk: [
+        { keywords: ["1", "easy", "loughrigg", "tarn", "green"], response: "**Loughrigg Tarn** — lovely choice for the family!\n\n📍 Short drive from Ambleside\n📏 1.5 miles circular, mostly flat\n👶 Pushchair-friendly in dry weather\n📸 Beautiful reflections for photos\n\nBest in the morning — shall I add it to tomorrow?" },
+        { keywords: ["2", "medium", "waterfall", "stock", "ghyll"], response: "**Stock Ghyll Force waterfall** — worth the rocky scramble!\n\n📍 Starts right in Ambleside\n📏 2 miles round trip\n⚠️ Rocky path — good shoes needed, hold little ones' hands\n💧 Spectacular after rain\n\nShall I add it to the timeline?" },
+        { keywords: ["yes", "add", "sure", "please"], response: "Added to your itinerary! 🥾\n\nI've scheduled it for the morning when the weather's best. Don't forget walking shoes and waterproofs!" },
+      ],
+      generic: [
+        { keywords: ["yes", "ok", "sure", "please", "yeah", "do it", "go ahead"], response: "Done! ✅ I've updated your itinerary. You can see the changes on the **Timeline** tab.\n\nAnything else you'd like to adjust?" },
+        { keywords: ["no", "nah", "not now", "later", "nevermind", "cancel"], response: "No problem! Let me know if you change your mind or want to explore other options. 😊" },
+      ],
+    };
+
+    const getLastAiTopic = () => {
+      const aiMsgs = chatMessages.filter(m => m.role === "ai");
+      if (aiMsgs.length === 0) return null;
+      const last = aiMsgs[aiMsgs.length - 1].text.toLowerCase();
+      if (last.includes("poll") && (last.includes("which one") || last.includes("options"))) return "poll";
+      if (last.includes("drunken duck") || last.includes("fellini") || last.includes("unicorn")) return "restaurant";
+      if (last.includes("charger") || last.includes("charging")) return "charger";
+      if (last.includes("swimming") || last.includes("aqua park") || last.includes("pool")) return "swimming";
+      if (last.includes("loughrigg") || last.includes("stock ghyll") || last.includes("helvellyn") || last.includes("walks near")) return "walk";
+      if (last.includes("shall i") || last.includes("want me to") || last.includes("would you like")) return "generic";
+      return null;
+    };
+
     const findResponse = (msg) => {
       const lower = msg.toLowerCase();
       // First check exact matches (for quick-tap buttons)
       const exactMap = { "EV chargers": 0, "Restaurants": 1, "Kids activities": 2, "Create poll": 3, "Weather": 4 };
       if (exactMap[msg] !== undefined) return aiResponsePatterns[exactMap[msg]].response;
+
+      // Check for context-aware follow-ups based on previous AI response
+      const topic = getLastAiTopic();
+      if (topic && followUpResponses[topic]) {
+        const words = lower.split(/\s+/);
+        for (const fu of followUpResponses[topic]) {
+          const fuScore = fu.keywords.filter(kw => words.some(w => w === kw || w.startsWith(kw))).length;
+          if (fuScore > 0) return fu.response;
+        }
+      }
+
       // Then do keyword matching with word boundaries — score each pattern
       const words = lower.split(/\s+/);
       let bestMatch = null;
@@ -1159,7 +1217,7 @@ export default function WanderlyApp() {
       if (bestMatch && bestScore > 0) return bestMatch.response;
       // Smart fallback based on message length and content
       if (lower.includes("?")) return `Great question! Let me look into that for your Lake District trip.\n\nBased on your group (4 adults + 2 children) near Ambleside, I'd suggest checking the **Explore** tab for curated options, or try asking about:\n\n• Restaurants & food\n• Activities for kids or adults\n• Weather & planning\n• Boats, hikes, or attractions\n• Budget & costs`;
-      return `Got it! I'll look into "${msg}" for your trip.\n\nHere are some things I can help with right now:\n\n🍽 **Food** — Restaurant suggestions for your group\n🏔 **Activities** — Walks, boats, kids' fun, spa\n⚡ **EV charging** — Nearest chargers\n⛅ **Weather** — Forecast & backup plans\n🗳 **Polls** — Group decision making\n\nJust ask about any of these!`;
+      return `I'll look into that for you! In the meantime, try asking about:\n\n🍽 **Restaurants** — "where should we eat tonight?"\n🏊 **Swimming** — "swimming options nearby"\n🥾 **Walks** — "easy walks for kids"\n⛵ **Boats** — "boat trips on Windermere"\n⚡ **EV** — "nearest chargers"\n🗳 **Polls** — "create a poll"\n⛅ **Weather** — "forecast for tomorrow"\n💰 **Budget** — "trip costs"\n\nI work best with specific questions!`;
     };
 
     const sendMessage = (text) => {
