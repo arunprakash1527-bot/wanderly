@@ -330,6 +330,7 @@ export default function WanderlyApp() {
   const [adultActSearch, setAdultActSearch] = useState("");
   const [olderActSearch, setOlderActSearch] = useState("");
   const [youngerActSearch, setYoungerActSearch] = useState("");
+  const [lastChatTopic, setLastChatTopic] = useState("");
 
   const resetWizard = useCallback(() => {
     setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
@@ -1109,11 +1110,26 @@ export default function WanderlyApp() {
     return (
       <>
         {wizStays.length === 0 && !staySearchOpen && (
-          <div style={{ textAlign: "center", padding: "20px 10px", color: T.t3, fontSize: 13 }}>
+          <div style={{ textAlign: "center", padding: "20px 10px", color: T.t3, fontSize: 13 }} onClick={() => setStaySearchOpen(true)}>
             <p style={{ marginBottom: 4 }}>No accommodations added yet.</p>
             <p style={{ fontSize: 12 }}>{wizTrip.places.length > 0
               ? `Showing suggestions near ${locationName}. Search or browse live options.`
               : "Add locations in Step 1 to get localised suggestions."}</p>
+          </div>
+        )}
+        {wizStays.length === 0 && !staySearchOpen && filteredAccom.length > 0 && (
+          <div style={{ ...css.card, padding: 12 }}>
+            <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Suggested accommodations:</p>
+            {filteredAccom.map((a, i) => (
+              <div key={i} onClick={() => addStay(a)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `.5px solid ${T.border}`, marginBottom: 6, background: T.s, transition: "background .15s" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: T.purpleL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🏨</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500 }}>{a.name}</p>
+                  <p style={{ fontSize: 11, color: T.t3 }}>{a.type} · {a.tags.slice(0, 2).join(" · ")} {a.price && `· ${a.price}`} · ★{a.rating}</p>
+                </div>
+                <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>+ Add</span>
+              </div>
+            ))}
           </div>
         )}
         {wizStays.map((s, i) => (
@@ -1487,14 +1503,34 @@ export default function WanderlyApp() {
       return null;
     };
 
+    // Topic-based follow-up responses for when lastChatTopic is set but no keyword/context match
+    const topicFollowUpDefaults = {
+      poll: "Great choice! I've created a poll for your group. You can find it in the Polls section. Want to set a deadline for voting?",
+      restaurant: "I can add any of those restaurants to your itinerary. Just say which one, or I can suggest more options nearby.",
+      ev: "Want me to add a charging stop to your itinerary? I can schedule it at the most convenient time.",
+      charger: "Want me to add a charging stop to your itinerary? I can schedule it at the most convenient time.",
+      activity: "I can add that to your itinerary. Would you like it for a specific day?",
+      kids: "I can add that to your itinerary. Would you like it for a specific day?",
+      weather: "I can adjust your itinerary based on the weather. Want me to suggest indoor alternatives for rainy days?",
+      booking: "I can help with that booking. Would you like me to open the booking page, or mark it as confirmed?",
+      swimming: "I can add that to your itinerary. Would you like it for a specific day?",
+      walk: "I can add that to your itinerary. Would you like it for a specific day?",
+      generic: "Done! I've updated your itinerary. You can see the changes on the **Timeline** tab.\n\nAnything else you'd like to adjust?",
+    };
+
     const findResponse = (msg) => {
       const lower = msg.toLowerCase();
       // First check exact matches (for quick-tap buttons)
       const exactMap = { "EV chargers": 0, "Restaurants": 1, "Kids activities": 2, "Create poll": 3, "Weather": 4 };
-      if (exactMap[msg] !== undefined) return aiResponsePatterns[exactMap[msg]].response;
+      if (exactMap[msg] !== undefined) {
+        // Set topic based on exact match
+        const topicMap = { "EV chargers": "ev", "Restaurants": "restaurant", "Kids activities": "kids", "Create poll": "poll", "Weather": "weather" };
+        setLastChatTopic(topicMap[msg] || "");
+        return aiResponsePatterns[exactMap[msg]].response;
+      }
 
       // Check for context-aware follow-ups based on previous AI response
-      const topic = getLastAiTopic();
+      const topic = getLastAiTopic() || lastChatTopic;
       if (topic && followUpResponses[topic]) {
         const words = lower.split(/\s+/);
         for (const fu of followUpResponses[topic]) {
@@ -1507,6 +1543,7 @@ export default function WanderlyApp() {
       const words = lower.split(/\s+/);
       let bestMatch = null;
       let bestScore = 0;
+      let matchedTopic = "";
       for (const pattern of aiResponsePatterns) {
         let score = 0;
         for (const kw of pattern.keywords) {
@@ -1515,9 +1552,44 @@ export default function WanderlyApp() {
           // Single-word keywords: match whole words only (prevents "eat" matching inside "create")
           else if (words.some(w => w === kw || w.startsWith(kw) || w.endsWith(kw + "s") || w === kw + "s" || w === kw + "ing" || w === kw + "er" || w === kw + "ed")) score += 1;
         }
-        if (score > bestScore) { bestScore = score; bestMatch = pattern; }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = pattern;
+          // Determine topic from matched keywords
+          if (pattern.keywords.some(k => ["poll", "vote", "survey"].includes(k))) matchedTopic = "poll";
+          else if (pattern.keywords.some(k => ["restaurant", "food", "dinner", "lunch", "breakfast"].includes(k))) matchedTopic = "restaurant";
+          else if (pattern.keywords.some(k => ["ev", "charger", "charge", "charging"].includes(k))) matchedTopic = "ev";
+          else if (pattern.keywords.some(k => ["kid", "kids", "child", "children"].includes(k))) matchedTopic = "kids";
+          else if (pattern.keywords.some(k => ["weather", "rain", "forecast"].includes(k))) matchedTopic = "weather";
+          else if (pattern.keywords.some(k => ["cancel", "change", "reschedule", "modify"].includes(k))) matchedTopic = "booking";
+          else if (pattern.keywords.some(k => ["swim", "swimming", "pool"].includes(k))) matchedTopic = "swimming";
+          else if (pattern.keywords.some(k => ["hike", "walk", "trail"].includes(k))) matchedTopic = "walk";
+          else matchedTopic = "generic";
+        }
       }
-      if (bestMatch && bestScore > 0) return bestMatch.response;
+      if (bestMatch && bestScore > 0) {
+        setLastChatTopic(matchedTopic);
+        return bestMatch.response;
+      }
+
+      // Handle number responses ("1", "2", "3") and common follow-ups using lastChatTopic
+      const effectiveTopic = topic || lastChatTopic;
+      if (effectiveTopic && topicFollowUpDefaults[effectiveTopic]) {
+        // Check if this looks like a follow-up (short message, number, or common follow-up words)
+        const isFollowUp = /^[1-9]$/.test(lower.trim()) ||
+          ["yes", "no", "ok", "sure", "please", "yeah", "nah", "option", "custom", "add", "do it", "go ahead"].some(w => lower.includes(w));
+        if (isFollowUp) {
+          // Try followUpResponses first for numbered responses
+          if (effectiveTopic && followUpResponses[effectiveTopic]) {
+            for (const fu of followUpResponses[effectiveTopic]) {
+              const fuScore = fu.keywords.filter(kw => words.some(w => w === kw || w.startsWith(kw))).length;
+              if (fuScore > 0) return fu.response;
+            }
+          }
+          return topicFollowUpDefaults[effectiveTopic];
+        }
+      }
+
       // Smart fallback based on message length and content
       if (lower.includes("?")) return `Great question! Let me look into that for your Lake District trip.\n\nBased on your group (4 adults + 2 children) near Ambleside, I'd suggest checking the **Explore** tab for curated options, or try asking about:\n\n• Restaurants & food\n• Activities for kids or adults\n• Weather & planning\n• Boats, hikes, or attractions\n• Budget & costs`;
       return `I'll look into that for you! In the meantime, try asking about:\n\n🍽 **Restaurants** — "where should we eat tonight?"\n🏊 **Swimming** — "swimming options nearby"\n🥾 **Walks** — "easy walks for kids"\n⛵ **Boats** — "boat trips on Windermere"\n⚡ **EV** — "nearest chargers"\n🗳 **Polls** — "create a poll"\n⛅ **Weather** — "forecast for tomorrow"\n💰 **Budget** — "trip costs"\n\nI work best with specific questions!`;
@@ -1909,7 +1981,7 @@ export default function WanderlyApp() {
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div style={{ background: isLive ? T.ad : T.blue, color: "#fff", padding: "20px 20px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <button style={{ ...css.btn, ...css.btnSm, color: "#fff", opacity: 0.8 }} onClick={() => navigate("home")}>← Back</button>
+            <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.15)", borderColor: "rgba(255,255,255,.25)", color: "#fff" }} onClick={() => navigate("home")}>← Back</button>
             {isLive ? <Tag bg="rgba(255,255,255,0.2)" color="#fff">🟢 Live</Tag> : <Tag bg="rgba(255,255,255,0.2)" color="#fff">New</Tag>}
           </div>
           <h2 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400 }}>{trip.name}</h2>
