@@ -283,6 +283,7 @@ export default function WanderlyApp() {
   const [bookingStates, setBookingStates] = useState({});
   const chatRef = useRef(null);
   const photoInputRef = useRef(null);
+  const reelTimerRef = useRef(null);
   const [chatInput, setChatInput] = useState("");
   const [pollData, setPollData] = useState(POLLS);
   const [createdTrips, setCreatedTrips] = useState([]);
@@ -301,6 +302,9 @@ export default function WanderlyApp() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState(null);
   const [videoSettings, setVideoSettings] = useState(new Set(["Music overlay", "AI narration", "Date stamps"]));
+  const [reelPlaying, setReelPlaying] = useState(false);
+  const [reelIndex, setReelIndex] = useState(0);
+  const [reelPaused, setReelPaused] = useState(false);
 
   // Auth state
   const [user, setUser] = useState(null);
@@ -365,6 +369,22 @@ export default function WanderlyApp() {
       setJoinShareCode(joinCode);
     }
   }, []);
+
+  // Trip Reel auto-advance timer
+  useEffect(() => {
+    if (reelPlaying && !reelPaused && uploadedPhotos.length > 0) {
+      reelTimerRef.current = setInterval(() => {
+        setReelIndex(prev => {
+          if (prev >= uploadedPhotos.length - 1) {
+            setReelPlaying(false);
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 4000);
+    }
+    return () => { if (reelTimerRef.current) clearInterval(reelTimerRef.current); };
+  }, [reelPlaying, reelPaused, uploadedPhotos.length]);
 
   const signInWithGoogle = async () => {
     setAuthError("");
@@ -1661,12 +1681,20 @@ export default function WanderlyApp() {
               </>
             ) : (
               <>
-                <button onClick={() => { setVideoState("generating"); setTimeout(() => setVideoState("ready"), 2500); }}
+                <button onClick={() => {
+                    if (uploadedPhotos.length > 0) {
+                      setReelIndex(0);
+                      setReelPaused(false);
+                      setReelPlaying(true);
+                    } else {
+                      alert("Upload some photos first!");
+                    }
+                  }}
                   style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(255,255,255,.2)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
                 </button>
                 <p style={{ fontSize: 13, marginTop: 10, opacity: .8 }}>
-                  {videoState === "ready" ? "Ready! Tap to play your reel" : "AI trip highlight reel"}
+                  {uploadedPhotos.length === 0 ? "Upload photos to create your reel" : "Play trip highlight reel"}
                 </p>
               </>
             )}
@@ -2172,7 +2200,7 @@ export default function WanderlyApp() {
   if (authLoading) {
     return (
       <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Wanderly</h1>
@@ -2186,7 +2214,7 @@ export default function WanderlyApp() {
   if (!user) {
     return (
       <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
         <div style={{ height: "100%" }}>
           {renderAuthScreen()}
         </div>
@@ -2196,7 +2224,7 @@ export default function WanderlyApp() {
 
   return (
     <div style={phoneStyle}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
       <div style={{ height: "100%" }}>
         {screen === "home" && renderHomeScreen()}
         {screen === "create" && renderCreateScreen()}
@@ -2210,6 +2238,89 @@ export default function WanderlyApp() {
         {screen === "settings" && renderSettingsScreen()}
         {screen === "joinPreview" && renderJoinPreviewScreen()}
       </div>
+      {/* Trip Reel Overlay */}
+      {reelPlaying && uploadedPhotos.length > 0 && (() => {
+        const photo = uploadedPhotos[reelIndex] || uploadedPhotos[0];
+        const kbAnimations = ["kb1", "kb2", "kb3", "kb4"];
+        const kbOrigins = ["top left", "center", "bottom right", "top right"];
+        const kbAnim = kbAnimations[reelIndex % 4];
+        const kbOrigin = kbOrigins[reelIndex % 4];
+        const likedCount = uploadedPhotos.filter(p => p.liked).length;
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "#000", display: "flex", flexDirection: "column", fontFamily: T.font }}>
+            {/* Progress bars */}
+            <div style={{ display: "flex", gap: 3, padding: "12px 8px 8px", zIndex: 2 }}>
+              {uploadedPhotos.map((_, i) => (
+                <div key={i} style={{ flex: 1, height: 2.5, borderRadius: 2, overflow: "hidden", background: "rgba(255,255,255,0.3)" }}>
+                  <div style={{
+                    height: "100%",
+                    borderRadius: 2,
+                    background: "#fff",
+                    width: i < reelIndex ? "100%" : i === reelIndex ? "0%" : "0%",
+                    ...(i === reelIndex && !reelPaused ? { animation: "reelProgress 4s linear forwards" } : {}),
+                    ...(i === reelIndex && reelPaused ? { width: "50%" } : {}),
+                  }} />
+                </div>
+              ))}
+            </div>
+            {/* Close button */}
+            <button onClick={() => setReelPlaying(false)} style={{ position: "absolute", top: 10, right: 12, background: "none", border: "none", color: "#fff", fontSize: 28, cursor: "pointer", zIndex: 3, lineHeight: 1, padding: 4 }}>&times;</button>
+            {/* Photo with Ken Burns */}
+            <div key={reelIndex} style={{ flex: 1, overflow: "hidden", position: "relative", animation: "reelFadeIn 0.5s ease-in" }}>
+              <img
+                src={photo.url}
+                alt={photo.name}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  animation: `${kbAnim} 4s ease-in-out forwards`,
+                  transformOrigin: kbOrigin,
+                }}
+              />
+              {/* Pause indicator */}
+              {reelPaused && (
+                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", fontSize: 48, color: "rgba(255,255,255,0.8)", textShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>⏸️</div>
+              )}
+              {/* Bottom overlay gradient */}
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40%", background: "linear-gradient(transparent, rgba(0,0,0,0.7))", pointerEvents: "none" }} />
+              {/* Day badge + caption */}
+              <div style={{ position: "absolute", bottom: 60, left: 16, right: 16, zIndex: 2 }}>
+                <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: 12, background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)", color: "#fff", fontSize: 12, fontWeight: 500, marginBottom: 8 }}>📍 {photo.day || "Untagged"}</span>
+                {photo.caption && <p style={{ color: "#fff", fontSize: 15, fontWeight: 500, marginBottom: 4, textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>{photo.caption}</p>}
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>{photo.name}</p>
+              </div>
+              {/* Stats */}
+              <div style={{ position: "absolute", bottom: 24, left: 16, zIndex: 2 }}>
+                <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>❤️ {likedCount} photo{likedCount !== 1 ? "s" : ""} liked</span>
+              </div>
+              {/* Touch zones */}
+              <div style={{ position: "absolute", inset: 0, display: "flex", zIndex: 1 }}>
+                {/* Left third - previous */}
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => {
+                  if (reelIndex > 0) {
+                    if (reelTimerRef.current) clearInterval(reelTimerRef.current);
+                    setReelIndex(prev => prev - 1);
+                    setReelPaused(false);
+                  }
+                }} />
+                {/* Center third - pause/play */}
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setReelPaused(prev => !prev)} />
+                {/* Right third - next */}
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => {
+                  if (reelTimerRef.current) clearInterval(reelTimerRef.current);
+                  if (reelIndex < uploadedPhotos.length - 1) {
+                    setReelIndex(prev => prev + 1);
+                    setReelPaused(false);
+                  } else {
+                    setReelPlaying(false);
+                  }
+                }} />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {viewingPhoto && (() => {
         const photo = viewingPhoto;
         return (
