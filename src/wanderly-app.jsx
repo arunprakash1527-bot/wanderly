@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from './supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+
+// ─── Supabase Client (inline to avoid module init issues) ───
+const supabase = createClient(
+  'https://bwahdnkptexvvsoofidg.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3YWhkbmtwdGV4dnZzb29maWRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NjMyNTgsImV4cCI6MjA4OTQzOTI1OH0.0XeadG7jWY3_n39SUfI0zImB4NUKK1RLo37gYrGONGs'
+);
 
 // ─── Design Tokens ───
 const T = {
