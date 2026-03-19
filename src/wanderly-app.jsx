@@ -177,13 +177,51 @@ const GroupTag = ({ type, children }) => {
 
 // ─── Location Suggestions Database ───
 const LOCATION_SUGGESTIONS = [
+  // UK
   "London", "Manchester", "Birmingham", "Edinburgh", "Glasgow", "Liverpool", "Bristol", "Leeds", "Sheffield", "Newcastle",
   "Cambridge", "Oxford", "Bath", "Brighton", "York", "Cardiff", "Belfast", "Nottingham", "Southampton", "Leicester",
   "Windermere", "Ambleside", "Keswick", "Grasmere", "Lake District", "Cotswolds", "Peak District", "Cornwall", "Devon", "Dorset",
   "Welwyn Garden City", "St Albans", "Hertford", "Hatfield", "Stevenage", "Watford", "Hitchin", "Letchworth",
+  "Inverness", "Aberdeen", "St Andrews", "Isle of Skye", "Snowdonia", "Jersey",
+  // Europe
   "Paris", "Amsterdam", "Barcelona", "Rome", "Berlin", "Prague", "Vienna", "Lisbon", "Dublin", "Zurich",
-  "New York", "Los Angeles", "San Francisco", "Tokyo", "Sydney", "Dubai", "Singapore", "Bangkok", "Bali", "Maldives",
+  "Madrid", "Seville", "Valencia", "Malaga", "Florence", "Venice", "Milan", "Naples", "Amalfi Coast",
+  "Nice", "Lyon", "Bordeaux", "Marseille", "Munich", "Hamburg", "Cologne", "Brussels", "Bruges",
+  "Copenhagen", "Stockholm", "Oslo", "Helsinki", "Reykjavik", "Budapest", "Krakow", "Warsaw",
+  "Athens", "Santorini", "Mykonos", "Crete", "Dubrovnik", "Split", "Istanbul", "Bucharest",
+  "Tallinn", "Riga", "Ljubljana", "Salzburg", "Innsbruck", "Geneva", "Lucerne", "Interlaken",
+  // Americas
+  "New York", "Los Angeles", "San Francisco", "Chicago", "Miami", "Boston", "Washington DC", "Seattle",
+  "Las Vegas", "New Orleans", "Austin", "Nashville", "Denver", "Portland", "San Diego", "Honolulu",
+  "Toronto", "Vancouver", "Montreal", "Quebec City", "Banff", "Whistler",
+  "Mexico City", "Cancun", "Tulum", "Playa del Carmen",
+  "Rio de Janeiro", "São Paulo", "Buenos Aires", "Lima", "Bogota", "Cartagena", "Medellín",
+  "Santiago", "Cusco", "Machu Picchu", "Galápagos Islands",
+  // Asia
+  "Tokyo", "Kyoto", "Osaka", "Hiroshima", "Nara", "Sapporo",
+  "Bangkok", "Chiang Mai", "Phuket", "Krabi", "Koh Samui",
+  "Singapore", "Kuala Lumpur", "Penang", "Langkawi",
+  "Bali", "Jakarta", "Yogyakarta", "Ubud",
+  "Ho Chi Minh City", "Hanoi", "Da Nang", "Hoi An",
+  "Seoul", "Busan", "Jeju Island",
+  "Beijing", "Shanghai", "Hong Kong", "Taipei", "Macau", "Guilin", "Xi'an", "Chengdu",
+  "Delhi", "Mumbai", "Jaipur", "Goa", "Kerala", "Udaipur", "Agra", "Rishikesh", "Varanasi",
+  "Colombo", "Kandy", "Ella", "Mirissa",
+  "Kathmandu", "Pokhara",
+  // Middle East
+  "Dubai", "Abu Dhabi", "Doha", "Muscat", "Amman", "Petra", "Tel Aviv", "Jerusalem",
+  // Africa
+  "Cape Town", "Johannesburg", "Marrakech", "Fez", "Cairo", "Luxor", "Nairobi", "Zanzibar",
+  "Accra", "Lagos", "Victoria Falls", "Serengeti", "Kruger National Park", "Mauritius", "Seychelles",
+  // Oceania
+  "Sydney", "Melbourne", "Brisbane", "Perth", "Gold Coast", "Cairns", "Byron Bay", "Tasmania",
+  "Auckland", "Queenstown", "Rotorua", "Wellington", "Christchurch", "Milford Sound",
+  "Fiji", "Bora Bora", "Tahiti",
+  // Maldives & Islands
+  "Maldives", "Sri Lanka", "Madagascar", "Azores", "Canary Islands", "Madeira", "Majorca", "Ibiza", "Sardinia", "Sicily",
+  // Regions
   "Scotland", "Wales", "Northern Ireland", "England", "UK", "France", "Spain", "Italy", "Germany", "Portugal",
+  "Swiss Alps", "French Riviera", "Amalfi Coast", "Tuscany", "Provence", "Patagonia", "Amazon Rainforest",
 ];
 
 // ─── Activity Suggestions by Location ───
@@ -360,9 +398,8 @@ export default function WanderlyApp() {
   const [expandedItem, setExpandedItem] = useState(null);
   const [photos, setPhotos] = useState(MEMORIES);
   const [videoState, setVideoState] = useState("idle");
-  const [chatMessages, setChatMessages] = useState([
-    { role: "ai", text: "Good morning! Day 2 of your Lake District trip. 12°C and cloudy — perfect for walking. I've split today: adults + Max do Loughrigg Fell, Ella heads to Brockhole. Everyone meets at Fellinis for lunch. The boat cruise needs confirmation (£42 for 6). There's also an active poll on tonight's dinner — cast your vote!" },
-  ]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatDayInit, setChatDayInit] = useState(null);
   const [bookingStates, setBookingStates] = useState({});
   const chatRef = useRef(null);
   const photoInputRef = useRef(null);
@@ -857,6 +894,64 @@ export default function WanderlyApp() {
   };
 
   const navigate = useCallback((s) => setScreen(s), []);
+
+  // ─── Day-Aware Chat Greeting ───
+  const buildDayGreeting = useCallback((dayNum) => {
+    const day = DAYS[dayNum - 1];
+    const items = TIMELINE[dayNum] || [];
+    const totalDays = DAYS.length;
+    const isFirstDay = dayNum === 1;
+    const isLastDay = dayNum === totalDays;
+    const { temp, cond, icon } = day.weather;
+    const loc = day.location;
+    const bookingsNeeded = items.filter(it => it.needsBooking).map(it => `${it.title} (${it.price})`);
+    const activePolls = POLLS.filter(p => p.status === "active");
+
+    if (isFirstDay) {
+      const arrival = items.find(it => it.title.toLowerCase().includes("arrive") || it.title.toLowerCase().includes("check in"));
+      const lunch = items.find(it => it.title.toLowerCase().includes("lunch"));
+      const dinner = items.find(it => it.title.toLowerCase().includes("dinner"));
+      const stay = TRIP.stays[0];
+      return `Welcome to Day 1 — travel day! 🚗\n\n**Route:** Heading to **${loc}** · ${temp}°C ${icon} ${cond}\n**Accommodation:** ${stay ? stay.name + " (" + stay.tags.join(", ") + ")" : "Check your stays"}\n${arrival ? `**Arrival:** ${arrival.time} — ${arrival.desc}` : ""}\n${lunch ? `**Lunch:** ${lunch.time} at ${lunch.title.replace("Lunch at ", "")} — ${lunch.desc}` : ""}\n${dinner ? `**Dinner:** ${dinner.time} at ${dinner.title.replace("Dinner at ", "")} — ${dinner.desc}` : ""}\n\nNeed help with route planning, EV charging stops, or things to see on the way?`;
+    }
+
+    if (isLastDay) {
+      const checkout = items.find(it => it.title.toLowerCase().includes("pack") || it.title.toLowerCase().includes("checkout"));
+      const driveHome = items.find(it => it.title.toLowerCase().includes("drive home") || it.title.toLowerCase().includes("depart"));
+      const lunch = items.find(it => it.title.toLowerCase().includes("lunch"));
+      return `Final day — Day ${dayNum}! Time to head home.\n\n**${loc}** · ${temp}°C ${icon} ${cond}\n${checkout ? `**${checkout.time}:** ${checkout.title} — ${checkout.desc}` : ""}\n${lunch ? `**Last lunch:** ${lunch.time} at ${lunch.title.replace("Final lunch at ", "").replace("Lunch at ", "")} — ${lunch.desc}` : ""}\n${driveHome ? `**Departure:** ${driveHome.time} — ${driveHome.desc}` : ""}\n\nNeed help planning the drive home, stops en route, or want to revisit a favourite spot before leaving?`;
+    }
+
+    // Middle days — activity-focused
+    const adultItems = items.filter(it => it.for === "adults");
+    const kidItems = items.filter(it => it.for === "kids");
+    const allItems = items.filter(it => it.for === "all");
+    let msg = `Good morning! Day ${dayNum} in **${loc}** · ${temp}°C ${icon} ${cond}\n\n`;
+    if (adultItems.length && kidItems.length) {
+      msg += `I've split activities today:\n**Adults:** ${adultItems.map(it => it.title).join(", ")}\n**Kids:** ${kidItems.map(it => it.title).join(", ")}\n`;
+      const meetup = allItems.find(it => it.title.toLowerCase().includes("lunch"));
+      if (meetup) msg += `Everyone meets at **${meetup.title.replace("Lunch at ", "")}** for lunch.\n`;
+    } else {
+      const highlights = items.slice(0, 3).map(it => `${it.time} — ${it.title}`).join("\n");
+      msg += highlights + "\n";
+    }
+    if (bookingsNeeded.length) msg += `\n📋 **Needs confirmation:** ${bookingsNeeded.join(", ")}`;
+    if (activePolls.length) msg += `\n🗳️ ${activePolls.length} active poll${activePolls.length > 1 ? "s" : ""} — cast your vote!`;
+    return msg;
+  }, []);
+
+  // Initialize chat greeting when entering chat or switching days
+  useEffect(() => {
+    if (screen === "chat" && chatDayInit !== selectedDay) {
+      const greeting = buildDayGreeting(selectedDay);
+      if (chatDayInit === null) {
+        setChatMessages([{ role: "ai", text: greeting }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: "ai", text: `— Switching to Day ${selectedDay} —\n\n${greeting}` }]);
+      }
+      setChatDayInit(selectedDay);
+    }
+  }, [screen, selectedDay, chatDayInit, buildDayGreeting]);
 
   // Auto-scroll chat to bottom when messages change
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight); }, [chatMessages]);
@@ -1574,6 +1669,10 @@ export default function WanderlyApp() {
 
   // ─── Screen: Chat ───
   const renderChatScreen = () => {
+    const chatDay = DAYS[selectedDay - 1];
+    const chatLoc = chatDay.location;
+    const chatItems = TIMELINE[selectedDay] || [];
+
     const aiResponsePatterns = [
       { keywords: ["ev", "charger", "charge", "charging", "electric", "plug"], response: "3 chargers near Ambleside:\n\n1. **Rydal Road** — 50kW CCS, 3 min walk, 2 available\n2. **Tesla Supercharger** — 8 stalls, 8 min drive\n3. **Pod Point, Co-op** — 7kW, 2 min walk\n\nShall I add a charging stop to your itinerary?" },
       { keywords: ["restaurant", "food", "eating", "dinner", "lunch", "breakfast", "cafe", "dining", "hungry", "meal"], response: "For your group near Ambleside:\n\n**The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n**Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n**The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.\n\nWant me to add any of these to your itinerary?" },
@@ -1658,6 +1757,32 @@ export default function WanderlyApp() {
 
     const findResponse = (msg) => {
       const lower = msg.toLowerCase();
+
+      // Day-specific quick action responses
+      const dayQuickResponses = {
+        "Route plan": selectedDay === 1
+          ? `**Getting to ${chatLoc}:**\n\nPopular routes from major cities:\n• **Manchester** — 1h 40m via M6/A591\n• **London** — 4h 30m via M6\n• **Birmingham** — 3h via M6\n\n**Recommended stops:**\n1. **Tebay Services** — best motorway services in the UK, local farm shop, EV chargers\n2. **Lancaster Services** — halfway point, Costa + M&S\n\n**EV charging en route:** Rapid chargers at Tebay (50kW), Lancaster (150kW), Killington Lake (50kW)\n\nWhat's your starting location? I can give you a tailored route.`
+          : `**Route for Day ${selectedDay}:** ${chatItems[0]?.desc || "Check your timeline for today's route."}`,
+        "Stops en route": selectedDay === DAYS.length
+          ? `**Stops on your way home from ${chatLoc}:**\n\n1. **Tebay Services** — 30 min south, farm shop + EV chargers (50kW)\n2. **Rheged Centre** — 25 min, cinema + food hall + playground\n3. **Penrith Castle** — free, quick 20 min stop\n\nWhere are you heading home to? I'll plan the best stops.`
+          : `Nearby stops from ${chatLoc}:\n\n1. **${chatLoc === "Windermere" ? "Orrest Head viewpoint" : chatLoc === "Keswick" ? "Castlerigg Stone Circle" : "Rydal Water"}** — scenic, free, 10 min\n2. **Local shops** in ${chatLoc} town centre\n3. **Lakeside cafe** for a quick break`,
+        "Today's plan": (() => {
+          const summary = chatItems.map(it => `**${it.time}** — ${it.title}${it.for !== "all" ? ` (${it.for})` : ""}`).join("\n");
+          return `Here's your full Day ${selectedDay} in **${chatLoc}**:\n\n${summary}`;
+        })(),
+        "Bookings": (() => {
+          const bookable = chatItems.filter(it => it.needsBooking);
+          if (!bookable.length) return `No bookings needed for Day ${selectedDay} — you're all set! 🎉`;
+          return `**Bookings needed for Day ${selectedDay}:**\n\n${bookable.map(it => `📋 **${it.title}** — ${it.price}\n   ${it.desc}`).join("\n\n")}\n\nWant me to help with any of these?`;
+        })(),
+      };
+
+      // Check day-specific quick actions first
+      if (dayQuickResponses[msg]) {
+        setLastChatTopic("generic");
+        return dayQuickResponses[msg];
+      }
+
       // First check exact matches (for quick-tap buttons)
       const exactMap = { "EV chargers": 0, "Restaurants": 1, "Kids activities": 2, "Create poll": 3, "Weather": 4 };
       if (exactMap[msg] !== undefined) {
@@ -1744,14 +1869,34 @@ export default function WanderlyApp() {
       }, 800);
     };
 
+    // Day-aware quick action chips
+    const isFirstDay = selectedDay === 1;
+    const isLastDay = selectedDay === DAYS.length;
+    const quickActions = isFirstDay
+      ? ["Route plan", "EV chargers", "Stops en route", "Weather", "Today's plan"]
+      : isLastDay
+      ? ["Stops en route", "Route plan", "EV chargers", "Today's plan", "Weather"]
+      : ["Today's plan", "Restaurants", "Kids activities", "EV chargers", "Bookings", "Create poll", "Weather"];
+
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
-          <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Trip chat</h2>
-          <div style={{ display: "flex" }}>
-            {[["You", T.a], ["JM", T.coral], ["SP", T.blue]].map(([l, c], i) => (
-              <Avatar key={i} bg={c} label={l} size={24} style={{ marginLeft: i ? -4 : 0, border: `1.5px solid ${T.s}` }} />
+        <div style={{ background: T.s, borderBottom: `.5px solid ${T.border}` }}>
+          <div style={{ padding: "14px 20px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
+            <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Trip chat</h2>
+            <div style={{ display: "flex" }}>
+              {[["You", T.a], ["JM", T.coral], ["SP", T.blue]].map(([l, c], i) => (
+                <Avatar key={i} bg={c} label={l} size={24} style={{ marginLeft: i ? -4 : 0, border: `1.5px solid ${T.s}` }} />
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 4, padding: "0 20px 10px", overflowX: "auto" }}>
+            {DAYS.map(d => (
+              <button key={d.day} onClick={() => setSelectedDay(d.day)}
+                style={{ ...css.chip, flexShrink: 0, fontSize: 11, padding: "4px 10px",
+                  ...(selectedDay === d.day ? { background: T.a, color: "#fff", borderColor: T.ad } : {}) }}>
+                Day {d.day} · {d.location}
+              </button>
             ))}
           </div>
         </div>
@@ -1770,7 +1915,7 @@ export default function WanderlyApp() {
         </div>
         <div style={{ padding: "0 20px" }}>
           <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "6px 0" }}>
-            {["EV chargers", "Restaurants", "Kids activities", "Create poll", "Weather"].map(p => (
+            {quickActions.map(p => (
               <button key={p} style={{ ...css.chip, flexShrink: 0, fontSize: 12 }} onClick={() => sendMessage(p)}>{p}</button>
             ))}
           </div>
