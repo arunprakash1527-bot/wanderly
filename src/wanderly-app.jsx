@@ -529,13 +529,13 @@ export default function WanderlyApp() {
   // Demo animation tick — drives all animations
   useEffect(() => {
     if (showDemo && !demoPaused) {
-      demoTickRef.current = setInterval(() => setDemoTick(t => t + 1), 120);
+      demoTickRef.current = setInterval(() => setDemoTick(t => t + 1), 220);
     }
     return () => { if (demoTickRef.current) clearInterval(demoTickRef.current); };
   }, [showDemo, demoPaused]);
 
-  // Demo auto-advance slides
-  const DEMO_SLIDE_DURATIONS = [50, 40, 35, 55, 50, 50, 45, 40, 40, 999];
+  // Demo auto-advance slides (ticks at 220ms each)
+  const DEMO_SLIDE_DURATIONS = [52, 46, 40, 58, 48, 48, 48, 42, 44, 999];
   useEffect(() => {
     if (!showDemo) return;
     const dur = DEMO_SLIDE_DURATIONS[demoSlide] || 50;
@@ -2776,7 +2776,7 @@ export default function WanderlyApp() {
   if (authLoading) {
     return (
       <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.4}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-20px);opacity:0}60%{transform:translateY(4px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Wanderly</h1>
@@ -2790,7 +2790,7 @@ export default function WanderlyApp() {
   if (!user) {
     return (
       <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.4}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-20px);opacity:0}60%{transform:translateY(4px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
         <div style={{ height: "100%" }}>
           {renderAuthScreen()}
         </div>
@@ -2800,7 +2800,7 @@ export default function WanderlyApp() {
 
   return (
     <div style={phoneStyle}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.4}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-20px);opacity:0}60%{transform:translateY(4px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
       <div style={{ height: "100%" }}>
         {screen === "home" && renderHomeScreen()}
         {screen === "create" && renderCreateScreen()}
@@ -2928,22 +2928,22 @@ export default function WanderlyApp() {
         // Helper: show element after tick
         const show = (afterTick) => t >= afterTick;
         // Helper: animated style for pop-in
-        const popIn = (delay) => t >= delay ? { animation: "demoPop .4s ease forwards" } : { opacity: 0, transform: "scale(0)" };
-        const slideUp = (delay) => t >= delay ? { animation: "demoSlideUp .4s ease forwards" } : { opacity: 0, transform: "translateY(20px)" };
-        const bounceIn = (delay) => t >= delay ? { animation: "demoBounce .5s ease forwards" } : { opacity: 0 };
+        const popIn = (delay) => t >= delay ? { animation: "demoPop .6s cubic-bezier(.34,1.56,.64,1) forwards" } : { opacity: 0, transform: "scale(0)" };
+        const slideUp = (delay) => t >= delay ? { animation: "demoSlideUp .55s ease-out forwards" } : { opacity: 0, transform: "translateY(16px)" };
+        const bounceIn = (delay) => t >= delay ? { animation: "demoBounce .65s ease-out forwards" } : { opacity: 0 };
         // Typing indicator dots
         const TypingDots = () => (
           <div style={{ display: "flex", gap: 4, padding: "8px 12px", background: T.s2, borderRadius: 12, width: "fit-content" }}>
-            {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: 3, background: T.t3, animation: `demoPulse .8s ease ${i * .2}s infinite` }} />)}
+            {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: 3, background: T.t3, animation: `demoPulse 1s ease ${i * .25}s infinite` }} />)}
           </div>
         );
         // Chat bubble component
         const ChatBubble = ({ text, isUser, delay, typing }) => {
           if (!show(delay)) return null;
-          if (typing && t < delay + 6) return <div style={{ alignSelf: isUser ? "flex-end" : "flex-start", ...slideUp(delay) }}><TypingDots /></div>;
+          if (typing && t < delay + 8) return <div style={{ alignSelf: isUser ? "flex-end" : "flex-start", ...slideUp(delay) }}><TypingDots /></div>;
           return (
             <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 14, fontSize: 12, lineHeight: 1.5, alignSelf: isUser ? "flex-end" : "flex-start",
-              background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t, ...slideUp(delay + (typing ? 6 : 0)) }}>
+              background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t, ...slideUp(delay + (typing ? 8 : 0)) }}>
               {text}
             </div>
           );
@@ -2964,16 +2964,16 @@ export default function WanderlyApp() {
                 </p>
                 <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20, ...slideUp(14) }}>
                   {[["You", T.a], ["James", T.coral], ["Sarah", T.blue], ["+1", T.amber]].map(([n, c], i) => (
-                    <div key={i} style={{ ...popIn(16 + i * 3) }}>
+                    <div key={i} style={{ ...popIn(16 + i * 4) }}>
                       <div style={{ width: 44, height: 44, borderRadius: 22, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 600, margin: "0 auto 4px" }}>{n[0]}</div>
                       <span style={{ fontSize: 10, color: "rgba(255,255,255,.5)" }}>{n}</span>
                     </div>
                   ))}
                 </div>
-                {show(28) && (
+                {show(32) && (
                   <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 14 }}>
                     {[{e:"👦",n:"Max, 12"},{e:"👧",n:"Ella, 8"}].map((k, i) => (
-                      <div key={i} style={{ padding: "6px 14px", borderRadius: 10, background: "rgba(255,255,255,.08)", ...popIn(30 + i * 4) }}>
+                      <div key={i} style={{ padding: "6px 14px", borderRadius: 10, background: "rgba(255,255,255,.08)", ...popIn(34 + i * 5) }}>
                         <span style={{ fontSize: 16 }}>{k.e}</span>
                         <span style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginLeft: 6 }}>{k.n}</span>
                       </div>
@@ -2990,7 +2990,7 @@ export default function WanderlyApp() {
                 <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
                   <div style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: 10 }}>
                     <span style={{ fontSize: 10, color: T.t3 }}>Trip name</span>
-                    <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t }}>{t < 3 ? "│" : typeText("Easter Lake District", 3, 1.5)}</p>
+                    <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t }}>{t < 3 ? "│" : typeText("Easter Lake District", 3, 2)}</p>
                   </div>
                   {show(18) && (
                     <div style={{ display: "flex", gap: 8, marginBottom: 10, ...slideUp(18) }}>
