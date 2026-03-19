@@ -1396,12 +1396,21 @@ export default function WanderlyApp() {
               </div>
             )}
             {filteredAccom.length === 0 && staySearch.trim() && (
-              <div style={{ textAlign: "center", padding: 8 }}>
-                <p style={{ fontSize: 12, color: T.t3, marginBottom: 6 }}>No local matches for "{staySearch}".</p>
+              <div style={{ padding: 8 }}>
+                <p style={{ fontSize: 12, color: T.t3, marginBottom: 8, textAlign: "center" }}>No local matches for "{staySearch}".</p>
+                <div onClick={() => addStay({ name: staySearch.trim(), type: "Custom", tags: ["User added"], rating: null, price: null })}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `1.5px solid ${T.a}`, marginBottom: 8, background: T.al, transition: "background .15s" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: T.a, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0, color: "#fff" }}>+</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 13, fontWeight: 500 }}>Add "{staySearch.trim()}"</p>
+                    <p style={{ fontSize: 11, color: T.t3 }}>Add as custom accommodation</p>
+                  </div>
+                  <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>+ Add</span>
+                </div>
                 <button onClick={() => {
                   const q = locationName ? `${staySearch.trim()} near ${locationName}` : staySearch.trim();
                   window.open(`https://www.google.com/search?q=${encodeURIComponent(q + " accommodation")}`, "_blank");
-                }} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, margin: "0 auto" }}>🔍 Search Google for "{staySearch.trim()}"</button>
+                }} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, margin: "0 auto", display: "block" }}>🔍 Search Google for "{staySearch.trim()}"</button>
               </div>
             )}
             {filteredAccom.map((a, i) => (
