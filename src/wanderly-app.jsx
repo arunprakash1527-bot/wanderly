@@ -53,7 +53,7 @@ const CONNECTORS = {
 const TRIP = {
   name: "Easter Lake District", start: "3 Apr", end: "7 Apr", year: "2026",
   places: ["Windermere", "Ambleside", "Keswick", "Grasmere"],
-  startLocation: "Coulsdon, CR5",
+  startLocation: "Manchester",
   travelMode: "EV vehicle",
   travellers: { adults: 4, older: [{ name: "Max", age: 12 }], younger: [{ name: "Ella", age: 8 }] },
   stays: [
@@ -72,11 +72,10 @@ const DAYS = [
 
 const TIMELINE = {
   1: [
-    { time: "8:00 AM", title: "Depart Coulsdon", desc: "Pack car · Final check · Full EV charge", for: "all", rating: null, price: null },
-    { time: "10:30 AM", title: "Stop at Oxford Services", desc: "EV charge (50kW) · Costa · Stretch legs · 30 min", for: "all", rating: null, price: null },
-    { time: "1:00 PM", title: "Lunch at Tebay Services", desc: "4.7★ · Farm shop · Proper food · EV charger", for: "all", rating: 4.7, price: "££" },
-    { time: "3:30 PM", title: "Arrive Windermere", desc: "Check in at Windermere Boutique Hotel · EV charge", for: "all", rating: null, price: null },
-    { time: "4:30 PM", title: "Lake Windermere walk", desc: "Gentle 1hr lakeside stroll · Stretch after drive", for: "all", rating: 4.8, price: "Free" },
+    { time: "9:00 AM", title: "Depart Manchester", desc: "Pack car · Final check · Full EV charge", for: "all", rating: null, price: null },
+    { time: "10:30 AM", title: "Arrive Windermere", desc: "Check in at Windermere Boutique Hotel · EV charge", for: "all", rating: null, price: null },
+    { time: "11:30 AM", title: "Lake Windermere walk", desc: "Gentle 1hr lakeside stroll · Settle in to the area", for: "all", rating: 4.8, price: "Free" },
+    { time: "1:00 PM", title: "Lunch at Francine's", desc: "4.7★ · Cosy cafe · Great cakes · Veggie options", for: "all", rating: 4.7, price: "££" },
     { time: "7:00 PM", title: "Dinner at The Angel Inn", desc: "4.5★ · Local ales · Roast lamb · Kids portions", for: "all", rating: 4.5, price: "£££" },
   ],
   2: [
@@ -114,7 +113,7 @@ const TIMELINE = {
     { time: "10:00 AM", title: "Catbells family hike", desc: "Moderate · 1.5 hrs · Spectacular views", for: "adults", rating: 4.9, price: "Free" },
     { time: "10:00 AM", title: "Keswick Pencil Museum", desc: "Interactive · World's largest pencil!", for: "kids", rating: 4.3, price: "£5.50" },
     { time: "12:30 PM", title: "Final lunch at Morrels", desc: "4.7★ · Bistro · Seasonal menu", for: "all", rating: 4.7, price: "££" },
-    { time: "2:00 PM", title: "Drive home to Coulsdon", desc: "~5 hrs · Stops at Tebay Services & Oxford (EV chargers)", for: "all", rating: null, price: null },
+    { time: "2:00 PM", title: "Drive home to Manchester", desc: "~1.5 hrs · Stop at Tebay Services (EV charger)", for: "all", rating: null, price: null },
   ],
 };
 
@@ -535,7 +534,7 @@ export default function WanderlyApp() {
   }, [showDemo, demoPaused]);
 
   // Demo auto-advance slides (ticks at 220ms each)
-  const DEMO_SLIDE_DURATIONS = [52, 46, 40, 58, 48, 48, 48, 42, 44, 999];
+  const DEMO_SLIDE_DURATIONS = [52, 62, 40, 58, 48, 48, 48, 42, 44, 999];
   useEffect(() => {
     if (!showDemo) return;
     const dur = DEMO_SLIDE_DURATIONS[demoSlide] || 50;
@@ -1785,7 +1784,7 @@ export default function WanderlyApp() {
       { keywords: ["cancel", "change", "reschedule", "move", "swap", "edit", "modify", "update"], response: "Sure! What would you like to change?\n\n1. **Swap an activity** — Replace something in the timeline\n2. **Move a time slot** — Shift an activity earlier or later\n3. **Cancel a booking** — Remove a booked item\n4. **Add something new** — Insert a new activity\n\nJust tell me what to adjust and I'll update the itinerary." },
       { keywords: ["help", "what can", "how do", "explain", "guide"], response: "Here's what I can help with:\n\n🗺 **Plan** — Suggest activities, restaurants, routes\n📅 **Schedule** — Add, move, or remove timeline items\n⛅ **Weather** — Real-time forecasts and backup plans\n⚡ **EV** — Find chargers along your route\n🗳 **Polls** — Create group votes for decisions\n💰 **Budget** — Track trip spending\n📍 **Navigate** — Directions to any location\n\nJust ask in plain English!" },
       { keywords: ["thank", "thanks", "cheers", "great", "perfect", "awesome", "brilliant"], response: "You're welcome! 😊 Enjoy your Lake District adventure. I'm here whenever you need anything — just ask!" },
-      { keywords: ["morning", "today", "plan for today", "what's next", "itinerary", "schedule"], response: "**Today's plan:**\n\n🕙 10:00 — Arrive Windermere, check in\n🕧 12:30 — Lunch at Francine's (veggie + non-veg)\n🕝 2:30 — Lake Windermere walk (everyone)\n🕔 5:00 — Settle into hotel\n🕖 7:00 — Dinner (TBC)\n\n⛅ Weather looks good until 4 PM. Want to adjust anything?" },
+      { keywords: ["morning", "today", "plan for today", "what's next", "itinerary", "schedule"], response: "**Today's plan:**\n\n🕙 10:30 — Arrive Windermere, check in\n🕧 11:30 — Lake Windermere walk\n🕐 1:00 — Lunch at Francine's (veggie + non-veg)\n🕖 7:00 — Dinner at The Angel Inn\n\n⛅ Weather looks good until 4 PM. Want to adjust anything?" },
       { keywords: ["emergency", "hospital", "doctor", "pharmacy", "medical", "urgent", "police"], response: "**Emergency contacts:**\n\n🚑 **999** — Emergency services\n🏥 **Ambleside Health Centre** — 015394 32693, Mon-Fri 8am-6pm\n💊 **Ambleside Pharmacy** — 015394 33594, closes 5:30 PM\n🏥 **Nearest A&E** — Westmorland General, Kendal (20 min drive)\n🚔 **Non-emergency police** — 101\n\nStay safe out there!" },
     ];
 
@@ -2927,10 +2926,22 @@ export default function WanderlyApp() {
         };
         // Helper: show element after tick
         const show = (afterTick) => t >= afterTick;
-        // Helper: animated style for pop-in
-        const popIn = (delay) => t >= delay ? { animation: "demoPop .6s cubic-bezier(.34,1.56,.64,1) forwards" } : { opacity: 0, transform: "scale(0)" };
-        const slideUp = (delay) => t >= delay ? { animation: "demoSlideUp .55s ease-out forwards" } : { opacity: 0, transform: "translateY(16px)" };
-        const bounceIn = (delay) => t >= delay ? { animation: "demoBounce .65s ease-out forwards" } : { opacity: 0 };
+        // Helpers: return animation only during animation window, then stable static style to prevent flicker
+        const popIn = (delay) => {
+          if (t < delay) return { opacity: 0, transform: "scale(0)" };
+          if (t < delay + 4) return { animation: "demoPop .6s cubic-bezier(.34,1.56,.64,1) forwards" };
+          return { opacity: 1, transform: "scale(1)" };
+        };
+        const slideUp = (delay) => {
+          if (t < delay) return { opacity: 0, transform: "translateY(16px)" };
+          if (t < delay + 4) return { animation: "demoSlideUp .55s ease-out forwards" };
+          return { opacity: 1, transform: "translateY(0)" };
+        };
+        const bounceIn = (delay) => {
+          if (t < delay) return { opacity: 0, transform: "translateY(-16px)" };
+          if (t < delay + 4) return { animation: "demoBounce .65s ease-out forwards" };
+          return { opacity: 1, transform: "translateY(0)" };
+        };
         // Typing indicator dots
         const TypingDots = () => (
           <div style={{ display: "flex", gap: 4, padding: "8px 12px", background: T.s2, borderRadius: 12, width: "fit-content" }}>
@@ -2992,8 +3003,8 @@ export default function WanderlyApp() {
                     <span style={{ fontSize: 10, color: T.t3 }}>Trip name</span>
                     <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t }}>{t < 3 ? "│" : typeText("Easter Lake District", 3, 2)}</p>
                   </div>
-                  {show(18) && (
-                    <div style={{ display: "flex", gap: 8, marginBottom: 10, ...slideUp(18) }}>
+                  {show(45) && (
+                    <div style={{ display: "flex", gap: 8, marginBottom: 10, ...slideUp(45) }}>
                       <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
                         <span style={{ fontSize: 10, color: T.t3 }}>Start</span>
                         <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>3 Apr 2026</p>
@@ -3004,10 +3015,10 @@ export default function WanderlyApp() {
                       </div>
                     </div>
                   )}
-                  {show(22) && (
+                  {show(50) && (
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {["Windermere", "Ambleside", "Keswick", "Grasmere"].map((p, i) => (
-                        show(24 + i * 3) && <span key={p} style={{ ...css.chip, ...css.chipActive, fontSize: 11, padding: "4px 10px", ...popIn(24 + i * 3) }}>{p}</span>
+                        show(52 + i * 3) && <span key={p} style={{ ...css.chip, ...css.chipActive, fontSize: 11, padding: "4px 10px", ...popIn(52 + i * 3) }}>{p}</span>
                       ))}
                     </div>
                   )}
@@ -3054,7 +3065,7 @@ export default function WanderlyApp() {
                   <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 1 · 3 Apr</span>
                 </div>
                 <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8, minHeight: 240 }}>
-                  <ChatBubble delay={2} typing text={<span>🔋 <b>Travel day — heading to Windermere!</b><br/><br/><b>From:</b> Coulsdon, CR5<br/><b>To:</b> Windermere Boutique Hotel<br/><b>Mode:</b> EV vehicle<br/><br/>Anyone to pick up along the way?</span>} />
+                  <ChatBubble delay={2} typing text={<span>🔋 <b>Travel day — heading to Windermere!</b><br/><br/><b>From:</b> Manchester<br/><b>To:</b> Windermere Boutique Hotel<br/><b>Mode:</b> EV vehicle<br/><br/>Anyone to pick up along the way?</span>} />
                   <ChatBubble delay={16} isUser text="No, heading straight there" />
                   <ChatBubble delay={20} typing text="Great! What time would you like to leave?" />
                   {show(30) && (
@@ -3071,7 +3082,7 @@ export default function WanderlyApp() {
                   )}
                   {(demoInteracted.time || show(40)) && (
                     <ChatBubble delay={demoInteracted.time ? 0 : 40} typing text={
-                      <span>🗺️ <b>Your route is ready!</b><br/>Coulsdon → M25 → M1 → M6 → A591<br/>⚡ EV stop: Tebay Services (50kW)<br/>⏱️ ~4.5 hrs with breaks<br/>📍 Arrive ~{demoInteracted.time === "9:00 AM" ? "1:30 PM" : demoInteracted.time === "10:00 AM" ? "2:30 PM" : "12:30 PM"}</span>
+                      <span>🗺️ <b>Your route is ready!</b><br/>Manchester → M6 → A591<br/>⚡ EV stop: Lancaster Services (50kW)<br/>⏱️ ~1.5 hrs with breaks<br/>📍 Arrive ~{demoInteracted.time === "9:00 AM" ? "10:30 AM" : demoInteracted.time === "10:00 AM" ? "11:30 AM" : "9:30 AM"}</span>
                     } />
                   )}
                 </div>
@@ -3121,7 +3132,7 @@ export default function WanderlyApp() {
                   <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 5 · 7 Apr</span>
                 </div>
                 <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <ChatBubble delay={2} typing text={<span>🏠 <b>Time to head home!</b><br/><br/><b>From:</b> Keswick Lakeside Cottage<br/><b>To:</b> Coulsdon, CR5<br/><br/>When do you want to set off?</span>} />
+                  <ChatBubble delay={2} typing text={<span>🏠 <b>Time to head home!</b><br/><br/><b>From:</b> Keswick Lakeside Cottage<br/><b>To:</b> Manchester<br/><br/>When do you want to set off?</span>} />
                   {show(18) && (
                     <div style={{ display: "flex", gap: 6, ...slideUp(18) }}>
                       {["10:00 AM", "After lunch"].map((opt, i) => (
@@ -3135,7 +3146,7 @@ export default function WanderlyApp() {
                   )}
                   {(demoInteracted.depart || show(30)) && (
                     <ChatBubble delay={demoInteracted.depart ? 0 : 30} typing text={
-                      <span>🗺️ <b>Route planned!</b><br/>Keswick → A66 → M6 → M1 → M25<br/>⚡ EV: Tebay Services<br/>☕ Stop: Rheged Centre (playground!)<br/>📍 Home by ~{demoInteracted.depart === "After lunch" ? "7:30 PM" : "4:30 PM"}</span>
+                      <span>🗺️ <b>Route planned!</b><br/>Keswick → A66 → M6 → Manchester<br/>⚡ EV: Tebay Services<br/>☕ Stop: Rheged Centre (playground!)<br/>📍 Home by ~{demoInteracted.depart === "After lunch" ? "5:00 PM" : "1:30 PM"}</span>
                     } />
                   )}
                 </div>
