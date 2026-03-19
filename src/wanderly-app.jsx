@@ -2942,17 +2942,15 @@ export default function WanderlyApp() {
           if (t < delay + 4) return { animation: "demoBounce .65s ease-out forwards" };
           return { opacity: 1, transform: "translateY(0)" };
         };
-        const fadeIn = (delay) => {
-          if (t < delay) return { opacity: 0, transform: "scale(.96)" };
-          if (t < delay + 4) return { animation: "demoFadeIn .5s ease forwards" };
-          return { opacity: 1, transform: "scale(1)" };
-        };
-        // Chat bubble component — single clean fade, no typing dots
+        // Chat bubble — mount at delay, transition at delay+1 (flicker-free)
         const ChatBubble = ({ text, isUser, delay }) => {
-          if (!show(delay)) return null;
+          if (t < delay) return null;
+          const visible = t > delay;
           return (
             <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 14, fontSize: 12, lineHeight: 1.5, alignSelf: isUser ? "flex-end" : "flex-start",
-              background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t, ...fadeIn(delay) }}>
+              background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t,
+              opacity: visible ? 1 : 0, transform: visible ? "scale(1)" : "scale(.96)",
+              transition: "opacity .5s ease, transform .5s ease" }}>
               {text}
             </div>
           );
