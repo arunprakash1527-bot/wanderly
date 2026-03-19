@@ -460,7 +460,11 @@ export default function WanderlyApp() {
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('wanderly_welcomed'));
   const [showDemo, setShowDemo] = useState(false);
   const [demoSlide, setDemoSlide] = useState(0);
+  const [demoTick, setDemoTick] = useState(0);
+  const [demoPaused, setDemoPaused] = useState(false);
+  const [demoInteracted, setDemoInteracted] = useState({});
   const demoTimerRef = useRef(null);
+  const demoTickRef = useRef(null);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -521,6 +525,28 @@ export default function WanderlyApp() {
     }
     return () => { if (reelTimerRef.current) clearInterval(reelTimerRef.current); };
   }, [reelPlaying, reelPaused, uploadedPhotos.length]);
+
+  // Demo animation tick — drives all animations
+  useEffect(() => {
+    if (showDemo && !demoPaused) {
+      demoTickRef.current = setInterval(() => setDemoTick(t => t + 1), 120);
+    }
+    return () => { if (demoTickRef.current) clearInterval(demoTickRef.current); };
+  }, [showDemo, demoPaused]);
+
+  // Demo auto-advance slides
+  const DEMO_SLIDE_DURATIONS = [50, 40, 35, 55, 50, 50, 45, 40, 40, 999];
+  useEffect(() => {
+    if (!showDemo) return;
+    const dur = DEMO_SLIDE_DURATIONS[demoSlide] || 50;
+    if (demoTick >= dur && demoSlide < 9) {
+      setDemoSlide(s => s + 1);
+      setDemoTick(0);
+    }
+  }, [showDemo, demoTick, demoSlide]);
+
+  // Reset tick on slide change
+  useEffect(() => { setDemoTick(0); }, [demoSlide]);
 
   const signInWithGoogle = async () => {
     setAuthError("");
@@ -2750,7 +2776,7 @@ export default function WanderlyApp() {
   if (authLoading) {
     return (
       <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.4}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-20px);opacity:0}60%{transform:translateY(4px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Wanderly</h1>
@@ -2764,7 +2790,7 @@ export default function WanderlyApp() {
   if (!user) {
     return (
       <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.4}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-20px);opacity:0}60%{transform:translateY(4px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
         <div style={{ height: "100%" }}>
           {renderAuthScreen()}
         </div>
@@ -2774,7 +2800,7 @@ export default function WanderlyApp() {
 
   return (
     <div style={phoneStyle}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.4}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-20px);opacity:0}60%{transform:translateY(4px)}100%{transform:translateY(0);opacity:1}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
       <div style={{ height: "100%" }}>
         {screen === "home" && renderHomeScreen()}
         {screen === "create" && renderCreateScreen()}
@@ -2889,292 +2915,426 @@ export default function WanderlyApp() {
         </div>
       )}
       {showDemo && (() => {
-        const DEMO_SLIDES = [
-          {
-            icon: "🌍", title: "Plan your perfect trip",
-            subtitle: "Name it, set dates, pick your destinations",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 16, textAlign: "left" }}>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.a }} />
-                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.s3 }} />
-                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.s3 }} />
-                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.s3 }} />
-                </div>
-                <div style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, color: T.t3 }}>Trip name</span>
-                  <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2 }}>Easter Lake District</p>
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
-                    <span style={{ fontSize: 10, color: T.t3 }}>Start</span>
-                    <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>3 Apr 2026</p>
-                  </div>
-                  <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
-                    <span style={{ fontSize: 10, color: T.t3 }}>End</span>
-                    <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>7 Apr 2026</p>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {["Windermere", "Ambleside", "Keswick", "Grasmere"].map(p => (
-                    <span key={p} style={{ ...css.chip, ...css.chipActive, fontSize: 11, padding: "4px 10px" }}>{p}</span>
-                  ))}
-                </div>
-              </div>
-            ),
-          },
-          {
-            icon: "👨‍👩‍👧‍👦", title: "Add your travel group",
-            subtitle: "Adults, kids, dietary needs — the AI plans for everyone",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 16, textAlign: "left" }}>
-                <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
-                  {[["You", T.a], ["James", T.coral], ["Sarah", T.blue], ["+1", T.amber]].map(([n, c], i) => (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 18, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 600 }}>{n[0]}</div>
-                      <span style={{ fontSize: 10, color: T.t2 }}>{n}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 10, textAlign: "center" }}>
-                    <span style={{ fontSize: 18 }}>👦</span>
-                    <p style={{ fontSize: 11, fontWeight: 500, marginTop: 2 }}>Max, 12</p>
-                  </div>
-                  <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 10, textAlign: "center" }}>
-                    <span style={{ fontSize: 18 }}>👧</span>
-                    <p style={{ fontSize: 11, fontWeight: 500, marginTop: 2 }}>Ella, 8</p>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {["Vegetarian", "Nut allergy", "Kids menu"].map(t => (
-                    <span key={t} style={{ padding: "4px 10px", borderRadius: 12, fontSize: 10, background: T.coralL, color: T.coral }}>{t}</span>
-                  ))}
-                </div>
-              </div>
-            ),
-          },
-          {
-            icon: "🏨", title: "Book your stays",
-            subtitle: "Search, compare, or add your own accommodations",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 16, textAlign: "left" }}>
-                {[
-                  { name: "Windermere Boutique Hotel", dates: "3-5 Apr", type: "Hotel", tags: ["2 rooms", "Breakfast", "EV charger"] },
-                  { name: "Keswick Lakeside Cottage", dates: "5-7 Apr", type: "Cottage", tags: ["3 beds", "Garden", "Dog friendly"] },
-                ].map((s, i) => (
-                  <div key={i} style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: i === 0 ? 8 : 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</span>
-                      <span style={{ fontSize: 10, color: T.t3, background: T.amberL, padding: "2px 8px", borderRadius: 8 }}>{s.type}</span>
-                    </div>
-                    <span style={{ fontSize: 11, color: T.t3 }}>{s.dates}</span>
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
-                      {s.tags.map(t => <span key={t} style={{ fontSize: 9, padding: "2px 7px", borderRadius: 8, background: T.al, color: T.ad }}>{t}</span>)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ),
-          },
-          {
-            icon: "🔋", title: "Day 1: AI plans your route",
-            subtitle: "Start location, EV stops, arrival time — all conversational",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
-                <div style={{ background: T.s2, borderRadius: 10, padding: 12, marginBottom: 8 }}>
-                  <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>🔋 Travel day — heading to Windermere!</p>
-                  <p style={{ fontSize: 11, color: T.t2 }}><b>From:</b> Coulsdon, CR5</p>
-                  <p style={{ fontSize: 11, color: T.t2 }}><b>To:</b> Windermere Boutique Hotel</p>
-                  <p style={{ fontSize: 11, color: T.t2 }}><b>Mode:</b> EV vehicle</p>
-                </div>
-                <div style={{ background: T.al, borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 11, color: T.ad }}>
-                  ⚡ EV stops: Tebay Services (50kW) · Booths Windermere
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {["8:00 AM", "9:00 AM", "10:00 AM"].map(t => (
-                    <span key={t} style={{ ...css.chip, fontSize: 10, padding: "4px 10px", ...(t === "8:00 AM" ? css.chipActive : {}) }}>{t}</span>
-                  ))}
-                </div>
-              </div>
-            ),
-          },
-          {
-            icon: "🎯", title: "Activity days: Smart itineraries",
-            subtitle: "Split plans for adults & kids, anchored to your stay",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
-                <p style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>Day 2 in <b>Ambleside</b> · 12°C ☁️</p>
-                <div style={{ background: T.amberL, borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 11 }}>
-                  🏨 Base: <b>Windermere Boutique Hotel</b>
-                </div>
-                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                  <div style={{ flex: 1, background: T.blueL, borderRadius: 8, padding: 8 }}>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: T.blue, marginBottom: 4 }}>Adults</p>
-                    <p style={{ fontSize: 10 }}>Loughrigg Fell walk</p>
-                    <p style={{ fontSize: 10 }}>Low Wood Bay Spa</p>
-                  </div>
-                  <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 8 }}>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: T.pink, marginBottom: 4 }}>Kids</p>
-                    <p style={{ fontSize: 10 }}>Brockhole Adventure</p>
-                    <p style={{ fontSize: 10 }}>Easter egg trail</p>
-                  </div>
-                </div>
-                <div style={{ fontSize: 11, color: T.ad }}>🍽️ Everyone meets at <b>Fellinis</b> for lunch</div>
-              </div>
-            ),
-          },
-          {
-            icon: "🏠", title: "Last day: Departure planning",
-            subtitle: "Route home with stops, EV charges, and timing",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
-                <div style={{ background: T.s2, borderRadius: 10, padding: 12, marginBottom: 8 }}>
-                  <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>🏠 Heading back to Coulsdon, CR5!</p>
-                  <p style={{ fontSize: 11, color: T.t2 }}><b>From:</b> Keswick Lakeside Cottage</p>
-                  <p style={{ fontSize: 11, color: T.t2 }}><b>To:</b> Coulsdon, CR5</p>
-                </div>
-                <div style={{ fontSize: 11, marginBottom: 8 }}>
-                  <p style={{ fontWeight: 500, marginBottom: 4 }}>Suggested stops:</p>
-                  <p>1. Tebay Services — farm shop + cafe</p>
-                  <p>2. Rheged Centre — food hall + playground</p>
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {["10:00 AM", "After lunch"].map(t => (
-                    <span key={t} style={{ ...css.chip, fontSize: 10, padding: "4px 10px", ...(t === "10:00 AM" ? css.chipActive : {}) }}>{t}</span>
-                  ))}
-                </div>
-              </div>
-            ),
-          },
-          {
-            icon: "🗳️", title: "Decide together with polls",
-            subtitle: "Group voting on restaurants, activities, and routes",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
-                <p style={{ fontSize: 12, fontWeight: 500, marginBottom: 10 }}>Where should we eat dinner?</p>
-                {[
-                  { text: "The Drunken Duck — steaks, kids free", pct: 60, voted: true },
-                  { text: "The Unicorn — pub grills, playground", pct: 20 },
-                  { text: "Lake Road Kitchen — Nordic, upscale", pct: 20 },
-                ].map((o, i) => (
-                  <div key={i} style={{ marginBottom: 6, position: "relative", borderRadius: 8, overflow: "hidden", border: `.5px solid ${o.voted ? T.a : T.border}` }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${o.pct}%`, background: o.voted ? T.al : T.s2, transition: "width 1s ease" }} />
-                    <div style={{ position: "relative", padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 11 }}>{o.voted ? "✓ " : ""}{o.text}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>{o.pct}%</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ),
-          },
-          {
-            icon: "📸", title: "Capture & relive memories",
-            subtitle: "Upload photos day-by-day and build your trip gallery",
-            mockup: (
-              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
-                <p style={{ fontSize: 12, fontWeight: 500, marginBottom: 10 }}>Day 2 — Ambleside · 8 photos</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 10 }}>
-                  {[
-                    { label: "Fell view", color: "#5A8C6E" }, { label: "Lake", color: "#5A7EA0" },
-                    { label: "Lunch", color: "#A08060" }, { label: "Ella playing", color: "#7EA060" },
-                    { label: "Boat trip", color: "#4A8BA0" }, { label: "Ice cream", color: "#A04A8B" },
-                    { label: "Pub dinner", color: "#8A7348" }, { label: "Sunset", color: "#486A8A" },
-                  ].map((p, i) => (
-                    <div key={i} style={{ aspectRatio: "1", borderRadius: 6, background: p.color, display: "flex", alignItems: "flex-end", padding: 3 }}>
-                      <span style={{ fontSize: 7, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.5)" }}>{p.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <button style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", fontSize: 11 }}>📷 Add photos</button>
-              </div>
-            ),
-          },
-          {
-            icon: "✨", title: "AI-generated trip highlights",
-            subtitle: "Auto-curated video reel with music, narration & date stamps",
-            mockup: (
-              <div style={{ background: "#1a1a1a", borderRadius: 12, padding: 14, textAlign: "center", color: "#fff" }}>
-                <div style={{ display: "flex", gap: 3, marginBottom: 12, justifyContent: "center" }}>
-                  {[1,2,3,4,5].map(i => (
-                    <div key={i} style={{ height: 3, flex: 1, borderRadius: 2, background: i <= 3 ? T.a : "rgba(255,255,255,.2)" }} />
-                  ))}
-                </div>
-                <div style={{ width: 80, height: 80, borderRadius: 40, background: "linear-gradient(135deg, #5A8C6E, #4A8BA0)", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 32 }}>▶</span>
-                </div>
-                <p style={{ fontFamily: T.fontD, fontSize: 16, marginBottom: 4 }}>Easter Lake District 2026</p>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginBottom: 12 }}>3 Apr – 7 Apr · 12 photos · AI narrated</p>
-                <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
-                  {["Music overlay", "AI narration", "Date stamps"].map(s => (
-                    <span key={s} style={{ fontSize: 9, padding: "3px 8px", borderRadius: 8, background: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.8)" }}>✓ {s}</span>
-                  ))}
-                </div>
-              </div>
-            ),
-          },
-          {
-            icon: "🚀", title: "Ready to plan your trip?",
-            subtitle: "Create your own adventure in minutes",
-            mockup: (
-              <div style={{ textAlign: "center", padding: 10 }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🌍</div>
-                <p style={{ fontSize: 13, color: T.t2, marginBottom: 16, lineHeight: 1.5 }}>
-                  Wanderly connects to 18 travel services — maps, weather, bookings, EV chargers, and more — to build your perfect trip.
+        const t = demoTick;
+        const s = demoSlide;
+        const total = 10;
+        const isLast = s === total - 1;
+        // Helper: typewriter text (reveals chars based on tick)
+        const typeText = (text, startTick, speed = 2) => {
+          const elapsed = Math.max(0, t - startTick);
+          const chars = Math.min(text.length, Math.floor(elapsed / speed));
+          return text.substring(0, chars) + (chars < text.length ? "│" : "");
+        };
+        // Helper: show element after tick
+        const show = (afterTick) => t >= afterTick;
+        // Helper: animated style for pop-in
+        const popIn = (delay) => t >= delay ? { animation: "demoPop .4s ease forwards" } : { opacity: 0, transform: "scale(0)" };
+        const slideUp = (delay) => t >= delay ? { animation: "demoSlideUp .4s ease forwards" } : { opacity: 0, transform: "translateY(20px)" };
+        const bounceIn = (delay) => t >= delay ? { animation: "demoBounce .5s ease forwards" } : { opacity: 0 };
+        // Typing indicator dots
+        const TypingDots = () => (
+          <div style={{ display: "flex", gap: 4, padding: "8px 12px", background: T.s2, borderRadius: 12, width: "fit-content" }}>
+            {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: 3, background: T.t3, animation: `demoPulse .8s ease ${i * .2}s infinite` }} />)}
+          </div>
+        );
+        // Chat bubble component
+        const ChatBubble = ({ text, isUser, delay, typing }) => {
+          if (!show(delay)) return null;
+          if (typing && t < delay + 6) return <div style={{ alignSelf: isUser ? "flex-end" : "flex-start", ...slideUp(delay) }}><TypingDots /></div>;
+          return (
+            <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 14, fontSize: 12, lineHeight: 1.5, alignSelf: isUser ? "flex-end" : "flex-start",
+              background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t, ...slideUp(delay + (typing ? 6 : 0)) }}>
+              {text}
+            </div>
+          );
+        };
+
+        // ─── SLIDE RENDERERS ───
+        const renderSlide = () => {
+          switch (s) {
+            // ─── Slide 0: Narrative intro ───
+            case 0: return (
+              <div style={{ textAlign: "center", maxWidth: 340 }}>
+                <div style={{ fontSize: 48, marginBottom: 16, ...popIn(2) }}>👨‍👩‍👧‍👦</div>
+                <p style={{ fontFamily: T.fontD, fontSize: 22, color: "#fff", marginBottom: 8, ...slideUp(5) }}>
+                  Meet the Johnsons
                 </p>
-                <button onClick={() => { setShowDemo(false); setScreen("create"); setWizStep(0); resetWizard(); }}
-                  style={{ ...css.btn, ...css.btnP, width: "100%", padding: "14px 16px", justifyContent: "center", fontSize: 15, fontWeight: 500, marginBottom: 10 }}>
-                  Create my first trip
-                </button>
-                <button onClick={() => { setShowDemo(false); }}
-                  style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: T.t2 }}>
-                  Explore the demo trip
-                </button>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,.7)", lineHeight: 1.6, ...slideUp(8) }}>
+                  4 adults, 2 kids, 1 EV, and a dream Easter trip to the Lake District.
+                </p>
+                <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20, ...slideUp(14) }}>
+                  {[["You", T.a], ["James", T.coral], ["Sarah", T.blue], ["+1", T.amber]].map(([n, c], i) => (
+                    <div key={i} style={{ ...popIn(16 + i * 3) }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 22, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 600, margin: "0 auto 4px" }}>{n[0]}</div>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,.5)" }}>{n}</span>
+                    </div>
+                  ))}
+                </div>
+                {show(28) && (
+                  <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 14 }}>
+                    {[{e:"👦",n:"Max, 12"},{e:"👧",n:"Ella, 8"}].map((k, i) => (
+                      <div key={i} style={{ padding: "6px 14px", borderRadius: 10, background: "rgba(255,255,255,.08)", ...popIn(30 + i * 4) }}>
+                        <span style={{ fontSize: 16 }}>{k.e}</span>
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginLeft: 6 }}>{k.n}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            ),
-          },
+            );
+
+            // ─── Slide 1: Trip creation with typing ───
+            case 1: return (
+              <div style={{ width: "100%", maxWidth: 320 }}>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Step 1 · Name your trip</p>
+                <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
+                  <div style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                    <span style={{ fontSize: 10, color: T.t3 }}>Trip name</span>
+                    <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t }}>{t < 3 ? "│" : typeText("Easter Lake District", 3, 1.5)}</p>
+                  </div>
+                  {show(18) && (
+                    <div style={{ display: "flex", gap: 8, marginBottom: 10, ...slideUp(18) }}>
+                      <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
+                        <span style={{ fontSize: 10, color: T.t3 }}>Start</span>
+                        <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>3 Apr 2026</p>
+                      </div>
+                      <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
+                        <span style={{ fontSize: 10, color: T.t3 }}>End</span>
+                        <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>7 Apr 2026</p>
+                      </div>
+                    </div>
+                  )}
+                  {show(22) && (
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {["Windermere", "Ambleside", "Keswick", "Grasmere"].map((p, i) => (
+                        show(24 + i * 3) && <span key={p} style={{ ...css.chip, ...css.chipActive, fontSize: 11, padding: "4px 10px", ...popIn(24 + i * 3) }}>{p}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+
+            // ─── Slide 2: Stays slide in ───
+            case 2: return (
+              <div style={{ width: "100%", maxWidth: 320 }}>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Step 2 · Where are you staying?</p>
+                <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
+                  {show(4) && (
+                    <div style={{ background: T.s2, borderRadius: 8, padding: 10, marginBottom: 6, display: "flex", alignItems: "center", gap: 8, ...slideUp(4) }}>
+                      <span style={{ fontSize: 16 }}>🔍</span>
+                      <span style={{ fontSize: 12, color: T.t3 }}>{typeText("Windermere hotels...", 6, 1.5)}</span>
+                    </div>
+                  )}
+                  {[
+                    { name: "Windermere Boutique Hotel", dates: "3-5 Apr", type: "Hotel", tags: ["2 rooms", "Breakfast", "EV charger"], delay: 14 },
+                    { name: "Keswick Lakeside Cottage", dates: "5-7 Apr", type: "Cottage", tags: ["3 beds", "Garden", "Dog friendly"], delay: 20 },
+                  ].map((stay, i) => (
+                    show(stay.delay) && <div key={i} style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: 6, ...slideUp(stay.delay) }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 500 }}>{stay.name}</span>
+                        <span style={{ fontSize: 9, color: T.amber, background: T.amberL, padding: "2px 8px", borderRadius: 8 }}>{stay.type}</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: T.t3 }}>{stay.dates}</span>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
+                        {stay.tags.map((tag, j) => show(stay.delay + 3 + j * 2) && <span key={tag} style={{ fontSize: 9, padding: "2px 7px", borderRadius: 8, background: T.al, color: T.ad, ...popIn(stay.delay + 3 + j * 2) }}>{tag}</span>)}
+                      </div>
+                    </div>
+                  ))}
+                  {show(28) && <div style={{ textAlign: "center", marginTop: 4, ...popIn(28) }}><span style={{ fontSize: 10, color: T.ad }}>✓ 2 stays added</span></div>}
+                </div>
+              </div>
+            );
+
+            // ─── Slide 3: Day 1 chat conversation ───
+            case 3: return (
+              <div style={{ width: "100%", maxWidth: 320 }}>
+                <div style={{ background: T.ad, borderRadius: "14px 14px 0 0", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>Chat with AI</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 1 · 3 Apr</span>
+                </div>
+                <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8, minHeight: 240 }}>
+                  <ChatBubble delay={2} typing text={<span>🔋 <b>Travel day — heading to Windermere!</b><br/><br/><b>From:</b> Coulsdon, CR5<br/><b>To:</b> Windermere Boutique Hotel<br/><b>Mode:</b> EV vehicle<br/><br/>Anyone to pick up along the way?</span>} />
+                  <ChatBubble delay={16} isUser text="No, heading straight there" />
+                  <ChatBubble delay={20} typing text="Great! What time would you like to leave?" />
+                  {show(30) && (
+                    <div style={{ display: "flex", gap: 6, ...slideUp(30) }}>
+                      {["8:00 AM", "9:00 AM", "10:00 AM"].map((time, i) => (
+                        <span key={time} style={{ ...css.chip, fontSize: 10, padding: "5px 12px",
+                          ...(demoInteracted.time === time ? css.chipActive : (i === 0 && !demoInteracted.time) ? {} : {}),
+                          cursor: "pointer", ...popIn(32 + i * 2) }}
+                          onClick={e => { e.stopPropagation(); setDemoInteracted(p => ({...p, time})); setDemoPaused(true); setTimeout(() => setDemoPaused(false), 1500); }}>
+                          {time}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(demoInteracted.time || show(40)) && (
+                    <ChatBubble delay={demoInteracted.time ? 0 : 40} typing text={
+                      <span>🗺️ <b>Your route is ready!</b><br/>Coulsdon → M25 → M1 → M6 → A591<br/>⚡ EV stop: Tebay Services (50kW)<br/>⏱️ ~4.5 hrs with breaks<br/>📍 Arrive ~{demoInteracted.time === "9:00 AM" ? "1:30 PM" : demoInteracted.time === "10:00 AM" ? "2:30 PM" : "12:30 PM"}</span>
+                    } />
+                  )}
+                </div>
+              </div>
+            );
+
+            // ─── Slide 4: Activity day with animated schedule ───
+            case 4: return (
+              <div style={{ width: "100%", maxWidth: 320 }}>
+                <div style={{ background: T.ad, borderRadius: "14px 14px 0 0", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>Chat with AI</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 2 · 4 Apr</span>
+                </div>
+                <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <ChatBubble delay={2} typing text={<span>Good morning! Day 2 in <b>Ambleside</b> · 12°C ☁️</span>} />
+                  {show(12) && (
+                    <div style={{ background: T.amberL, borderRadius: 8, padding: "6px 10px", fontSize: 11, ...slideUp(12) }}>
+                      🏨 Your base: <b>Windermere Boutique Hotel</b>
+                    </div>
+                  )}
+                  {show(16) && (
+                    <div style={{ display: "flex", gap: 6, ...slideUp(16) }}>
+                      <div style={{ flex: 1, background: T.blueL, borderRadius: 8, padding: 8, ...slideUp(16) }}>
+                        <p style={{ fontSize: 10, fontWeight: 600, color: T.blue, marginBottom: 4 }}>Adults</p>
+                        {["🥾 Loughrigg Fell", "💆 Low Wood Spa"].map((a, i) => show(20 + i * 4) && <p key={i} style={{ fontSize: 10, marginBottom: 2, ...slideUp(20 + i * 4) }}>{a}</p>)}
+                      </div>
+                      <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 8, ...slideUp(18) }}>
+                        <p style={{ fontSize: 10, fontWeight: 600, color: T.pink, marginBottom: 4 }}>Kids</p>
+                        {["🎢 Brockhole Park", "🥚 Easter egg trail"].map((a, i) => show(22 + i * 4) && <p key={i} style={{ fontSize: 10, marginBottom: 2, ...slideUp(22 + i * 4) }}>{a}</p>)}
+                      </div>
+                    </div>
+                  )}
+                  {show(32) && (
+                    <div style={{ fontSize: 11, color: T.ad, textAlign: "center", padding: 6, background: T.al, borderRadius: 8, ...popIn(32) }}>
+                      🍽️ Everyone meets at <b>Fellinis</b> for lunch — 12:30 PM
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+
+            // ─── Slide 5: Last day departure ───
+            case 5: return (
+              <div style={{ width: "100%", maxWidth: 320 }}>
+                <div style={{ background: T.ad, borderRadius: "14px 14px 0 0", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>Chat with AI</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 5 · 7 Apr</span>
+                </div>
+                <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <ChatBubble delay={2} typing text={<span>🏠 <b>Time to head home!</b><br/><br/><b>From:</b> Keswick Lakeside Cottage<br/><b>To:</b> Coulsdon, CR5<br/><br/>When do you want to set off?</span>} />
+                  {show(18) && (
+                    <div style={{ display: "flex", gap: 6, ...slideUp(18) }}>
+                      {["10:00 AM", "After lunch"].map((opt, i) => (
+                        <span key={opt} style={{ ...css.chip, fontSize: 10, padding: "5px 12px", cursor: "pointer", ...popIn(20 + i * 3),
+                          ...(demoInteracted.depart === opt ? css.chipActive : {}) }}
+                          onClick={e => { e.stopPropagation(); setDemoInteracted(p => ({...p, depart: opt})); setDemoPaused(true); setTimeout(() => setDemoPaused(false), 1500); }}>
+                          {opt}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(demoInteracted.depart || show(30)) && (
+                    <ChatBubble delay={demoInteracted.depart ? 0 : 30} typing text={
+                      <span>🗺️ <b>Route planned!</b><br/>Keswick → A66 → M6 → M1 → M25<br/>⚡ EV: Tebay Services<br/>☕ Stop: Rheged Centre (playground!)<br/>📍 Home by ~{demoInteracted.depart === "After lunch" ? "7:30 PM" : "4:30 PM"}</span>
+                    } />
+                  )}
+                </div>
+              </div>
+            );
+
+            // ─── Slide 6: Interactive poll ───
+            case 6: {
+              const pollVote = demoInteracted.poll;
+              const opts = [
+                { text: "The Drunken Duck", desc: "steaks · kids free", base: 2 },
+                { text: "The Unicorn", desc: "pub grills · playground", base: 1 },
+                { text: "Lake Road Kitchen", desc: "Nordic · upscale", base: 1 },
+              ];
+              const totalVotes = 4 + (pollVote !== undefined ? 1 : 0);
+              const getVotes = (i) => {
+                let v = opts[i].base;
+                if (pollVote === i) v++;
+                return v;
+              };
+              return (
+                <div style={{ width: "100%", maxWidth: 320 }}>
+                  <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Group decision time</p>
+                  <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
+                    <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4, ...slideUp(3) }}>🗳️ Where should we eat dinner?</p>
+                    <p style={{ fontSize: 10, color: T.t3, marginBottom: 12, ...slideUp(5) }}>4 travellers · {pollVote !== undefined ? "You voted!" : "Tap to vote"}</p>
+                    {opts.map((o, i) => {
+                      const pct = Math.round(getVotes(i) / totalVotes * 100);
+                      const voted = pollVote === i;
+                      return show(8 + i * 4) && (
+                        <div key={i} style={{ marginBottom: 8, position: "relative", borderRadius: 10, overflow: "hidden",
+                          border: `1.5px solid ${voted ? T.a : T.border}`, cursor: pollVote === undefined ? "pointer" : "default", ...slideUp(8 + i * 4) }}
+                          onClick={e => { if (pollVote !== undefined) return; e.stopPropagation(); setDemoInteracted(p => ({...p, poll: i})); setDemoPaused(true); setTimeout(() => setDemoPaused(false), 2000); }}>
+                          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pollVote !== undefined ? `${pct}%` : "0%",
+                            background: voted ? T.al : T.s2, transition: "width 1s ease" }} />
+                          <div style={{ position: "relative", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <span style={{ fontSize: 12, fontWeight: voted ? 600 : 400 }}>{voted ? "✓ " : ""}{o.text}</span>
+                              <span style={{ fontSize: 10, color: T.t3, marginLeft: 6 }}>{o.desc}</span>
+                            </div>
+                            {pollVote !== undefined && <span style={{ fontSize: 12, fontWeight: 600, color: voted ? T.ad : T.t3 }}>{pct}%</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+
+            // ─── Slide 7: Photos flying in ───
+            case 7: {
+              const photos = [
+                { label: "Fell view", color: "#5A8C6E" }, { label: "Lake", color: "#5A7EA0" },
+                { label: "Lunch", color: "#A08060" }, { label: "Ella playing", color: "#7EA060" },
+                { label: "Boat trip", color: "#4A8BA0" }, { label: "Ice cream", color: "#A04A8B" },
+                { label: "Pub dinner", color: "#8A7348" }, { label: "Sunset", color: "#C87040" },
+              ];
+              return (
+                <div style={{ width: "100%", maxWidth: 320 }}>
+                  <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Day 2 memories · Ambleside</p>
+                  <div style={{ background: T.s, borderRadius: 14, padding: 14, textAlign: "left" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5 }}>
+                      {photos.map((p, i) => (
+                        <div key={i} style={{ aspectRatio: "1", borderRadius: 8, background: show(4 + i * 3) ? p.color : T.s2,
+                          display: "flex", alignItems: "flex-end", padding: 4, transition: "background .5s ease",
+                          ...(show(4 + i * 3) ? bounceIn(4 + i * 3) : { opacity: .2 }) }}>
+                          {show(4 + i * 3) && <span style={{ fontSize: 8, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.5)" }}>{p.label}</span>}
+                        </div>
+                      ))}
+                    </div>
+                    {show(30) && (
+                      <div style={{ textAlign: "center", marginTop: 10, ...popIn(30) }}>
+                        <span style={{ fontSize: 11, color: T.ad }}>📸 {Math.min(8, Math.max(0, Math.floor((t - 4) / 3)))} photos added</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            // ─── Slide 8: AI highlights reel ───
+            case 8: {
+              const reelPhotos = ["#5A8C6E", "#5A7EA0", "#A08060", "#4A8BA0", "#C87040"];
+              const activeReel = Math.min(reelPhotos.length - 1, Math.floor(t / 7));
+              return (
+                <div style={{ width: "100%", maxWidth: 320 }}>
+                  <div style={{ background: "#1a1a1a", borderRadius: 14, padding: 16, textAlign: "center", color: "#fff", overflow: "hidden" }}>
+                    <div style={{ display: "flex", gap: 3, marginBottom: 14 }}>
+                      {reelPhotos.map((_, i) => (
+                        <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: "rgba(255,255,255,.15)", overflow: "hidden" }}>
+                          <div style={{ height: "100%", background: T.a, width: i < activeReel ? "100%" : i === activeReel ? `${(t % 7) / 7 * 100}%` : "0%", transition: "width .12s linear" }} />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ width: "100%", aspectRatio: "16/10", borderRadius: 8, background: reelPhotos[activeReel], marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", transition: "background .5s ease", position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", bottom: 8, left: 10, fontSize: 10, color: "rgba(255,255,255,.7)" }}>
+                        {["Loughrigg Fell", "Windermere Lake", "Lunch at Fellinis", "Boat trip", "Sunset"][activeReel]}
+                      </div>
+                      <div style={{ position: "absolute", top: 8, right: 10, fontSize: 9, color: "rgba(255,255,255,.5)", background: "rgba(0,0,0,.3)", padding: "2px 6px", borderRadius: 4 }}>
+                        Day {[2,2,2,3,4][activeReel]}
+                      </div>
+                    </div>
+                    <p style={{ fontFamily: T.fontD, fontSize: 16, marginBottom: 4, ...slideUp(2) }}>Easter Lake District 2026</p>
+                    <p style={{ fontSize: 10, color: "rgba(255,255,255,.5)", marginBottom: 10 }}>AI-curated highlights · 8 photos</p>
+                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                      {["🎵 Music", "🎙️ Narration", "📅 Dates"].map((s, i) => (
+                        <span key={s} style={{ fontSize: 9, padding: "3px 8px", borderRadius: 8, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.6)", ...popIn(4 + i * 3) }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // ─── Slide 9: CTA ───
+            case 9: return (
+              <div style={{ textAlign: "center", maxWidth: 340 }}>
+                <div style={{ fontSize: 56, marginBottom: 16, ...popIn(2) }}>🌍</div>
+                <h2 style={{ fontFamily: T.fontD, fontSize: 26, color: "#fff", marginBottom: 8, ...slideUp(5) }}>Your adventure awaits</h2>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,.5)", lineHeight: 1.6, marginBottom: 24, ...slideUp(8) }}>
+                  Wanderly connects maps, weather, bookings, EV chargers, and AI — so you can focus on making memories.
+                </p>
+                {show(14) && (
+                  <button onClick={e => { e.stopPropagation(); setShowDemo(false); setScreen("create"); setWizStep(0); resetWizard(); }}
+                    style={{ ...css.btn, ...css.btnP, width: "100%", padding: "14px 16px", justifyContent: "center", fontSize: 15, fontWeight: 500, marginBottom: 10, ...slideUp(14) }}>
+                    Create my first trip
+                  </button>
+                )}
+                {show(18) && (
+                  <button onClick={e => { e.stopPropagation(); setShowDemo(false); }}
+                    style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: "rgba(255,255,255,.5)", border: "1px solid rgba(255,255,255,.15)", ...slideUp(18) }}>
+                    Explore the demo trip
+                  </button>
+                )}
+              </div>
+            );
+
+            default: return null;
+          }
+        };
+
+        // Narrative captions per slide
+        const captions = [
+          "This is their story...",
+          "First, name the trip and pick destinations",
+          "Then find the perfect places to stay",
+          "Day 1 — the AI plans the whole drive",
+          "Activity days — split plans for everyone",
+          "Last day — route home with pit stops",
+          "Big decisions? Let the group vote",
+          "Every moment, captured and catalogued",
+          "The AI turns your photos into a highlight reel",
+          "",
         ];
-        const total = DEMO_SLIDES.length;
-        const slide = DEMO_SLIDES[demoSlide];
-        const isLast = demoSlide === total - 1;
+
         return (
-          <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "linear-gradient(180deg, #0D2818 0%, #1A3C2A 50%, #0D2818 100%)", display: "flex", flexDirection: "column", fontFamily: T.font }}
+          <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "linear-gradient(180deg, #0D2818 0%, #1A3C2A 50%, #0D2818 100%)", display: "flex", flexDirection: "column", fontFamily: T.font, overflow: "hidden" }}
             onClick={e => {
               if (isLast) return;
               const x = e.clientX;
               const w = window.innerWidth;
-              if (x < w * 0.3) { setDemoSlide(Math.max(0, demoSlide - 1)); }
-              else { setDemoSlide(Math.min(total - 1, demoSlide + 1)); }
+              if (x < w * 0.25) { setDemoSlide(Math.max(0, s - 1)); }
+              else if (x > w * 0.75) { setDemoSlide(Math.min(total - 1, s + 1)); }
             }}>
             {/* Progress bar */}
             <div style={{ display: "flex", gap: 3, padding: "12px 16px 0", flexShrink: 0 }}>
-              {DEMO_SLIDES.map((_, i) => (
-                <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: "rgba(255,255,255,.2)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: 2, background: i < demoSlide ? "#fff" : i === demoSlide ? T.a : "transparent", width: i <= demoSlide ? "100%" : "0%", transition: "width .4s ease" }} />
-                </div>
-              ))}
+              {Array.from({length: total}).map((_, i) => {
+                const dur = DEMO_SLIDE_DURATIONS[i] || 50;
+                return (
+                  <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: "rgba(255,255,255,.15)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 2, background: i < s ? "rgba(255,255,255,.8)" : i === s ? T.a : "transparent",
+                      width: i < s ? "100%" : i === s ? `${Math.min(100, (t / dur) * 100)}%` : "0%", transition: i === s ? "width .12s linear" : "none" }} />
+                  </div>
+                );
+              })}
             </div>
-            {/* Skip button */}
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px 0", flexShrink: 0 }}>
-              <button onClick={e => { e.stopPropagation(); setShowDemo(false); }}
-                style={{ background: "rgba(255,255,255,.1)", border: "none", color: "rgba(255,255,255,.7)", fontSize: 12, padding: "5px 14px", borderRadius: 16, cursor: "pointer", fontFamily: T.font }}>
-                Skip
-              </button>
-            </div>
-            {/* Slide content */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 24px", overflow: "hidden" }}>
-              <div style={{ fontSize: 44, marginBottom: 12, animation: "reelFadeIn .4s ease" }} key={`icon-${demoSlide}`}>{slide.icon}</div>
-              <h2 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: "#fff", textAlign: "center", marginBottom: 6, animation: "reelFadeIn .4s ease" }} key={`title-${demoSlide}`}>{slide.title}</h2>
-              <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", textAlign: "center", marginBottom: 20, animation: "reelFadeIn .5s ease" }} key={`sub-${demoSlide}`}>{slide.subtitle}</p>
-              <div style={{ width: "100%", maxWidth: 320, animation: "reelFadeIn .5s ease" }} key={`mock-${demoSlide}`}>
-                {slide.mockup}
+            {/* Top bar: Skip + pause */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px 0", flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,.4)" }}>{s + 1} / {total}</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={e => { e.stopPropagation(); setDemoPaused(p => !p); }}
+                  style={{ background: "rgba(255,255,255,.1)", border: "none", color: "rgba(255,255,255,.7)", fontSize: 11, padding: "4px 12px", borderRadius: 12, cursor: "pointer", fontFamily: T.font }}>
+                  {demoPaused ? "▶ Play" : "❚❚ Pause"}
+                </button>
+                <button onClick={e => { e.stopPropagation(); setShowDemo(false); setDemoPaused(false); setDemoInteracted({}); }}
+                  style={{ background: "rgba(255,255,255,.1)", border: "none", color: "rgba(255,255,255,.7)", fontSize: 11, padding: "4px 12px", borderRadius: 12, cursor: "pointer", fontFamily: T.font }}>
+                  Skip
+                </button>
               </div>
             </div>
-            {/* Bottom nav hint */}
-            {!isLast && (
-              <div style={{ textAlign: "center", padding: "16px 0 24px", color: "rgba(255,255,255,.3)", fontSize: 12, flexShrink: 0 }}>
-                Tap to continue · {demoSlide + 1}/{total}
+            {/* Slide content */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 24px", overflow: "hidden" }} key={`slide-${s}`}>
+              {renderSlide()}
+            </div>
+            {/* Bottom caption */}
+            {captions[s] && (
+              <div style={{ textAlign: "center", padding: "12px 24px 24px", flexShrink: 0 }}>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,.4)", fontStyle: "italic" }}>{captions[s]}</p>
               </div>
             )}
           </div>
