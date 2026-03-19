@@ -802,7 +802,7 @@ export default function WanderlyApp() {
       travellers: { adults: wizTravellers.adults.map(a => ({ ...a })), olderKids: wizTravellers.olderKids.map(c => ({ ...c })), youngerKids: wizTravellers.youngerKids.map(c => ({ ...c })) },
       stays: [...wizStays],
       stayNames: wizStays.map(s => s.name || s),
-      prefs: { food: [...wizPrefs.food], activities: [...wizPrefs.adultActs, ...wizPrefs.olderActs, ...wizPrefs.youngerActs] },
+      prefs: { food: [...wizPrefs.food], activities: [...wizPrefs.adultActs, ...wizPrefs.olderActs, ...wizPrefs.youngerActs], adultActs: [...wizPrefs.adultActs], olderActs: [...wizPrefs.olderActs], youngerActs: [...wizPrefs.youngerActs], instructions: wizPrefs.instructions || "" },
     };
     if (editingTripId) {
       // Update existing trip, preserve status and timeline
@@ -849,14 +849,48 @@ export default function WanderlyApp() {
     const loc = trip.places[0] || "your destination";
     const stayName = trip.stayNames[0] || "accommodation";
     const food = trip.prefs.food.length > 0 ? trip.prefs.food.join(" + ") : "Local cuisine";
-    const activity = trip.prefs.activities.length > 0 ? trip.prefs.activities[0] : "Explore the area";
     const travelMode = trip.travel[0] || "Travel";
-    items.push({ time: "9:00 AM", title: `Arrive ${loc}`, desc: `${travelMode} · Check in at ${stayName}`, group: "Everyone", color: T.a });
-    items.push({ time: "11:00 AM", title: activity, desc: `${loc} · Guided experience`, group: "Everyone", color: T.blue });
-    items.push({ time: "12:30 PM", title: `Lunch — ${food}`, desc: `Local restaurant · ${food}`, group: "Everyone", color: T.coral });
-    items.push({ time: "2:30 PM", title: `Explore ${loc}`, desc: trip.prefs.activities.length > 1 ? trip.prefs.activities[1] : "Walking tour & sightseeing", group: "Everyone", color: T.blue });
+    const adultActs = trip.prefs.adultActs || [];
+    const olderActs = trip.prefs.olderActs || [];
+    const youngerActs = trip.prefs.youngerActs || [];
+    const kidActs = [...new Set([...olderActs, ...youngerActs])];
+    const hasKids = (trip.travellers?.olderKids?.length || 0) + (trip.travellers?.youngerKids?.length || 0) > 0;
+    const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
+    const instructions = trip.prefs.instructions || "";
+
+    // Arrival
+    const arriveDesc = trip.startLocation ? `${travelMode} from ${trip.startLocation} · Check in at ${stayName}` : `${travelMode} · Check in at ${stayName}`;
+    items.push({ time: "9:00 AM", title: `Arrive ${loc}`, desc: arriveDesc, group: "Everyone", color: T.a });
+
+    // Morning activity
+    const morningAct = adultActs[0] || "Explore the area";
+    if (hasKids && kidActs.length > 0) {
+      items.push({ time: "10:30 AM", title: morningAct, desc: `${loc} · ${budgetTier.label} experience`, group: "Adults", color: T.blue });
+      items.push({ time: "10:30 AM", title: kidActs[0], desc: `${loc} · Family-friendly`, group: "Kids", color: T.pink });
+    } else {
+      items.push({ time: "10:30 AM", title: morningAct, desc: `${loc} · ${budgetTier.label} experience`, group: "Everyone", color: T.blue });
+    }
+
+    // Lunch
+    items.push({ time: "12:30 PM", title: `Lunch — ${food}`, desc: `${budgetTier.label} restaurant · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+
+    // Afternoon activity
+    const afternoonAdult = adultActs[1] || "Walking tour & sightseeing";
+    if (hasKids && kidActs.length > 1) {
+      items.push({ time: "2:30 PM", title: afternoonAdult, desc: `${loc} · Afternoon session`, group: "Adults", color: T.blue });
+      items.push({ time: "2:30 PM", title: kidActs[1], desc: `${loc} · Fun for kids`, group: "Kids", color: T.pink });
+    } else {
+      items.push({ time: "2:30 PM", title: afternoonAdult, desc: `${loc} · Afternoon session`, group: "Everyone", color: T.blue });
+    }
+
+    // Return + Dinner
     items.push({ time: "5:00 PM", title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
-    items.push({ time: "7:00 PM", title: "Dinner", desc: `${food} · Restaurant TBC`, group: "Everyone", color: T.coral });
+    items.push({ time: "7:00 PM", title: "Dinner", desc: `${food} · ${budgetTier.label} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+
+    // Special instructions note
+    if (instructions) {
+      items.push({ time: "📝", title: "Your notes", desc: instructions, group: "Note", color: T.amber });
+    }
     return items;
   };
 
@@ -907,21 +941,29 @@ export default function WanderlyApp() {
     setTripChatInput("");
     const trip = createdTrips.find(t => t.id === tripId);
     const loc = trip?.places[0] || "your destination";
-    // Simple AI-like responses based on keywords
+    const budget = trip?.budget || "";
+    const instructions = trip?.prefs?.instructions || "";
+    const hasKids = (trip?.travellers?.olderKids?.length || 0) + (trip?.travellers?.youngerKids?.length || 0) > 0;
+    const kidNames = [...(trip?.travellers?.olderKids || []), ...(trip?.travellers?.youngerKids || [])].map(k => `${k.name} (${k.age})`).join(", ");
+    const budgetLabel = { "Budget": "budget-friendly", "Mid-range": "mid-range", "Luxury": "upscale", "No limit": "top-rated" }[budget] || "local";
+    const notePrefix = instructions ? `📝 Keeping in mind: "${instructions}"\n\n` : "";
     setTimeout(() => {
       let reply = "";
       const lower = msg.toLowerCase();
       if (lower.includes("restaurant") || lower.includes("food") || lower.includes("eat") || lower.includes("lunch") || lower.includes("dinner")) {
-        reply = `Great question! For ${loc}, I'd recommend checking local restaurant guides. I've updated the dinner slot to "Restaurant research needed." You can edit any timeline item by tapping the ✏️ icon next to it.`;
+        const foodPref = trip?.prefs?.food?.length > 0 ? trip.prefs.food.join(", ") : "local cuisine";
+        reply = `${notePrefix}For ${budgetLabel} dining in ${loc} (${foodPref}):\n\n🍽️ I'd recommend searching for ${budgetLabel} restaurants with ${foodPref} options.${hasKids ? `\n👧 With ${kidNames}, look for family-friendly spots with kids' menus.` : ""}\n\nYou can edit the dinner slot by tapping ✏️.`;
       } else if (lower.includes("earlier") || lower.includes("later") || lower.includes("time") || lower.includes("move")) {
-        reply = `You can adjust timings by tapping the ✏️ edit icon on any timeline item and changing the time. Would you like me to suggest an alternative schedule?`;
+        reply = `${notePrefix}You can adjust timings by tapping ✏️ on any timeline item.${hasKids ? `\n\n💡 Tip: with kids (${kidNames}), consider earlier dinner times and built-in rest breaks.` : ""}`;
       } else if (lower.includes("add") || lower.includes("include") || lower.includes("more")) {
-        reply = `I've added a new activity slot to your timeline. Tap the ✏️ icon to customize it with your preferred activity for ${loc}.`;
+        reply = `${notePrefix}I've added a new activity slot to your timeline for ${loc}.${hasKids ? `\n\n👧 Consider splitting adult and kid activities — ${kidNames} might enjoy something different!` : ""}\n\nTap ✏️ to customise it.`;
         addTimelineItem(tripId);
       } else if (lower.includes("remove") || lower.includes("delete") || lower.includes("cancel")) {
-        reply = `You can remove any activity by tapping the ✏️ icon and then the 🗑️ delete button. Which activity would you like to remove?`;
+        reply = `You can remove any activity by tapping ✏️ then 🗑️. Which one would you like to remove?`;
+      } else if (lower.includes("budget") || lower.includes("cost") || lower.includes("spend") || lower.includes("price")) {
+        reply = `${notePrefix}Your trip is set to **${budget || "unspecified"}** budget. I've tailored restaurant and activity suggestions to ${budgetLabel} options.\n\nTrack costs by marking items as "Booked" and entering the price.`;
       } else {
-        reply = `Thanks for the input! You can refine your ${loc} itinerary by:\n• Tapping ✏️ on any timeline item to edit it\n• Using the "+ Add activity" button for new items\n• Telling me what you'd like to change`;
+        reply = `${notePrefix}Here's what I know about your ${loc} trip:\n• Budget: ${budget || "Not set"}\n• Food: ${trip?.prefs?.food?.join(", ") || "Not set"}${hasKids ? `\n• Kids: ${kidNames}` : ""}\n${instructions ? `• Notes: ${instructions}\n` : ""}\nTell me what you'd like to adjust!`;
       }
       setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
     }, 800);
@@ -2483,7 +2525,7 @@ export default function WanderlyApp() {
               setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel), budget: trip.budget || "" });
               setWizTravellers({ adults: trip.travellers.adults.map(a => ({ ...a })), olderKids: trip.travellers.olderKids.map(c => ({ ...c })), youngerKids: trip.travellers.youngerKids.map(c => ({ ...c })) });
               setWizStays(trip.stays || []);
-              setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.activities), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
+              setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.adultActs || trip.prefs.activities), olderActs: new Set(trip.prefs.olderActs || []), youngerActs: new Set(trip.prefs.youngerActs || []), instructions: trip.prefs.instructions || "" });
               setWizStep(0);
               setEditingTripId(trip.id);
               navigate("create");
@@ -2587,7 +2629,7 @@ export default function WanderlyApp() {
                           <p style={{ fontSize: 11, color: T.t3, marginBottom: 2 }}>{item.time}</p>
                           <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
                           <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
-                          <Tag bg={T.al} color={T.ad}>{item.group}</Tag>
+                          <Tag bg={item.group === "Adults" ? T.blueL : item.group === "Kids" ? T.pinkL : item.group === "Note" ? T.amberL : T.al} color={item.group === "Adults" ? T.blue : item.group === "Kids" ? T.pink : item.group === "Note" ? T.amber : T.ad}>{item.group}</Tag>
                         </div>
                         <button onClick={() => setEditingTimelineIdx(i)} style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "2px 6px", opacity: 0.5 }}>✏️</button>
                       </div>
@@ -2595,6 +2637,45 @@ export default function WanderlyApp() {
                   </div>
                 </div>
               ))}
+
+              {/* Booking cost summary */}
+              {(() => {
+                const costs = Object.entries(bookingStates).filter(([k, v]) => v.cost && parseFloat(v.cost.replace(/[^0-9.]/g, '')));
+                const total = costs.reduce((sum, [, v]) => sum + (parseFloat(v.cost.replace(/[^0-9.]/g, '')) || 0), 0);
+                const booked = Object.values(bookingStates).filter(v => v.status === "booked").length;
+                return total > 0 ? (
+                  <div style={{ ...css.card, background: T.al, borderColor: T.a, marginTop: 8, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 500, color: T.ad }}>💰 Booked costs</p>
+                      <p style={{ fontSize: 10, color: T.t3 }}>{booked} item{booked !== 1 ? "s" : ""} booked</p>
+                    </div>
+                    <p style={{ fontSize: 16, fontWeight: 600, color: T.ad }}>£{total.toFixed(0)}</p>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Tonight's stay — matched from stay check-in/out dates */}
+              {trip.stays?.length > 0 && (() => {
+                const tripStart = trip.rawStart ? new Date(trip.rawStart) : null;
+                const currentDate = tripStart ? new Date(tripStart.getTime() + 0 * 86400000) : null; // Day 1 for now
+                const matchedStay = currentDate ? trip.stays.find(s => {
+                  if (!s.checkIn || !s.checkOut) return false;
+                  const ci = new Date(s.checkIn);
+                  const co = new Date(s.checkOut);
+                  return currentDate >= ci && currentDate < co;
+                }) : trip.stays[0];
+                return matchedStay ? (
+                  <div style={{ ...css.card, background: T.purpleL, borderColor: T.purple, marginTop: 8 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "start" }}>
+                      <span style={{ fontSize: 16 }}>🏠</span>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: T.purple }}>Tonight's stay</p>
+                        <p style={{ fontSize: 12, color: T.t2 }}>{matchedStay.name}{matchedStay.checkIn ? ` · ${new Date(matchedStay.checkIn).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${new Date(matchedStay.checkOut).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
 
               <div style={{ ...css.card, marginTop: 8, padding: 12 }}>
                 <div style={css.sectionTitle}>Refine with AI</div>
@@ -2633,7 +2714,10 @@ export default function WanderlyApp() {
               {trip.travel.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Travel</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}</div></div>}
               {trip.stayNames.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Accommodation</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.stayNames.map(s => <Tag key={s} bg={T.amberL} color={T.amber}>{s}</Tag>)}</div></div>}
               {trip.prefs.food.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Food</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.food.map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}</div></div>}
-              {trip.prefs.activities.length > 0 && <div><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.activities.map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}</div></div>}
+              {(trip.prefs.adultActs?.length > 0 || trip.prefs.activities?.length > 0) && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Adult activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{(trip.prefs.adultActs || trip.prefs.activities).map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}</div></div>}
+              {trip.prefs.olderActs?.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Older kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.olderActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
+              {trip.prefs.youngerActs?.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Younger kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.youngerActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
+              {trip.prefs.instructions && <div><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Special instructions</label><p style={{ fontSize: 12, color: T.t2, marginTop: 4, lineHeight: 1.5 }}>📝 {trip.prefs.instructions}</p></div>}
             </div>
           </div>
 
