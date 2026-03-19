@@ -534,7 +534,7 @@ export default function WanderlyApp() {
   }, [showDemo, demoPaused]);
 
   // Demo auto-advance slides (ticks at 220ms each)
-  const DEMO_SLIDE_DURATIONS = [52, 62, 40, 58, 48, 48, 48, 42, 44, 999];
+  const DEMO_SLIDE_DURATIONS = [52, 42, 40, 62, 48, 52, 48, 42, 44, 999];
   useEffect(() => {
     if (!showDemo) return;
     const dur = DEMO_SLIDE_DURATIONS[demoSlide] || 50;
@@ -2951,10 +2951,10 @@ export default function WanderlyApp() {
         // Chat bubble component
         const ChatBubble = ({ text, isUser, delay, typing }) => {
           if (!show(delay)) return null;
-          if (typing && t < delay + 8) return <div style={{ alignSelf: isUser ? "flex-end" : "flex-start", ...slideUp(delay) }}><TypingDots /></div>;
+          if (typing && t < delay + 6) return <div style={{ alignSelf: isUser ? "flex-end" : "flex-start", ...slideUp(delay) }}><TypingDots /></div>;
           return (
             <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 14, fontSize: 12, lineHeight: 1.5, alignSelf: isUser ? "flex-end" : "flex-start",
-              background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t, ...slideUp(delay + (typing ? 8 : 0)) }}>
+              background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t, ...slideUp(delay + (typing ? 6 : 0)) }}>
               {text}
             </div>
           );
@@ -3001,10 +3001,10 @@ export default function WanderlyApp() {
                 <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
                   <div style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: 10 }}>
                     <span style={{ fontSize: 10, color: T.t3 }}>Trip name</span>
-                    <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t }}>{t < 3 ? "│" : typeText("Easter Lake District", 3, 2)}</p>
+                    <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t }}>{t < 3 ? "│" : typeText("Easter Lake District", 3, 1)}</p>
                   </div>
-                  {show(45) && (
-                    <div style={{ display: "flex", gap: 8, marginBottom: 10, ...slideUp(45) }}>
+                  {show(25) && (
+                    <div style={{ display: "flex", gap: 8, marginBottom: 10, ...slideUp(25) }}>
                       <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
                         <span style={{ fontSize: 10, color: T.t3 }}>Start</span>
                         <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>3 Apr 2026</p>
@@ -3015,10 +3015,10 @@ export default function WanderlyApp() {
                       </div>
                     </div>
                   )}
-                  {show(50) && (
+                  {show(30) && (
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {["Windermere", "Ambleside", "Keswick", "Grasmere"].map((p, i) => (
-                        show(52 + i * 3) && <span key={p} style={{ ...css.chip, ...css.chipActive, fontSize: 11, padding: "4px 10px", ...popIn(52 + i * 3) }}>{p}</span>
+                        show(32 + i * 3) && <span key={p} style={{ ...css.chip, ...css.chipActive, fontSize: 11, padding: "4px 10px", ...popIn(32 + i * 3) }}>{p}</span>
                       ))}
                     </div>
                   )}
@@ -3034,7 +3034,7 @@ export default function WanderlyApp() {
                   {show(4) && (
                     <div style={{ background: T.s2, borderRadius: 8, padding: 10, marginBottom: 6, display: "flex", alignItems: "center", gap: 8, ...slideUp(4) }}>
                       <span style={{ fontSize: 16 }}>🔍</span>
-                      <span style={{ fontSize: 12, color: T.t3 }}>{typeText("Windermere hotels...", 6, 1.5)}</span>
+                      <span style={{ fontSize: 12, color: T.t3 }}>{typeText("Windermere hotels...", 6, 0.75)}</span>
                     </div>
                   )}
                   {[
@@ -3065,24 +3065,23 @@ export default function WanderlyApp() {
                   <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 1 · 3 Apr</span>
                 </div>
                 <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8, minHeight: 240 }}>
-                  <ChatBubble delay={2} typing text={<span>🔋 <b>Travel day — heading to Windermere!</b><br/><br/><b>From:</b> Manchester<br/><b>To:</b> Windermere Boutique Hotel<br/><b>Mode:</b> EV vehicle<br/><br/>Anyone to pick up along the way?</span>} />
-                  <ChatBubble delay={16} isUser text="No, heading straight there" />
-                  <ChatBubble delay={20} typing text="Great! What time would you like to leave?" />
-                  {show(30) && (
-                    <div style={{ display: "flex", gap: 6, ...slideUp(30) }}>
+                  <ChatBubble delay={2} typing text={<span>🔋 <b>Travel day!</b> Manchester → Windermere<br/><br/>What time would you like to leave?</span>} />
+                  {show(14) && (
+                    <div style={{ display: "flex", gap: 6, ...slideUp(14) }}>
                       {["8:00 AM", "9:00 AM", "10:00 AM"].map((time, i) => (
                         <span key={time} style={{ ...css.chip, fontSize: 10, padding: "5px 12px",
-                          ...(demoInteracted.time === time ? css.chipActive : (i === 0 && !demoInteracted.time) ? {} : {}),
-                          cursor: "pointer", ...popIn(32 + i * 2) }}
+                          ...(demoInteracted.time === time ? css.chipActive : {}),
+                          cursor: "pointer", ...popIn(16 + i * 3) }}
                           onClick={e => { e.stopPropagation(); setDemoInteracted(p => ({...p, time})); setDemoPaused(true); setTimeout(() => setDemoPaused(false), 1500); }}>
                           {time}
                         </span>
                       ))}
                     </div>
                   )}
-                  {(demoInteracted.time || show(40)) && (
-                    <ChatBubble delay={demoInteracted.time ? 0 : 40} typing text={
-                      <span>🗺️ <b>Your route is ready!</b><br/>Manchester → M6 → A591<br/>⚡ EV stop: Lancaster Services (50kW)<br/>⏱️ ~1.5 hrs with breaks<br/>📍 Arrive ~{demoInteracted.time === "9:00 AM" ? "10:30 AM" : demoInteracted.time === "10:00 AM" ? "11:30 AM" : "9:30 AM"}</span>
+                  <ChatBubble delay={demoInteracted.time ? 0 : 28} isUser text={demoInteracted.time || "9:00 AM"} />
+                  {(demoInteracted.time || show(34)) && (
+                    <ChatBubble delay={demoInteracted.time ? 2 : 34} typing text={
+                      <span>🗺️ <b>Route ready!</b><br/>Manchester → M6 → A591<br/>⚡ EV stop: Lancaster Services<br/>📍 Arrive ~{demoInteracted.time === "8:00 AM" ? "9:30 AM" : demoInteracted.time === "10:00 AM" ? "11:30 AM" : "10:30 AM"}</span>
                     } />
                   )}
                 </div>
@@ -3098,25 +3097,25 @@ export default function WanderlyApp() {
                 </div>
                 <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
                   <ChatBubble delay={2} typing text={<span>Good morning! Day 2 in <b>Ambleside</b> · 12°C ☁️</span>} />
-                  {show(12) && (
-                    <div style={{ background: T.amberL, borderRadius: 8, padding: "6px 10px", fontSize: 11, ...slideUp(12) }}>
+                  {show(14) && (
+                    <div style={{ background: T.amberL, borderRadius: 8, padding: "6px 10px", fontSize: 11, ...slideUp(14) }}>
                       🏨 Your base: <b>Windermere Boutique Hotel</b>
                     </div>
                   )}
-                  {show(16) && (
-                    <div style={{ display: "flex", gap: 6, ...slideUp(16) }}>
-                      <div style={{ flex: 1, background: T.blueL, borderRadius: 8, padding: 8, ...slideUp(16) }}>
+                  {show(20) && (
+                    <div style={{ display: "flex", gap: 6, ...slideUp(20) }}>
+                      <div style={{ flex: 1, background: T.blueL, borderRadius: 8, padding: 8, ...slideUp(20) }}>
                         <p style={{ fontSize: 10, fontWeight: 600, color: T.blue, marginBottom: 4 }}>Adults</p>
-                        {["🥾 Loughrigg Fell", "💆 Low Wood Spa"].map((a, i) => show(20 + i * 4) && <p key={i} style={{ fontSize: 10, marginBottom: 2, ...slideUp(20 + i * 4) }}>{a}</p>)}
+                        {["🥾 Loughrigg Fell", "💆 Low Wood Spa"].map((a, i) => show(24 + i * 4) && <p key={i} style={{ fontSize: 10, marginBottom: 2, ...slideUp(24 + i * 4) }}>{a}</p>)}
                       </div>
-                      <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 8, ...slideUp(18) }}>
+                      <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 8, ...slideUp(22) }}>
                         <p style={{ fontSize: 10, fontWeight: 600, color: T.pink, marginBottom: 4 }}>Kids</p>
-                        {["🎢 Brockhole Park", "🥚 Easter egg trail"].map((a, i) => show(22 + i * 4) && <p key={i} style={{ fontSize: 10, marginBottom: 2, ...slideUp(22 + i * 4) }}>{a}</p>)}
+                        {["🎢 Brockhole Park", "🥚 Easter egg trail"].map((a, i) => show(26 + i * 4) && <p key={i} style={{ fontSize: 10, marginBottom: 2, ...slideUp(26 + i * 4) }}>{a}</p>)}
                       </div>
                     </div>
                   )}
-                  {show(32) && (
-                    <div style={{ fontSize: 11, color: T.ad, textAlign: "center", padding: 6, background: T.al, borderRadius: 8, ...popIn(32) }}>
+                  {show(36) && (
+                    <div style={{ fontSize: 11, color: T.ad, textAlign: "center", padding: 6, background: T.al, borderRadius: 8, ...popIn(36) }}>
                       🍽️ Everyone meets at <b>Fellinis</b> for lunch — 12:30 PM
                     </div>
                   )}
@@ -3132,11 +3131,11 @@ export default function WanderlyApp() {
                   <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 5 · 7 Apr</span>
                 </div>
                 <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <ChatBubble delay={2} typing text={<span>🏠 <b>Time to head home!</b><br/><br/><b>From:</b> Keswick Lakeside Cottage<br/><b>To:</b> Manchester<br/><br/>When do you want to set off?</span>} />
-                  {show(18) && (
-                    <div style={{ display: "flex", gap: 6, ...slideUp(18) }}>
+                  <ChatBubble delay={2} typing text={<span>🏠 <b>Time to head home!</b> Keswick → Manchester<br/><br/>When do you want to set off?</span>} />
+                  {show(14) && (
+                    <div style={{ display: "flex", gap: 6, ...slideUp(14) }}>
                       {["10:00 AM", "After lunch"].map((opt, i) => (
-                        <span key={opt} style={{ ...css.chip, fontSize: 10, padding: "5px 12px", cursor: "pointer", ...popIn(20 + i * 3),
+                        <span key={opt} style={{ ...css.chip, fontSize: 10, padding: "5px 12px", cursor: "pointer", ...popIn(16 + i * 3),
                           ...(demoInteracted.depart === opt ? css.chipActive : {}) }}
                           onClick={e => { e.stopPropagation(); setDemoInteracted(p => ({...p, depart: opt})); setDemoPaused(true); setTimeout(() => setDemoPaused(false), 1500); }}>
                           {opt}
@@ -3144,9 +3143,10 @@ export default function WanderlyApp() {
                       ))}
                     </div>
                   )}
-                  {(demoInteracted.depart || show(30)) && (
-                    <ChatBubble delay={demoInteracted.depart ? 0 : 30} typing text={
-                      <span>🗺️ <b>Route planned!</b><br/>Keswick → A66 → M6 → Manchester<br/>⚡ EV: Tebay Services<br/>☕ Stop: Rheged Centre (playground!)<br/>📍 Home by ~{demoInteracted.depart === "After lunch" ? "5:00 PM" : "1:30 PM"}</span>
+                  <ChatBubble delay={demoInteracted.depart ? 0 : 26} isUser text={demoInteracted.depart || "After lunch"} />
+                  {(demoInteracted.depart || show(32)) && (
+                    <ChatBubble delay={demoInteracted.depart ? 2 : 32} typing text={
+                      <span>🗺️ <b>Route planned!</b><br/>Keswick → A66 → M6<br/>☕ Stop: Rheged Centre<br/>📍 Home by ~{demoInteracted.depart === "10:00 AM" ? "1:30 PM" : "5:00 PM"}</span>
                     } />
                   )}
                 </div>
