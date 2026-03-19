@@ -10,7 +10,7 @@ const supabase = createClient(
 // ─── Design Tokens ───
 const T = {
   bg: "#FAF9F6", s: "#FFFFFF", s2: "#F0EFEB", s3: "#E8E7E2",
-  t1: "#1A1A18", t2: "#5E5D58", t3: "#9C9B96",
+  t1: "#1A1A18", t2: "#5E5D58", t3: "#767570",
   a: "#1B8F6A", al: "#E1F3EC", ad: "#0D6B4F",
   coral: "#D85A30", coralL: "#FAECE7",
   blue: "#2E7CC9", blueL: "#E4F0FB",
@@ -209,12 +209,95 @@ const ACCOM_TEMPLATES = [
   { suffix: "Guest House", type: "Guest House", baseTags: ["Homely", "Garden", "Breakfast"], baseRating: 4.5, price: "£" },
 ];
 
+function getRegion(places) {
+  const all = places.join(" ").toLowerCase();
+  if (/tokyo|kyoto|osaka|japan|hiroshima|nara|sapporo|okinawa/.test(all)) return "japan";
+  if (/paris|lyon|marseille|france|nice|bordeaux/.test(all)) return "france";
+  if (/barcelona|madrid|spain|seville|valencia|malaga/.test(all)) return "spain";
+  if (/rome|florence|venice|italy|milan|naples|amalfi/.test(all)) return "italy";
+  if (/amsterdam|netherlands|rotterdam|hague/.test(all)) return "netherlands";
+  if (/berlin|munich|germany|hamburg|frankfurt/.test(all)) return "germany";
+  if (/lisbon|porto|portugal|algarve/.test(all)) return "portugal";
+  if (/prague|czech/.test(all)) return "czech";
+  if (/vienna|austria|salzburg/.test(all)) return "austria";
+  if (/zurich|geneva|switzerland|bern/.test(all)) return "switzerland";
+  if (/dublin|ireland|galway|cork/.test(all)) return "ireland";
+  if (/new york|los angeles|san francisco|usa|america|miami|chicago|boston|seattle/.test(all)) return "usa";
+  if (/sydney|melbourne|australia|brisbane|perth/.test(all)) return "australia";
+  if (/dubai|abu dhabi|uae/.test(all)) return "uae";
+  if (/singapore/.test(all)) return "singapore";
+  if (/bangkok|thailand|phuket|chiang mai/.test(all)) return "thailand";
+  if (/bali|indonesia|jakarta/.test(all)) return "indonesia";
+  if (/maldives/.test(all)) return "maldives";
+  return "uk";
+}
+
+const REGION_ACCOM_TEMPLATES = {
+  japan: [
+    { suffix: "Ryokan", type: "Traditional Inn", baseTags: ["Tatami", "Onsen", "Kaiseki dinner"], baseRating: 4.8, price: "£££" },
+    { suffix: "Capsule Hotel", type: "Capsule", baseTags: ["Central", "Modern", "Budget"], baseRating: 4.2, price: "£" },
+    { suffix: "Business Hotel", type: "Hotel", baseTags: ["Clean", "Convenient", "Wi-Fi"], baseRating: 4.3, price: "££" },
+    { suffix: "Boutique Hotel", type: "Hotel", baseTags: ["Design", "Rooftop bar", "City view"], baseRating: 4.7, price: "£££" },
+    { suffix: "Guest House", type: "Guesthouse", baseTags: ["Local area", "Shared kitchen", "Friendly"], baseRating: 4.5, price: "£" },
+    { suffix: "Luxury Resort", type: "Resort", baseTags: ["Spa", "Garden", "Fine dining"], baseRating: 4.9, price: "££££" },
+  ],
+  france: [
+    { suffix: "Boutique Hôtel", type: "Boutique Hotel", baseTags: ["Charming", "Central", "Breakfast"], baseRating: 4.6, price: "£££" },
+    { suffix: "Chambre d'Hôtes", type: "B&B", baseTags: ["Homely", "Local host", "Garden"], baseRating: 4.7, price: "££" },
+    { suffix: "Auberge", type: "Inn", baseTags: ["Restaurant", "Countryside", "Character"], baseRating: 4.5, price: "££" },
+    { suffix: "Aparthotel", type: "Apartment", baseTags: ["Kitchen", "Self-catering", "Spacious"], baseRating: 4.4, price: "££" },
+    { suffix: "Luxury Palace", type: "Luxury Hotel", baseTags: ["5-star", "Spa", "Concierge"], baseRating: 4.9, price: "££££" },
+  ],
+  spain: [
+    { suffix: "Parador", type: "Historic Hotel", baseTags: ["Heritage", "Restaurant", "Views"], baseRating: 4.7, price: "£££" },
+    { suffix: "Hostal", type: "Guesthouse", baseTags: ["Budget", "Central", "Friendly"], baseRating: 4.2, price: "£" },
+    { suffix: "Boutique Hotel", type: "Boutique", baseTags: ["Design", "Rooftop terrace", "Pool"], baseRating: 4.6, price: "£££" },
+    { suffix: "Apartamento", type: "Apartment", baseTags: ["Kitchen", "Local area", "Balcony"], baseRating: 4.4, price: "££" },
+    { suffix: "Casa Rural", type: "Country House", baseTags: ["Rural", "Pool", "Peaceful"], baseRating: 4.5, price: "££" },
+  ],
+  italy: [
+    { suffix: "Albergo", type: "Hotel", baseTags: ["Central", "Breakfast", "Terrace"], baseRating: 4.5, price: "££" },
+    { suffix: "Agriturismo", type: "Farm Stay", baseTags: ["Countryside", "Local food", "Pool"], baseRating: 4.7, price: "££" },
+    { suffix: "Pensione", type: "Guesthouse", baseTags: ["Family-run", "Budget", "Charming"], baseRating: 4.3, price: "£" },
+    { suffix: "Boutique Hotel", type: "Boutique", baseTags: ["Design", "Historic building", "Restaurant"], baseRating: 4.8, price: "£££" },
+    { suffix: "Palazzo", type: "Luxury", baseTags: ["Heritage", "Spa", "Fine dining"], baseRating: 4.9, price: "££££" },
+  ],
+  usa: [
+    { suffix: "Downtown Hotel", type: "Hotel", baseTags: ["Central", "Gym", "Business"], baseRating: 4.4, price: "£££" },
+    { suffix: "Boutique Hotel", type: "Boutique", baseTags: ["Design", "Rooftop", "Bar"], baseRating: 4.7, price: "£££" },
+    { suffix: "Motel", type: "Motel", baseTags: ["Road trip", "Parking", "Budget"], baseRating: 3.8, price: "£" },
+    { suffix: "Airbnb Apartment", type: "Apartment", baseTags: ["Kitchen", "Local area", "Flexible"], baseRating: 4.5, price: "££" },
+    { suffix: "Resort & Spa", type: "Resort", baseTags: ["Pool", "Spa", "Restaurant"], baseRating: 4.8, price: "££££" },
+  ],
+  thailand: [
+    { suffix: "Beach Resort", type: "Resort", baseTags: ["Beachfront", "Pool", "Spa"], baseRating: 4.7, price: "££" },
+    { suffix: "Boutique Hotel", type: "Boutique", baseTags: ["Design", "Rooftop", "Central"], baseRating: 4.6, price: "££" },
+    { suffix: "Guest House", type: "Guesthouse", baseTags: ["Budget", "Friendly", "Local area"], baseRating: 4.3, price: "£" },
+    { suffix: "Hostel", type: "Hostel", baseTags: ["Social", "Dorm", "Bar"], baseRating: 4.1, price: "£" },
+    { suffix: "Luxury Villa", type: "Villa", baseTags: ["Private pool", "Staff", "Ocean view"], baseRating: 4.9, price: "££££" },
+  ],
+  uae: [
+    { suffix: "Luxury Hotel", type: "Hotel", baseTags: ["5-star", "Pool", "Spa"], baseRating: 4.8, price: "££££" },
+    { suffix: "Beach Resort", type: "Resort", baseTags: ["Private beach", "All-inclusive", "Water sports"], baseRating: 4.7, price: "££££" },
+    { suffix: "Aparthotel", type: "Apartment", baseTags: ["Kitchen", "City view", "Gym"], baseRating: 4.5, price: "£££" },
+    { suffix: "Budget Hotel", type: "Hotel", baseTags: ["Clean", "Metro access", "Wi-Fi"], baseRating: 4.2, price: "££" },
+  ],
+  maldives: [
+    { suffix: "Water Villa", type: "Villa", baseTags: ["Overwater", "Private deck", "Snorkeling"], baseRating: 4.9, price: "££££" },
+    { suffix: "Beach Bungalow", type: "Bungalow", baseTags: ["Beachfront", "Sunrise view", "Reef access"], baseRating: 4.8, price: "££££" },
+    { suffix: "Guest House", type: "Guesthouse", baseTags: ["Local island", "Budget", "Diving"], baseRating: 4.4, price: "££" },
+    { suffix: "All-Inclusive Resort", type: "Resort", baseTags: ["Spa", "Fine dining", "Excursions"], baseRating: 4.9, price: "£££££" },
+  ],
+};
+
 function generateLocalAccommodations(places) {
   if (!places || places.length === 0) return [];
+  const region = getRegion(places);
+  const templates = REGION_ACCOM_TEMPLATES[region] || ACCOM_TEMPLATES;
   const results = [];
   places.forEach(place => {
     const placeName = place.trim();
-    ACCOM_TEMPLATES.forEach(tmpl => {
+    templates.forEach(tmpl => {
       results.push({
         name: `${placeName} ${tmpl.suffix}`,
         type: tmpl.type,
@@ -318,7 +401,7 @@ export default function WanderlyApp() {
   const [joinShareCode, setJoinShareCode] = useState("");
 
   // ─── New Trip Wizard State ───
-  const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
+  const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "" });
   const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
   const [wizStays, setWizStays] = useState([]);
   const [wizPrefs, setWizPrefs] = useState({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
@@ -331,9 +414,16 @@ export default function WanderlyApp() {
   const [olderActSearch, setOlderActSearch] = useState("");
   const [youngerActSearch, setYoungerActSearch] = useState("");
   const [lastChatTopic, setLastChatTopic] = useState("");
+  const [toast, setToast] = useState(null);
+  const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('wanderly_welcomed'));
+
+  const showToast = useCallback((message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const resetWizard = useCallback(() => {
-    setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set() });
+    setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "" });
     setWizTravellers({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
     setWizStays([]);
     setWizPrefs({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
@@ -477,9 +567,10 @@ export default function WanderlyApp() {
       }
     } catch (err) {
       console.error('Error loading trips:', err);
+      showToast("Failed to save — check connection", "error");
     }
     setSyncing(false);
-  }, [user]);
+  }, [user, showToast]);
 
   // Save trip to Supabase
   const saveTripToDB = async (tripData) => {
@@ -567,6 +658,7 @@ export default function WanderlyApp() {
       return { ...tripData, id: trip.id, shareCode: trip.share_code, dbId: trip.id };
     } catch (err) {
       console.error('Error saving trip:', err);
+      showToast("Failed to save — check connection", "error");
       return tripData;
     }
   };
@@ -619,7 +711,11 @@ export default function WanderlyApp() {
   }, [user, loadTripsFromDB]);
 
   const createTrip = () => {
-    const name = wizTrip.name.trim() || "Untitled Trip";
+    if (wizTrip.name.trim().length < 2) {
+      alert("Please enter a trip name (at least 2 characters)");
+      return;
+    }
+    const name = wizTrip.name.trim();
     const formatDate = (d) => { if (!d) return ""; const dt = new Date(d); return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
     const tripData = {
       name,
@@ -631,6 +727,7 @@ export default function WanderlyApp() {
       year: wizTrip.start ? new Date(wizTrip.start).getFullYear() : new Date().getFullYear(),
       places: [...wizTrip.places],
       travel: [...wizTrip.travel],
+      budget: wizTrip.budget,
       travellers: { adults: wizTravellers.adults.map(a => ({ ...a })), olderKids: wizTravellers.olderKids.map(c => ({ ...c })), youngerKids: wizTravellers.youngerKids.map(c => ({ ...c })) },
       stays: [...wizStays],
       stayNames: wizStays.map(s => s.name || s),
@@ -657,15 +754,24 @@ export default function WanderlyApp() {
         saveTripToDB(newTrip).then(savedTrip => {
           if (savedTrip.dbId) {
             setCreatedTrips(prev => prev.map(t => t.id === newTrip.id ? { ...t, dbId: savedTrip.dbId, shareCode: savedTrip.shareCode } : t));
+            showToast("Saved to cloud", "success");
           }
+        }).catch(() => {
+          showToast("Failed to save — check connection", "error");
         });
       }
       setEditingTripId(null);
+      showToast("Trip created!");
       navigate("home");
     }
   };
 
-  const deleteCreatedTrip = (id) => setCreatedTrips(prev => prev.filter(t => t.id !== id));
+  const deleteCreatedTrip = (id) => {
+    const trip = createdTrips.find(t => t.id === id);
+    if (!window.confirm("Remove '" + (trip?.name || "this trip") + "'? This cannot be undone.")) return;
+    setCreatedTrips(prev => prev.filter(t => t.id !== id));
+    showToast("Trip removed");
+  };
 
   const generateTimeline = (trip) => {
     const items = [];
@@ -686,9 +792,8 @@ export default function WanderlyApp() {
   const makeTripLive = (id) => {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== id) return { ...t, status: t.status === "live" ? "new" : t.status };
-      const timeline = generateTimeline(t);
       updateTripStatusInDB(t.dbId || t.id, 'live');
-      return { ...t, status: "live", timeline };
+      return { ...t, status: "live", timeline: [] };
     }));
   };
 
@@ -787,9 +892,10 @@ export default function WanderlyApp() {
               {trip.travellers.olderKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.olderKids.length} older kid{trip.travellers.olderKids.length > 1 ? "s" : ""}</Tag>}
               {trip.travellers.youngerKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.youngerKids.length} younger kid{trip.travellers.youngerKids.length > 1 ? "s" : ""}</Tag>}
               {trip.stayNames.length > 0 && <Tag bg={T.amberL} color={T.amber}>{trip.stayNames.length} stay{trip.stayNames.length > 1 ? "s" : ""}</Tag>}
+              {trip.budget && <Tag bg={T.greenL} color={T.green}>{trip.budget}</Tag>}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {trip.status !== "live" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>🚀 Make Live</button>}
+              {trip.status !== "live" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>🚀 Activate trip</button>}
               <button onClick={e => { e.stopPropagation(); deleteCreatedTrip(trip.id); }} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.red }}>Remove</button>
             </div>
           </div>
@@ -849,8 +955,9 @@ export default function WanderlyApp() {
         <span style={{ fontSize: 11, color: T.t3 }}>Step {wizStep + 1} of 4</span>
       </div>
       <div style={{ display: "flex", gap: 4, padding: "10px 20px", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
-        {wizSteps.map((_, i) => (
-          <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= wizStep ? T.a : T.s2, transition: "background .3s" }} />
+        {wizSteps.map((step, i) => (
+          <div key={i} onClick={() => { if (i <= wizStep) setWizStep(i); }}
+            style={{ flex: 1, height: 4, borderRadius: 2, background: i <= wizStep ? T.a : T.s3, cursor: i <= wizStep ? "pointer" : "default", transition: "background .2s" }} />
         ))}
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
@@ -876,9 +983,14 @@ export default function WanderlyApp() {
   const renderWizDetails = () => {
     const addPlace = (p) => {
       const place = (p || placeInput).trim();
-      if (place && !wizTrip.places.includes(place)) {
-        setWizTrip(prev => ({ ...prev, places: [...prev.places, place] }));
+      if (!place) { setPlaceInput(""); setPlaceSuggestionsOpen(false); return; }
+      if (wizTrip.places.some(existing => existing.toLowerCase() === place.toLowerCase())) {
+        showToast("'" + place + "' already added", "error");
+        setPlaceInput("");
+        setPlaceSuggestionsOpen(false);
+        return;
       }
+      setWizTrip(prev => ({ ...prev, places: [...prev.places, place] }));
       setPlaceInput("");
       setPlaceSuggestionsOpen(false);
     };
@@ -897,6 +1009,9 @@ export default function WanderlyApp() {
           <ControlledField label="Start date" type="date" value={wizTrip.start} onChange={v => setWizTrip(prev => ({ ...prev, start: v }))} style={{ flex: 1 }} />
           <ControlledField label="End date" type="date" value={wizTrip.end} onChange={v => setWizTrip(prev => ({ ...prev, end: v }))} style={{ flex: 1 }} min={wizTrip.start || undefined} />
         </div>
+        {!wizTrip.start && (
+          <p style={{ fontSize: 12, color: T.t3, marginBottom: 14, fontStyle: "italic" }}>{"💡 Adding dates helps generate a better itinerary"}</p>
+        )}
         <div style={{ marginBottom: 14, position: "relative" }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Locations visiting</label>
           {wizTrip.places.length > 0 && (
@@ -942,6 +1057,15 @@ export default function WanderlyApp() {
             {travelOpts.map(o => (
               <span key={o} onClick={() => setWizTrip(prev => { const s = new Set(prev.travel); s.has(o) ? s.delete(o) : s.add(o); return { ...prev, travel: s }; })}
                 style={{ ...css.chip, ...(wizTrip.travel.has(o) ? css.chipActive : {}) }}>{o}</span>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Budget per person</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {["Budget", "Mid-range", "Luxury", "No limit"].map(o => (
+              <span key={o} onClick={() => setWizTrip(prev => ({ ...prev, budget: o }))}
+                style={{ ...css.chip, ...(wizTrip.budget === o ? css.chipActive : {}), cursor: "pointer" }}>{o}</span>
             ))}
           </div>
         </div>
@@ -1219,9 +1343,22 @@ export default function WanderlyApp() {
   };
 
   // ─── Wizard Step: Preferences (render function) ───
+  const REGION_SUGGESTIONS = {
+    japan: { food: ["Sushi", "Ramen", "Tempura", "Matcha", "Izakaya", "Wagyu beef", "Soba noodles"], activities: ["Temples & shrines", "Onsen bathing", "Cherry blossom viewing", "Anime district", "Tea ceremony", "Bullet train ride", "Sumo wrestling"] },
+    france: { food: ["Croissants", "Coq au vin", "Crêpes", "Cheese tasting", "Wine pairing", "Patisserie tour"], activities: ["Wine region tour", "Art galleries", "River cruise", "Château visit", "Market browsing", "Cooking class"] },
+    spain: { food: ["Tapas", "Paella", "Churros", "Jamón ibérico", "Sangria", "Pintxos"], activities: ["Flamenco show", "Beach day", "Siesta culture", "Gothic Quarter walk", "Football match", "Tapas crawl"] },
+    italy: { food: ["Pizza", "Gelato", "Pasta making", "Espresso culture", "Truffle hunting", "Aperitivo"], activities: ["Colosseum visit", "Gondola ride", "Vineyard tour", "Vespa rental", "Art renaissance tour", "Cooking class"] },
+    thailand: { food: ["Pad Thai", "Tom Yum", "Street food tour", "Mango sticky rice", "Night market food"], activities: ["Temple tour", "Thai massage", "Island hopping", "Night market", "Elephant sanctuary", "Muay Thai"] },
+    usa: { food: ["Burgers", "BBQ", "Food truck tour", "Brunch culture", "Craft beer", "Diner breakfast"], activities: ["Road trip stops", "National parks", "Broadway show", "Sports game", "Shopping district", "Rooftop bars"] },
+  };
+
   const renderWizPrefs = () => {
-    const allFoodOpts = ["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"];
-    const suggestions = ACTIVITY_SUGGESTIONS.default;
+    const region = wizTrip.places.length > 0 ? getRegion(wizTrip.places) : null;
+    const regionSugg = region && REGION_SUGGESTIONS[region] ? REGION_SUGGESTIONS[region] : null;
+    const regionLabel = region ? region.charAt(0).toUpperCase() + region.slice(1) : "";
+    const allFoodOpts = regionSugg ? [...regionSugg.food, "Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"] : ["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"];
+    const adultActsWithRegion = regionSugg ? [...regionSugg.activities, ...ACTIVITY_SUGGESTIONS.default.adults] : ACTIVITY_SUGGESTIONS.default.adults;
+    const suggestions = { ...ACTIVITY_SUGGESTIONS.default, adults: adultActsWithRegion };
 
     const togglePref = (key, item) => {
       setWizPrefs(prev => { const s = new Set(prev[key]); s.has(item) ? s.delete(item) : s.add(item); return { ...prev, [key]: s }; });
@@ -1256,6 +1393,7 @@ export default function WanderlyApp() {
 
     return (
       <>
+        {regionSugg && <p style={{ fontSize: 11, color: T.a, fontWeight: 500, marginBottom: 8 }}>{"🌍"} Showing suggestions popular in {regionLabel}</p>}
         {renderPrefSection("Food preferences", "food", allFoodOpts, foodSearch, setFoodSearch, "Search or type a food preference...")}
         {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...")}
         {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...")}
@@ -1592,7 +1730,7 @@ export default function WanderlyApp() {
 
       // Smart fallback based on message length and content
       if (lower.includes("?")) return `Great question! Let me look into that for your Lake District trip.\n\nBased on your group (4 adults + 2 children) near Ambleside, I'd suggest checking the **Explore** tab for curated options, or try asking about:\n\n• Restaurants & food\n• Activities for kids or adults\n• Weather & planning\n• Boats, hikes, or attractions\n• Budget & costs`;
-      return `I'll look into that for you! In the meantime, try asking about:\n\n🍽 **Restaurants** — "where should we eat tonight?"\n🏊 **Swimming** — "swimming options nearby"\n🥾 **Walks** — "easy walks for kids"\n⛵ **Boats** — "boat trips on Windermere"\n⚡ **EV** — "nearest chargers"\n🗳 **Polls** — "create a poll"\n⛅ **Weather** — "forecast for tomorrow"\n💰 **Budget** — "trip costs"\n\nI work best with specific questions!`;
+      return `I'm not sure about that specific request yet, but I'm getting smarter! Here's what I can help with right now:\n\n🍽️ **Restaurants** — 'find restaurants' or 'dinner options'\n⚡ **EV charging** — 'nearest chargers'\n🎯 **Activities** — 'things to do' or 'kids activities'\n🌦️ **Weather** — 'weather forecast'\n📊 **Polls** — 'create a poll'\n💰 **Budget** — 'trip cost' or 'budget'\n🚗 **Transport** — 'parking' or 'directions'\n\nTry asking about any of these!`;
     };
 
     const sendMessage = (text) => {
@@ -1988,7 +2126,7 @@ export default function WanderlyApp() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
             <p style={{ fontSize: 12, opacity: 0.8 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
             <button onClick={() => { /* pre-fill wizard with this trip's data and navigate to edit */
-              setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel) });
+              setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel), budget: trip.budget || "" });
               setWizTravellers({ adults: trip.travellers.adults.map(a => ({ ...a })), olderKids: trip.travellers.olderKids.map(c => ({ ...c })), youngerKids: trip.travellers.youngerKids.map(c => ({ ...c })) });
               setWizStays(trip.stays || []);
               setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.activities), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
@@ -2046,10 +2184,21 @@ export default function WanderlyApp() {
               <div style={{ fontSize: 28, marginBottom: 8 }}>🚀</div>
               <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: T.ad }}>Ready to go live?</h3>
               <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Wanderly will generate your day-by-day itinerary, connect travel services, and start monitoring weather & bookings.</p>
-              <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, justifyContent: "center", width: "100%", padding: "12px 16px", fontSize: 14 }}>🚀 Make Trip Live</button>
+              <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, justifyContent: "center", width: "100%", padding: "12px 16px", fontSize: 14 }}>🚀 Activate trip</button>
             </div>
           )}
 
+          {isLive && trip.timeline.length === 0 && (
+            <>
+              <div style={{ ...css.card, textAlign: "center", padding: 24, marginTop: 12, background: T.al, borderColor: T.a }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>{"✨"}</div>
+                <p style={{ fontSize: 14, fontWeight: 500, color: T.ad, marginBottom: 4 }}>Your itinerary is being prepared</p>
+                <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.5 }}>Chat with Wanderly AI to refine your plans, or add activities manually.</p>
+                <button onClick={() => navigate("chat")} style={{ ...css.btn, ...css.btnP, ...css.btnSm, marginTop: 12 }}>Chat with AI</button>
+              </div>
+              <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, marginTop: 8, width: "100%", justifyContent: "center" }}>+ Add activity</button>
+            </>
+          )}
           {isLive && trip.timeline.length > 0 && (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2135,7 +2284,7 @@ export default function WanderlyApp() {
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            {!isLive && <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }}>🚀 Make Live</button>}
+            {!isLive && <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }}>🚀 Activate trip</button>}
             <button onClick={() => { deleteCreatedTrip(trip.id); navigate("home"); }} style={{ ...css.btn, flex: isLive ? 0 : 1, justifyContent: "center", color: T.red }}>Remove trip</button>
           </div>
         </div>
@@ -2393,6 +2542,28 @@ export default function WanderlyApp() {
           </div>
         );
       })()}
+      {showWelcome && screen === "home" && createdTrips.length === 0 && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9997, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: T.s, borderRadius: T.r, padding: 28, maxWidth: 340, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{"🌍"}</div>
+            <h2 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginBottom: 8 }}>Welcome to Wanderly</h2>
+            <p style={{ fontSize: 13, color: T.t2, marginBottom: 20, lineHeight: 1.5 }}>Your AI travel concierge. Plan trips, invite friends, and create memories together.</p>
+            <button onClick={() => { setShowWelcome(false); localStorage.setItem('wanderly_welcomed', 'true'); setScreen("create"); setWizStep(0); resetWizard(); }}
+              style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 14, fontWeight: 500, marginBottom: 10 }}>
+              Create my first trip
+            </button>
+            <button onClick={() => { setShowWelcome(false); localStorage.setItem('wanderly_welcomed', 'true'); }}
+              style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: T.t2 }}>
+              Explore the demo first
+            </button>
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 9998, padding: "10px 20px", borderRadius: 20, background: toast.type === "error" ? T.red : T.ad, color: "#fff", fontSize: 13, fontFamily: T.font, boxShadow: "0 4px 12px rgba(0,0,0,.15)", animation: "reelFadeIn .3s ease" }}>
+          {toast.type === "success" ? "✓ " : "⚠ "}{toast.message}
+        </div>
+      )}
       {viewingPhoto && (() => {
         const photo = viewingPhoto;
         return (
