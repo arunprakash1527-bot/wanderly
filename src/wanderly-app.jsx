@@ -151,15 +151,15 @@ const MEMORIES = [
 
 // ─── Shared Styles ───
 const css = {
-  btn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: T.rs, border: `.5px solid ${T.border}`, background: T.s, fontFamily: T.font, fontSize: 13, cursor: "pointer", color: T.t1, transition: "all .15s", fontWeight: 500, outline: "none" },
+  btn: { display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: T.rs, border: `.5px solid ${T.border}`, background: T.s, fontFamily: T.font, fontSize: 13, cursor: "pointer", color: T.t1, transition: "all .15s", fontWeight: 500, outline: "none", minHeight: 44 },
   btnP: { background: T.a, color: "#fff", borderColor: T.ad },
-  btnSm: { padding: "5px 12px", fontSize: 12 },
-  chip: { padding: "6px 14px", borderRadius: 24, fontSize: 12, border: `.5px solid ${T.border}`, background: T.s, cursor: "pointer", transition: "all .15s", userSelect: "none", fontFamily: T.font },
+  btnSm: { padding: "8px 16px", fontSize: 12, minHeight: 40 },
+  chip: { padding: "8px 16px", borderRadius: 24, fontSize: 12, border: `.5px solid ${T.border}`, background: T.s, cursor: "pointer", transition: "all .15s", userSelect: "none", fontFamily: T.font, minHeight: 40 },
   chipActive: { background: T.al, borderColor: T.a, color: T.ad },
-  card: { background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, padding: "16px 18px", marginBottom: 10, boxShadow: T.shadow, transition: "all .2s" },
-  tag: (bg, color) => ({ display: "inline-block", padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500, background: bg, color, marginRight: 5, marginBottom: 3 }),
+  card: { background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 8, boxShadow: T.shadow, transition: "all .2s" },
+  tag: (bg, color) => ({ display: "inline-block", padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500, background: bg, color, marginRight: 4, marginBottom: 4 }),
   avatar: (bg, size = 32) => ({ width: size, height: size, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.37, fontWeight: 500, color: "#fff", background: bg, flexShrink: 0 }),
-  sectionTitle: { fontSize: 12, fontWeight: 600, color: T.t3, margin: "20px 0 10px", textTransform: "uppercase", letterSpacing: 0.8 },
+  sectionTitle: { fontSize: 12, fontWeight: 600, color: T.t3, margin: "24px 0 8px", textTransform: "uppercase", letterSpacing: 0.8 },
 };
 
 // ─── Components ───
@@ -175,6 +175,26 @@ const GroupTag = ({ type, children }) => {
   const map = { all: [T.al, T.ad], adults: [T.blueL, T.blue], older: [T.pinkL, T.pink], younger: [T.coralL, T.coral], kids: [T.pinkL, T.pink] };
   const [bg, c] = map[type] || map.all;
   return <span style={{ ...css.tag(bg, c), fontSize: 10, padding: "2px 8px" }}>{children}</span>;
+};
+
+const Collapsible = ({ title, icon, defaultOpen = false, sectionKey, expandedSections, setExpandedSections, count, children }) => {
+  const isOpen = expandedSections[sectionKey] !== undefined ? expandedSections[sectionKey] : defaultOpen;
+  const toggle = () => setExpandedSections(prev => ({ ...prev, [sectionKey]: !isOpen }));
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div className="w-expand" onClick={toggle} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderRadius: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {icon && <span style={{ fontSize: 14 }}>{icon}</span>}
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: 0.8 }}>{title}</span>
+          {count !== undefined && <span style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "2px 8px", borderRadius: 12 }}>{count}</span>}
+        </div>
+        <span style={{ fontSize: 12, color: T.t3, transition: "transform .2s", transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
+      </div>
+      <div style={{ maxHeight: isOpen ? 1000 : 0, overflow: "hidden", transition: "max-height .3s ease" }}>
+        {children}
+      </div>
+    </div>
+  );
 };
 
 // ─── Location Suggestions Database ───
@@ -367,6 +387,7 @@ function ControlledField({ label, type = "text", value, onChange, placeholder, s
 }
 
 function TabBar({ active, onNav }) {
+  const tabStyle = (isActive) => ({ flex: 1, padding: "12px 0", minHeight: 48, textAlign: "center", fontSize: 11, color: isActive ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: isActive ? 600 : 500, transition: "all .15s", borderTop: isActive ? `2px solid ${T.a}` : "2px solid transparent" });
   const tabs = [
     { id: "trip", label: "Timeline", screen: "trip" },
     { id: "chat", label: "Chat", screen: "chat" },
@@ -378,7 +399,7 @@ function TabBar({ active, onNav }) {
     return (
       <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
         {[["home", "Trips"], ["explore", "Explore"], ["settings", "Settings"]].map(([id, label]) => (
-          <button key={id} onClick={() => onNav(id)} style={{ flex: 1, padding: "10px 0 8px", textAlign: "center", fontSize: 11, color: active === id ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: 500 }}>{label}</button>
+          <button key={id} className="w-tab" onClick={() => onNav(id)} style={tabStyle(active === id)}>{label}</button>
         ))}
       </div>
     );
@@ -386,7 +407,7 @@ function TabBar({ active, onNav }) {
   return (
     <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
       {tabs.map(t => (
-        <button key={t.id} onClick={() => onNav(t.screen)} style={{ flex: 1, padding: "10px 0 8px", textAlign: "center", fontSize: 11, color: active === t.id ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: 500 }}>{t.label}</button>
+        <button key={t.id} className="w-tab" onClick={() => onNav(t.screen)} style={tabStyle(active === t.id)}>{t.label}</button>
       ))}
     </div>
   );
@@ -412,6 +433,7 @@ export default function WanderlyApp() {
   const [selectedCreatedTrip, setSelectedCreatedTrip] = useState(null);
   const [editingTimelineIdx, setEditingTimelineIdx] = useState(null);
   const [editingTripId, setEditingTripId] = useState(null);
+  const [expandedSections, setExpandedSections] = useState({});
   const [tripChatInput, setTripChatInput] = useState("");
   const [tripChatMessages, setTripChatMessages] = useState([]);
   const [settingsToggles, setSettingsToggles] = useState(() => {
@@ -1186,9 +1208,9 @@ export default function WanderlyApp() {
         {wizStep === 2 && renderWizStays()}
         {wizStep === 3 && renderWizPrefs()}
       </div>
-      <div style={{ display: "flex", gap: 10, padding: "12px 20px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
-        {wizStep > 0 && <button style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
-        <button style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 3 ? setWizStep(wizStep + 1) : createTrip()}>
+      <div style={{ display: "flex", gap: 8, padding: "16px 24px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
+        {wizStep > 0 && <button className="w-btn" style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
+        <button className="w-btn w-btnP" style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 3 ? setWizStep(wizStep + 1) : createTrip()}>
           {wizStep < 3 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
         </button>
       </div>
@@ -2141,10 +2163,10 @@ export default function WanderlyApp() {
               ))}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 4, padding: "0 20px 10px", overflowX: "auto" }}>
+          <div style={{ display: "flex", gap: 8, padding: "0 24px 8px", overflowX: "auto" }}>
             {DAYS.map(d => (
-              <button key={d.day} onClick={() => setSelectedDay(d.day)}
-                style={{ ...css.chip, flexShrink: 0, fontSize: 11, padding: "4px 10px",
+              <button key={d.day} className="w-chip" onClick={() => setSelectedDay(d.day)}
+                style={{ ...css.chip, flexShrink: 0, fontSize: 11, padding: "8px 16px",
                   ...(selectedDay === d.day ? { background: T.a, color: "#fff", borderColor: T.ad } : {}) }}>
                 Day {d.day} · {d.location}
               </button>
@@ -2164,20 +2186,20 @@ export default function WanderlyApp() {
             </div>
           ))}
         </div>
-        <div style={{ padding: "0 20px" }}>
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "6px 0" }}>
+        <div style={{ padding: "0 24px" }}>
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "8px 0" }}>
             {quickActions.map(p => (
-              <button key={p} style={{ ...css.chip, flexShrink: 0, fontSize: 12 }} onClick={() => sendMessage(p)}>{p}</button>
+              <button key={p} className="w-chip" style={{ ...css.chip, flexShrink: 0, fontSize: 12 }} onClick={() => sendMessage(p)}>{p}</button>
             ))}
           </div>
         </div>
-        <div style={{ padding: "10px 20px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
+        <div style={{ padding: "16px 24px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMessage()}
-              style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: 20, fontFamily: T.font, fontSize: 14, background: T.s2, outline: "none" }}
+              style={{ flex: 1, padding: "12px 16px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 14, background: T.s2, outline: "none", minHeight: 48 }}
               placeholder="Ask anything about your trip..." />
-            <button onClick={() => sendMessage()} style={{ width: 36, height: 36, borderRadius: "50%", background: T.a, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+            <button className="w-btnP" onClick={() => sendMessage()} style={{ width: 48, height: 48, borderRadius: "50%", background: T.a, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s", flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
             </button>
           </div>
         </div>
@@ -2544,11 +2566,12 @@ export default function WanderlyApp() {
 
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
           {isLive && trip.shareCode && (
-            <div style={{ ...css.card, marginBottom: 16, borderColor: T.a }}>
-              <div style={css.sectionTitle}>Share & Invite</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 10 }}>
+            <Collapsible title="Share & Invite" icon="🔗" sectionKey="share" defaultOpen={false} expandedSections={expandedSections} setExpandedSections={setExpandedSections}
+              count={trip.travellers.adults.length}>
+            <div className="w-card" style={{ ...css.card, borderColor: T.a }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 8 }}>
                 <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${window.location.origin}?join=${trip.shareCode}`}</code>
-                <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}?join=${trip.shareCode}`); }}>Copy link</button>
+                <button className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}?join=${trip.shareCode}`); }}>Copy link</button>
               </div>
               {trip.travellers.adults.map((a, i) => {
                 const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
@@ -2571,8 +2594,9 @@ export default function WanderlyApp() {
                   </div>
                 );
               })}
-              <button onClick={() => { setSelectedCreatedTrip(trip); navigate("joinPreview"); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 10, fontSize: 11 }}>Preview join page</button>
+              <button className="w-btn" onClick={() => { setSelectedCreatedTrip(trip); navigate("joinPreview"); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 8, fontSize: 11 }}>Preview join page</button>
             </div>
+            </Collapsible>
           )}
 
           {!isLive && (
@@ -2631,7 +2655,7 @@ export default function WanderlyApp() {
                           <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
                           <Tag bg={item.group === "Adults" ? T.blueL : item.group === "Kids" ? T.pinkL : item.group === "Note" ? T.amberL : T.al} color={item.group === "Adults" ? T.blue : item.group === "Kids" ? T.pink : item.group === "Note" ? T.amber : T.ad}>{item.group}</Tag>
                         </div>
-                        <button onClick={() => setEditingTimelineIdx(i)} style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "2px 6px", opacity: 0.5 }}>✏️</button>
+                        <button onClick={() => setEditingTimelineIdx(i)} style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 44, minHeight: 44, opacity: 0.5, justifyContent: "center" }}>✏️</button>
                       </div>
                     )}
                   </div>
@@ -2701,25 +2725,24 @@ export default function WanderlyApp() {
           )}
 
           {trip.brief && (
-            <div style={{ marginTop: 12 }}>
-              <div style={css.sectionTitle}>Trip brief</div>
-              <p style={{ fontSize: 13, color: T.t2, lineHeight: 1.5 }}>{trip.brief}</p>
-            </div>
+            <Collapsible title="Trip brief" icon="📋" sectionKey="brief" expandedSections={expandedSections} setExpandedSections={setExpandedSections}>
+              <p style={{ fontSize: 13, color: T.t2, lineHeight: 1.5, padding: "8px 0" }}>{trip.brief}</p>
+            </Collapsible>
           )}
 
-          <div style={{ marginTop: 16 }}>
-            <div style={css.sectionTitle}>Details</div>
-            <div style={css.card}>
-              {trip.places.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Locations</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}</div></div>}
-              {trip.travel.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Travel</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}</div></div>}
-              {trip.stayNames.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Accommodation</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.stayNames.map(s => <Tag key={s} bg={T.amberL} color={T.amber}>{s}</Tag>)}</div></div>}
-              {trip.prefs.food.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Food</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.food.map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}</div></div>}
-              {(trip.prefs.adultActs?.length > 0 || trip.prefs.activities?.length > 0) && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Adult activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{(trip.prefs.adultActs || trip.prefs.activities).map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}</div></div>}
-              {trip.prefs.olderActs?.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Older kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.olderActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
-              {trip.prefs.youngerActs?.length > 0 && <div style={{ marginBottom: 10 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Younger kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.youngerActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
+          <Collapsible title="Details" icon="📍" sectionKey="details" expandedSections={expandedSections} setExpandedSections={setExpandedSections}
+            count={trip.places.length + trip.travel.length + trip.stayNames.length}>
+            <div className="w-card" style={css.card}>
+              {trip.places.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Locations</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}</div></div>}
+              {trip.travel.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Travel</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}</div></div>}
+              {trip.stayNames.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Accommodation</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.stayNames.map(s => <Tag key={s} bg={T.amberL} color={T.amber}>{s}</Tag>)}</div></div>}
+              {trip.prefs.food.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Food</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.food.map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}</div></div>}
+              {(trip.prefs.adultActs?.length > 0 || trip.prefs.activities?.length > 0) && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Adult activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{(trip.prefs.adultActs || trip.prefs.activities).map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}</div></div>}
+              {trip.prefs.olderActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Older kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.olderActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
+              {trip.prefs.youngerActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Younger kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.youngerActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
               {trip.prefs.instructions && <div><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Special instructions</label><p style={{ fontSize: 12, color: T.t2, marginTop: 4, lineHeight: 1.5 }}>📝 {trip.prefs.instructions}</p></div>}
             </div>
-          </div>
+          </Collapsible>
 
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
             {!isLive && <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }}>🚀 Activate trip</button>}
@@ -2858,8 +2881,8 @@ export default function WanderlyApp() {
 
   if (authLoading) {
     return (
-      <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+      <div className="w-app" style={phoneStyle}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}`}</style>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Wanderly</h1>
@@ -2872,8 +2895,8 @@ export default function WanderlyApp() {
 
   if (!user) {
     return (
-      <div style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+      <div className="w-app" style={phoneStyle}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}`}</style>
         <div style={{ height: "100%" }}>
           {renderAuthScreen()}
         </div>
@@ -2882,8 +2905,8 @@ export default function WanderlyApp() {
   }
 
   return (
-    <div style={phoneStyle}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}`}</style>
+    <div className="w-app" style={phoneStyle}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}`}</style>
       <div style={{ height: "100%" }}>
         {screen === "home" && renderHomeScreen()}
         {screen === "create" && renderCreateScreen()}
