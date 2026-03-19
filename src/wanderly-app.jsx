@@ -1786,19 +1786,23 @@ export default function WanderlyApp() {
             else if (youngest <= 10) parts.push("mix family-friendly activities with some adult time");
           }
           const autoSummary = parts.length > 0 ? parts.join(". ") + "." : "";
+          // Auto-fill instructions with summary on first visit (if instructions is empty and summary exists)
+          if (autoSummary && !wizPrefs.instructions) {
+            setTimeout(() => setWizPrefs(prev => prev.instructions ? prev : { ...prev, instructions: autoSummary }), 0);
+          }
           return (
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>Trip summary</label>
-              {autoSummary && (
-                <div style={{ padding: 12, background: T.al, borderRadius: T.rs, border: `.5px solid ${T.a}`, marginBottom: 8 }}>
-                  <p style={{ fontSize: 12, color: T.ad, lineHeight: 1.6 }}>{autoSummary}</p>
-                  <p style={{ fontSize: 10, color: T.t3, marginTop: 4 }}>Auto-generated from your trip details</p>
-                </div>
-              )}
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 4, textTransform: "uppercase", letterSpacing: .5, marginTop: 8 }}>Additional notes <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Trip summary</label>
+                {autoSummary && wizPrefs.instructions !== autoSummary && (
+                  <button onClick={() => setWizPrefs(prev => ({ ...prev, instructions: autoSummary }))}
+                    style={{ fontSize: 10, color: T.a, background: "none", border: "none", cursor: "pointer", fontFamily: T.font, fontWeight: 500 }}>↻ Reset to auto</button>
+                )}
+              </div>
               <textarea value={wizPrefs.instructions} onChange={e => setWizPrefs(prev => ({ ...prev, instructions: e.target.value }))}
-                placeholder="e.g. Dog-friendly places only. Avoid steep trails. Must visit Dunvegan Castle."
-                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 48 }} />
+                placeholder="Your trip summary will appear here — edit freely to add preferences like dog-friendly, avoid steep trails, late starts..."
+                style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 80, lineHeight: 1.6 }} />
+              <p style={{ fontSize: 10, color: T.t3, marginTop: 4 }}>Auto-generated from your trip details — edit to add preferences like "dog-friendly", "avoid steep trails", "late starts"</p>
             </div>
           );
         })()}
