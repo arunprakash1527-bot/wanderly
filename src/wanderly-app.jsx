@@ -916,11 +916,19 @@ export default function WanderlyApp() {
     return items;
   };
 
+  const generateAndSetTimeline = (id) => {
+    setCreatedTrips(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      return { ...t, timeline: generateTimeline(t) };
+    }));
+    showToast("Itinerary generated!");
+  };
+
   const makeTripLive = (id) => {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== id) return { ...t, status: t.status === "live" ? "new" : t.status };
       updateTripStatusInDB(t.dbId || t.id, 'live');
-      return { ...t, status: "live", timeline: [] };
+      return { ...t, status: "live", timeline: generateTimeline(t) };
     }));
   };
 
@@ -2614,7 +2622,7 @@ export default function WanderlyApp() {
                 <div style={{ fontSize: 28, marginBottom: 8 }}>{"✨"}</div>
                 <p style={{ fontSize: 14, fontWeight: 500, color: T.ad, marginBottom: 4 }}>Your itinerary is being prepared</p>
                 <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.5 }}>Chat with Wanderly AI to refine your plans, or add activities manually.</p>
-                <button onClick={() => navigate("chat")} style={{ ...css.btn, ...css.btnP, ...css.btnSm, marginTop: 12 }}>Chat with AI</button>
+                <button onClick={() => { generateAndSetTimeline(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, marginTop: 12 }}>Generate itinerary</button>
               </div>
               <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, marginTop: 8, width: "100%", justifyContent: "center" }}>+ Add activity</button>
             </>
