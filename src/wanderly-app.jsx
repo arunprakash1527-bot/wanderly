@@ -816,6 +816,9 @@ export default function WanderlyApp() {
     if (gp.length) parts.push(`group: ${gp.join(", ")}`);
     if (trip.budget) parts.push(`${trip.budget.toLowerCase()} budget`);
     if (trip.prefs?.food?.length > 0) parts.push(`food preferences: ${trip.prefs.food.join(", ")}`);
+    if (trip.prefs?.adultActs?.length > 0) parts.push(`adult activities: ${trip.prefs.adultActs.join(", ")}`);
+    if (trip.prefs?.olderActs?.length > 0) parts.push(`older kids activities: ${trip.prefs.olderActs.join(", ")}`);
+    if (trip.prefs?.youngerActs?.length > 0) parts.push(`younger kids activities: ${trip.prefs.youngerActs.join(", ")}`);
     if (trip.stayNames?.length > 0) parts.push(`staying at ${trip.stayNames.join(", ")}`);
     const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
     if (allKids.length > 0) {
@@ -1776,6 +1779,10 @@ export default function WanderlyApp() {
           if (wizTrip.budget) parts.push(`${wizTrip.budget.toLowerCase()} budget`);
           // Food
           if (wizPrefs.food.size > 0) parts.push(`food: ${[...wizPrefs.food].join(", ")}`);
+          // Activities
+          if (wizPrefs.adultActs.size > 0) parts.push(`adult activities: ${[...wizPrefs.adultActs].join(", ")}`);
+          if (wizPrefs.olderActs.size > 0) parts.push(`older kids activities: ${[...wizPrefs.olderActs].join(", ")}`);
+          if (wizPrefs.youngerActs.size > 0) parts.push(`younger kids activities: ${[...wizPrefs.youngerActs].join(", ")}`);
           // Stays
           if (wizStays.length > 0) parts.push(`staying at ${wizStays.map(s => s.name || s).join(", ")}`);
           // Kids context
