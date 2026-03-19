@@ -802,6 +802,32 @@ export default function WanderlyApp() {
     }
   }, [user, loadTripsFromDB]);
 
+  const buildTripSummary = (trip) => {
+    const parts = [];
+    const numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd) - new Date(trip.rawStart)) / 86400000) + 1) : null;
+    if (numDays && trip.places?.length > 0) parts.push(`${numDays}-day trip to ${trip.places.join(", ")}`);
+    if (trip.travel?.length > 0) parts.push(`travelling by ${trip.travel.join(" + ").toLowerCase()}`);
+    if (trip.startLocation) parts.push(`starting from ${trip.startLocation}`);
+    const na = trip.travellers?.adults?.length || 0, nok = trip.travellers?.olderKids?.length || 0, nyk = trip.travellers?.youngerKids?.length || 0;
+    const gp = [];
+    if (na > 0) gp.push(`${na} adult${na > 1 ? "s" : ""}`);
+    if (nok > 0) gp.push(`${nok} older kid${nok > 1 ? "s" : ""} (${trip.travellers.olderKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    if (nyk > 0) gp.push(`${nyk} younger kid${nyk > 1 ? "s" : ""} (${trip.travellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    if (gp.length) parts.push(`group: ${gp.join(", ")}`);
+    if (trip.budget) parts.push(`${trip.budget.toLowerCase()} budget`);
+    if (trip.prefs?.food?.length > 0) parts.push(`food preferences: ${trip.prefs.food.join(", ")}`);
+    if (trip.stayNames?.length > 0) parts.push(`staying at ${trip.stayNames.join(", ")}`);
+    const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
+    if (allKids.length > 0) {
+      const ages = allKids.map(k => parseInt(k.age) || 0);
+      const youngest = Math.min(...ages);
+      if (youngest <= 5) parts.push("young children in group — plan short activity blocks and rest breaks");
+      else if (youngest <= 10) parts.push("children in group — mix family-friendly with adult activities");
+    }
+    if (trip.prefs?.instructions) parts.push(trip.prefs.instructions);
+    return parts.join(". ") + (parts.length ? "." : "");
+  };
+
   const createTrip = () => {
     if (wizTrip.name.trim().length < 2) {
       alert("Please enter a trip name (at least 2 characters)");
@@ -826,6 +852,7 @@ export default function WanderlyApp() {
       stayNames: wizStays.map(s => s.name || s),
       prefs: { food: [...wizPrefs.food], activities: [...wizPrefs.adultActs, ...wizPrefs.olderActs, ...wizPrefs.youngerActs], adultActs: [...wizPrefs.adultActs], olderActs: [...wizPrefs.olderActs], youngerActs: [...wizPrefs.youngerActs], instructions: wizPrefs.instructions || "" },
     };
+    tripData.summary = buildTripSummary(tripData);
     if (editingTripId) {
       // Update existing trip, preserve status and timeline
       setCreatedTrips(prev => prev.map(t => {
@@ -870,49 +897,92 @@ export default function WanderlyApp() {
     const items = [];
     const loc = trip.places[0] || "your destination";
     const stayName = trip.stayNames[0] || "accommodation";
-    const food = trip.prefs.food.length > 0 ? trip.prefs.food.join(" + ") : "Local cuisine";
+    const food = trip.prefs.food.length > 0 ? trip.prefs.food : ["Local cuisine"];
+    const foodLabel = food.join(" + ");
     const travelMode = trip.travel[0] || "Travel";
     const adultActs = trip.prefs.adultActs || [];
     const olderActs = trip.prefs.olderActs || [];
     const youngerActs = trip.prefs.youngerActs || [];
     const kidActs = [...new Set([...olderActs, ...youngerActs])];
-    const hasKids = (trip.travellers?.olderKids?.length || 0) + (trip.travellers?.youngerKids?.length || 0) > 0;
+    const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
+    const hasKids = allKids.length > 0;
     const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
-    const instructions = trip.prefs.instructions || "";
+    const ctx = (trip.summary || "") + " " + (trip.prefs.instructions || "");
+    const ctxLower = ctx.toLowerCase();
+
+    // Parse instruction keywords for modifiers
+    const wantsDogFriendly = /dog|pet/.test(ctxLower);
+    const wantsAccessible = /accessible|wheelchair|mobility|pushchair|buggy|pram/.test(ctxLower);
+    const wantsLateStart = /late start|sleep in|no rush|relaxed morning/.test(ctxLower);
+    const wantsShortBlocks = /short.*block|short.*activit|restless|young child|toddler/.test(ctxLower);
+    const wantsAvoidSteep = /avoid.*steep|no.*steep|gentle|easy.*walk|flat/.test(ctxLower);
+    const wantsPubs = /pub|pubs|tavern|inn/.test(ctxLower);
+
+    // Timing modifiers
+    const arriveTime = wantsLateStart ? "11:00 AM" : "9:00 AM";
+    const morningTime = wantsLateStart ? "12:00 PM" : "10:30 AM";
+    const lunchTime = wantsLateStart ? "1:30 PM" : "12:30 PM";
+    const afternoonTime = wantsLateStart ? "3:00 PM" : "2:30 PM";
+    const returnTime = "5:00 PM";
+    const dinnerTime = "7:00 PM";
+
+    // Tag builder
+    const tags = (base) => {
+      const t = [base];
+      if (wantsDogFriendly) t.push("🐕 Dog-friendly");
+      if (wantsAccessible) t.push("♿ Accessible");
+      return t.join(" · ");
+    };
 
     // Arrival
     const arriveDesc = trip.startLocation ? `${travelMode} from ${trip.startLocation} · Check in at ${stayName}` : `${travelMode} · Check in at ${stayName}`;
-    items.push({ time: "9:00 AM", title: `Arrive ${loc}`, desc: arriveDesc, group: "Everyone", color: T.a });
+    items.push({ time: arriveTime, title: `Arrive ${loc}`, desc: arriveDesc, group: "Everyone", color: T.a });
 
     // Morning activity
-    const morningAct = adultActs[0] || "Explore the area";
+    let morningAct = adultActs[0] || "Explore the area";
+    if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
+    const morningDesc = tags(`${loc} · ${budgetTier.label}`);
     if (hasKids && kidActs.length > 0) {
-      items.push({ time: "10:30 AM", title: morningAct, desc: `${loc} · ${budgetTier.label} experience`, group: "Adults", color: T.blue });
-      items.push({ time: "10:30 AM", title: kidActs[0], desc: `${loc} · Family-friendly`, group: "Kids", color: T.pink });
+      items.push({ time: morningTime, title: morningAct, desc: morningDesc, group: "Adults", color: T.blue });
+      items.push({ time: morningTime, title: kidActs[0], desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
     } else {
-      items.push({ time: "10:30 AM", title: morningAct, desc: `${loc} · ${budgetTier.label} experience`, group: "Everyone", color: T.blue });
+      items.push({ time: morningTime, title: morningAct, desc: morningDesc, group: "Everyone", color: T.blue });
+    }
+
+    // Rest break for young kids
+    if (wantsShortBlocks && hasKids) {
+      const youngest = allKids.map(k => `${k.name || "child"}`).join(" & ");
+      items.push({ time: wantsLateStart ? "1:00 PM" : "11:45 AM", title: `Rest break`, desc: `Snack stop for ${youngest} · Keep energy up`, group: "Kids", color: T.amber });
     }
 
     // Lunch
-    items.push({ time: "12:30 PM", title: `Lunch — ${food}`, desc: `${budgetTier.label} restaurant · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+    const lunchDesc = wantsPubs ? `${budgetTier.label} pub · ${budgetTier.price}` : `${budgetTier.label} restaurant · ${budgetTier.price}`;
+    const dietaryTags = [];
+    if (food.some(f => /vegetarian|vegan/i.test(f))) dietaryTags.push("🥬 Veggie options");
+    if (food.some(f => /halal/i.test(f))) dietaryTags.push("Halal");
+    if (food.some(f => /gluten/i.test(f))) dietaryTags.push("GF options");
+    if (hasKids && food.some(f => /kid/i.test(f))) dietaryTags.push("Kids menu");
+    const lunchExtra = dietaryTags.length > 0 ? ` · ${dietaryTags.join(", ")}` : "";
+    items.push({ time: lunchTime, title: `Lunch — ${foodLabel}`, desc: `${lunchDesc}${lunchExtra}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
 
     // Afternoon activity
-    const afternoonAdult = adultActs[1] || "Walking tour & sightseeing";
+    let afternoonAdult = adultActs[1] || "Walking tour & sightseeing";
+    if (wantsAvoidSteep && /hik|trail|climb|trek/.test(afternoonAdult.toLowerCase())) afternoonAdult = "Scenic drive & viewpoints";
     if (hasKids && kidActs.length > 1) {
-      items.push({ time: "2:30 PM", title: afternoonAdult, desc: `${loc} · Afternoon session`, group: "Adults", color: T.blue });
-      items.push({ time: "2:30 PM", title: kidActs[1], desc: `${loc} · Fun for kids`, group: "Kids", color: T.pink });
+      items.push({ time: afternoonTime, title: afternoonAdult, desc: tags(`${loc} · Afternoon`), group: "Adults", color: T.blue });
+      items.push({ time: afternoonTime, title: kidActs[1] || "Playground & free time", desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
+    } else if (hasKids && wantsShortBlocks) {
+      items.push({ time: afternoonTime, title: afternoonAdult, desc: tags(`${loc} · Short session (1hr)`), group: "Everyone", color: T.blue });
+      items.push({ time: "3:30 PM", title: "Free time & play", desc: `Let kids recharge · ${stayName} area`, group: "Everyone", color: T.pink });
     } else {
-      items.push({ time: "2:30 PM", title: afternoonAdult, desc: `${loc} · Afternoon session`, group: "Everyone", color: T.blue });
+      items.push({ time: afternoonTime, title: afternoonAdult, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
     }
 
     // Return + Dinner
-    items.push({ time: "5:00 PM", title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
-    items.push({ time: "7:00 PM", title: "Dinner", desc: `${food} · ${budgetTier.label} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+    items.push({ time: returnTime, title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
+    const dinnerDesc = wantsPubs ? `${foodLabel} · ${budgetTier.label} pub · ${budgetTier.price}` : `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`;
+    items.push({ time: dinnerTime, title: wantsPubs ? "Dinner at local pub" : "Dinner", desc: `${dinnerDesc}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}${lunchExtra}`, group: "Everyone", color: T.coral });
 
-    // Special instructions note
-    if (instructions) {
-      items.push({ time: "📝", title: "Your notes", desc: instructions, group: "Note", color: T.amber });
-    }
     return items;
   };
 
@@ -970,30 +1040,56 @@ export default function WanderlyApp() {
     setTripChatMessages(prev => [...prev, { role: "user", text: msg }]);
     setTripChatInput("");
     const trip = createdTrips.find(t => t.id === tripId);
-    const loc = trip?.places[0] || "your destination";
+    const loc = trip?.places?.join(", ") || "your destination";
+    const firstLoc = trip?.places?.[0] || "your destination";
     const budget = trip?.budget || "";
+    const summary = trip?.summary || buildTripSummary(trip || {});
     const instructions = trip?.prefs?.instructions || "";
-    const hasKids = (trip?.travellers?.olderKids?.length || 0) + (trip?.travellers?.youngerKids?.length || 0) > 0;
-    const kidNames = [...(trip?.travellers?.olderKids || []), ...(trip?.travellers?.youngerKids || [])].map(k => `${k.name} (${k.age})`).join(", ");
+    const allKids = [...(trip?.travellers?.olderKids || []), ...(trip?.travellers?.youngerKids || [])];
+    const hasKids = allKids.length > 0;
+    const kidNames = allKids.map(k => `${k.name} (${k.age})`).join(", ");
     const budgetLabel = { "Budget": "budget-friendly", "Mid-range": "mid-range", "Luxury": "upscale", "No limit": "top-rated" }[budget] || "local";
-    const notePrefix = instructions ? `📝 Keeping in mind: "${instructions}"\n\n` : "";
+    const foodPref = trip?.prefs?.food?.length > 0 ? trip.prefs.food.join(", ") : "local cuisine";
+    const ctxLower = summary.toLowerCase();
+    const wantsDog = /dog|pet/.test(ctxLower);
+    const wantsAccessible = /accessible|wheelchair|mobility/.test(ctxLower);
+    const wantsPubs = /pub|pubs|tavern/.test(ctxLower);
+
+    const contextLine = `📋 **Your trip:** ${summary}\n\n`;
+
     setTimeout(() => {
       let reply = "";
       const lower = msg.toLowerCase();
       if (lower.includes("restaurant") || lower.includes("food") || lower.includes("eat") || lower.includes("lunch") || lower.includes("dinner")) {
-        const foodPref = trip?.prefs?.food?.length > 0 ? trip.prefs.food.join(", ") : "local cuisine";
-        reply = `${notePrefix}For ${budgetLabel} dining in ${loc} (${foodPref}):\n\n🍽️ I'd recommend searching for ${budgetLabel} restaurants with ${foodPref} options.${hasKids ? `\n👧 With ${kidNames}, look for family-friendly spots with kids' menus.` : ""}\n\nYou can edit the dinner slot by tapping ✏️.`;
+        const extras = [];
+        if (wantsDog) extras.push("🐕 dog-friendly");
+        if (wantsAccessible) extras.push("♿ accessible");
+        if (hasKids) extras.push("👧 kids' menus");
+        const filterStr = extras.length > 0 ? `\n\nFiltering for: ${extras.join(", ")}` : "";
+        reply = `${contextLine}For ${budgetLabel} dining in ${firstLoc} (${foodPref}):${filterStr}\n\n🍽️ I'd suggest ${budgetLabel} ${wantsPubs ? "pubs & gastropubs" : "restaurants"} with ${foodPref} options.${hasKids ? `\n👧 With ${kidNames}, look for family-friendly spots.` : ""}\n\nTap ✏️ on any meal to update.`;
       } else if (lower.includes("earlier") || lower.includes("later") || lower.includes("time") || lower.includes("move")) {
-        reply = `${notePrefix}You can adjust timings by tapping ✏️ on any timeline item.${hasKids ? `\n\n💡 Tip: with kids (${kidNames}), consider earlier dinner times and built-in rest breaks.` : ""}`;
+        reply = `${contextLine}Tap ✏️ on any timeline item to adjust times.`;
+        if (hasKids) {
+          const youngest = Math.min(...allKids.map(k => parseInt(k.age) || 10));
+          reply += youngest <= 7 ? `\n\n💡 With young kids (${kidNames}), I'd recommend:\n• Dinner by 5:30 PM\n• Rest breaks every 2 hours\n• Late starts if mornings are tough` : `\n\n💡 With ${kidNames}, earlier dinner (6 PM) works well.`;
+        }
       } else if (lower.includes("add") || lower.includes("include") || lower.includes("more")) {
-        reply = `${notePrefix}I've added a new activity slot to your timeline for ${loc}.${hasKids ? `\n\n👧 Consider splitting adult and kid activities — ${kidNames} might enjoy something different!` : ""}\n\nTap ✏️ to customise it.`;
         addTimelineItem(tripId);
+        reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
+        if (hasKids) reply += `\n\n👧 Tip: Split adult/kid activities — ${kidNames} might enjoy something different!`;
+        if (wantsDog) reply += `\n🐕 Remember: check venue is dog-friendly before booking.`;
+        reply += `\n\nTap ✏️ to customise.`;
       } else if (lower.includes("remove") || lower.includes("delete") || lower.includes("cancel")) {
-        reply = `You can remove any activity by tapping ✏️ then 🗑️. Which one would you like to remove?`;
+        reply = `Tap ✏️ on any item, then 🗑️ to remove it. Which activity would you like to remove?`;
       } else if (lower.includes("budget") || lower.includes("cost") || lower.includes("spend") || lower.includes("price")) {
-        reply = `${notePrefix}Your trip is set to **${budget || "unspecified"}** budget. I've tailored restaurant and activity suggestions to ${budgetLabel} options.\n\nTrack costs by marking items as "Booked" and entering the price.`;
+        reply = `${contextLine}Your **${budget || "unspecified"}** budget shapes all recommendations:\n• 🍽️ ${budgetLabel} restaurants (${foodPref})\n• 🎯 ${budgetLabel} activities\n• 🏨 Stays: ${trip?.stayNames?.join(", ") || "not set"}\n\nTrack actual costs by marking items as "Booked" and entering the price.`;
+      } else if (lower.includes("summary") || lower.includes("plan") || lower.includes("overview")) {
+        reply = `${contextLine}All itinerary items above are tailored to this context. Ask me about restaurants, activities, timing, or budget — I'll factor in everything.`;
+      } else if (lower.includes("regenerate") || lower.includes("refresh") || lower.includes("redo")) {
+        generateAndSetTimeline(tripId);
+        reply = `${contextLine}Done! I've regenerated your itinerary based on all your preferences. The timeline above is updated.`;
       } else {
-        reply = `${notePrefix}Here's what I know about your ${loc} trip:\n• Budget: ${budget || "Not set"}\n• Food: ${trip?.prefs?.food?.join(", ") || "Not set"}${hasKids ? `\n• Kids: ${kidNames}` : ""}\n${instructions ? `• Notes: ${instructions}\n` : ""}\nTell me what you'd like to adjust!`;
+        reply = `${contextLine}I'm using all of the above to personalise your ${firstLoc} trip. Ask me about:\n• 🍽️ Restaurants & food\n• ⏰ Timing adjustments\n• 🎯 Activities to add\n• 💰 Budget & costs\n• 🔄 Regenerate itinerary`;
       }
       setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
     }, 800);
@@ -1660,13 +1756,52 @@ export default function WanderlyApp() {
         {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...")}
         {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...")}
         {wizTravellers.youngerKids.length > 0 && renderPrefSection("Activities — Children 3-7", "youngerActs", suggestions.youngerKids, youngerActSearch, setYoungerActSearch, "Search or add a kids activity...")}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Special instructions</label>
-          <textarea value={wizPrefs.instructions} onChange={e => setWizPrefs(prev => ({ ...prev, instructions: e.target.value }))}
-            placeholder="e.g. Dog-friendly places. Top-rated pubs for dinners. Avoid steep trails. Kids get restless after 2 hrs — plan short, fun stops."
-            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 60 }} />
-          <p style={{ fontSize: 11, color: T.t3, marginTop: 4, fontStyle: "italic" }}>Tip: Mention dietary needs, accessibility requirements, pace preferences, or must-visit spots.</p>
-        </div>
+        {/* Auto-generated trip summary */}
+        {(() => {
+          const parts = [];
+          // Trip shape
+          const numDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end) - new Date(wizTrip.start)) / 86400000) + 1) : null;
+          if (numDays && wizTrip.places.length > 0) parts.push(`${numDays}-day trip to ${wizTrip.places.join(", ")}`);
+          // Travel
+          if (wizTrip.travel.size > 0) parts.push(`travelling by ${[...wizTrip.travel].join(" + ").toLowerCase()}`);
+          if (wizTrip.startLocation) parts.push(`starting from ${wizTrip.startLocation}`);
+          // Group
+          const na = wizTravellers.adults.length, nok = wizTravellers.olderKids.length, nyk = wizTravellers.youngerKids.length;
+          const groupParts = [];
+          if (na > 0) groupParts.push(`${na} adult${na > 1 ? "s" : ""}`);
+          if (nok > 0) groupParts.push(`${nok} older kid${nok > 1 ? "s" : ""} (${wizTravellers.olderKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+          if (nyk > 0) groupParts.push(`${nyk} younger kid${nyk > 1 ? "s" : ""} (${wizTravellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+          if (groupParts.length) parts.push(`group: ${groupParts.join(", ")}`);
+          // Budget
+          if (wizTrip.budget) parts.push(`${wizTrip.budget.toLowerCase()} budget`);
+          // Food
+          if (wizPrefs.food.size > 0) parts.push(`food: ${[...wizPrefs.food].join(", ")}`);
+          // Stays
+          if (wizStays.length > 0) parts.push(`staying at ${wizStays.map(s => s.name || s).join(", ")}`);
+          // Kids context
+          if (nok + nyk > 0) {
+            const ages = [...wizTravellers.olderKids, ...wizTravellers.youngerKids].map(k => parseInt(k.age) || 0);
+            const youngest = Math.min(...ages);
+            if (youngest <= 5) parts.push("plan for short activity blocks — young children in group");
+            else if (youngest <= 10) parts.push("mix family-friendly activities with some adult time");
+          }
+          const autoSummary = parts.length > 0 ? parts.join(". ") + "." : "";
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>Trip summary</label>
+              {autoSummary && (
+                <div style={{ padding: 12, background: T.al, borderRadius: T.rs, border: `.5px solid ${T.a}`, marginBottom: 8 }}>
+                  <p style={{ fontSize: 12, color: T.ad, lineHeight: 1.6 }}>{autoSummary}</p>
+                  <p style={{ fontSize: 10, color: T.t3, marginTop: 4 }}>Auto-generated from your trip details</p>
+                </div>
+              )}
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 4, textTransform: "uppercase", letterSpacing: .5, marginTop: 8 }}>Additional notes <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+              <textarea value={wizPrefs.instructions} onChange={e => setWizPrefs(prev => ({ ...prev, instructions: e.target.value }))}
+                placeholder="e.g. Dog-friendly places only. Avoid steep trails. Must visit Dunvegan Castle."
+                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 48 }} />
+            </div>
+          );
+        })()}
       </>
     );
   };
