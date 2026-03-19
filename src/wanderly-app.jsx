@@ -458,6 +458,9 @@ export default function WanderlyApp() {
   const [chatFlowData, setChatFlowData] = useState({});
   const [toast, setToast] = useState(null);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('wanderly_welcomed'));
+  const [showDemo, setShowDemo] = useState(false);
+  const [demoSlide, setDemoSlide] = useState(0);
+  const demoTimerRef = useRef(null);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -1052,7 +1055,10 @@ export default function WanderlyApp() {
               <Tag bg={T.al} color={T.ad}>Live</Tag>
             </div>
           </div>
-          <p style={{ fontSize: 11, color: T.t3, marginBottom: 10, fontStyle: "italic" }}>Sample trip — tap to explore how Wanderly works</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <p style={{ fontSize: 11, color: T.t3, fontStyle: "italic" }}>Sample trip — tap to explore</p>
+            <button onClick={e => { e.stopPropagation(); setShowDemo(true); setDemoSlide(0); }} style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", gap: 4 }}>▶ Watch demo</button>
+          </div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
             <Tag bg={T.blueL} color={T.blue}>EV road trip</Tag>
             <Tag bg={T.coralL} color={T.coral}>Mixed diet</Tag>
@@ -2875,13 +2881,305 @@ export default function WanderlyApp() {
               style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 14, fontWeight: 500, marginBottom: 10 }}>
               Create my first trip
             </button>
-            <button onClick={() => { setShowWelcome(false); localStorage.setItem('wanderly_welcomed', 'true'); }}
+            <button onClick={() => { setShowWelcome(false); localStorage.setItem('wanderly_welcomed', 'true'); setShowDemo(true); setDemoSlide(0); }}
               style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: T.t2 }}>
               Explore the demo first
             </button>
           </div>
         </div>
       )}
+      {showDemo && (() => {
+        const DEMO_SLIDES = [
+          {
+            icon: "🌍", title: "Plan your perfect trip",
+            subtitle: "Name it, set dates, pick your destinations",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 16, textAlign: "left" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.a }} />
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.s3 }} />
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.s3 }} />
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: T.s3 }} />
+                </div>
+                <div style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: T.t3 }}>Trip name</span>
+                  <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2 }}>Easter Lake District</p>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
+                    <span style={{ fontSize: 10, color: T.t3 }}>Start</span>
+                    <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>3 Apr 2026</p>
+                  </div>
+                  <div style={{ flex: 1, background: T.s2, borderRadius: 8, padding: 10 }}>
+                    <span style={{ fontSize: 10, color: T.t3 }}>End</span>
+                    <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>7 Apr 2026</p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {["Windermere", "Ambleside", "Keswick", "Grasmere"].map(p => (
+                    <span key={p} style={{ ...css.chip, ...css.chipActive, fontSize: 11, padding: "4px 10px" }}>{p}</span>
+                  ))}
+                </div>
+              </div>
+            ),
+          },
+          {
+            icon: "👨‍👩‍👧‍👦", title: "Add your travel group",
+            subtitle: "Adults, kids, dietary needs — the AI plans for everyone",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 16, textAlign: "left" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
+                  {[["You", T.a], ["James", T.coral], ["Sarah", T.blue], ["+1", T.amber]].map(([n, c], i) => (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 18, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 600 }}>{n[0]}</div>
+                      <span style={{ fontSize: 10, color: T.t2 }}>{n}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 10, textAlign: "center" }}>
+                    <span style={{ fontSize: 18 }}>👦</span>
+                    <p style={{ fontSize: 11, fontWeight: 500, marginTop: 2 }}>Max, 12</p>
+                  </div>
+                  <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 10, textAlign: "center" }}>
+                    <span style={{ fontSize: 18 }}>👧</span>
+                    <p style={{ fontSize: 11, fontWeight: 500, marginTop: 2 }}>Ella, 8</p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {["Vegetarian", "Nut allergy", "Kids menu"].map(t => (
+                    <span key={t} style={{ padding: "4px 10px", borderRadius: 12, fontSize: 10, background: T.coralL, color: T.coral }}>{t}</span>
+                  ))}
+                </div>
+              </div>
+            ),
+          },
+          {
+            icon: "🏨", title: "Book your stays",
+            subtitle: "Search, compare, or add your own accommodations",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 16, textAlign: "left" }}>
+                {[
+                  { name: "Windermere Boutique Hotel", dates: "3-5 Apr", type: "Hotel", tags: ["2 rooms", "Breakfast", "EV charger"] },
+                  { name: "Keswick Lakeside Cottage", dates: "5-7 Apr", type: "Cottage", tags: ["3 beds", "Garden", "Dog friendly"] },
+                ].map((s, i) => (
+                  <div key={i} style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: i === 0 ? 8 : 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</span>
+                      <span style={{ fontSize: 10, color: T.t3, background: T.amberL, padding: "2px 8px", borderRadius: 8 }}>{s.type}</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: T.t3 }}>{s.dates}</span>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                      {s.tags.map(t => <span key={t} style={{ fontSize: 9, padding: "2px 7px", borderRadius: 8, background: T.al, color: T.ad }}>{t}</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ),
+          },
+          {
+            icon: "🔋", title: "Day 1: AI plans your route",
+            subtitle: "Start location, EV stops, arrival time — all conversational",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
+                <div style={{ background: T.s2, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>🔋 Travel day — heading to Windermere!</p>
+                  <p style={{ fontSize: 11, color: T.t2 }}><b>From:</b> Coulsdon, CR5</p>
+                  <p style={{ fontSize: 11, color: T.t2 }}><b>To:</b> Windermere Boutique Hotel</p>
+                  <p style={{ fontSize: 11, color: T.t2 }}><b>Mode:</b> EV vehicle</p>
+                </div>
+                <div style={{ background: T.al, borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 11, color: T.ad }}>
+                  ⚡ EV stops: Tebay Services (50kW) · Booths Windermere
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["8:00 AM", "9:00 AM", "10:00 AM"].map(t => (
+                    <span key={t} style={{ ...css.chip, fontSize: 10, padding: "4px 10px", ...(t === "8:00 AM" ? css.chipActive : {}) }}>{t}</span>
+                  ))}
+                </div>
+              </div>
+            ),
+          },
+          {
+            icon: "🎯", title: "Activity days: Smart itineraries",
+            subtitle: "Split plans for adults & kids, anchored to your stay",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
+                <p style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>Day 2 in <b>Ambleside</b> · 12°C ☁️</p>
+                <div style={{ background: T.amberL, borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 11 }}>
+                  🏨 Base: <b>Windermere Boutique Hotel</b>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  <div style={{ flex: 1, background: T.blueL, borderRadius: 8, padding: 8 }}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: T.blue, marginBottom: 4 }}>Adults</p>
+                    <p style={{ fontSize: 10 }}>Loughrigg Fell walk</p>
+                    <p style={{ fontSize: 10 }}>Low Wood Bay Spa</p>
+                  </div>
+                  <div style={{ flex: 1, background: T.pinkL, borderRadius: 8, padding: 8 }}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: T.pink, marginBottom: 4 }}>Kids</p>
+                    <p style={{ fontSize: 10 }}>Brockhole Adventure</p>
+                    <p style={{ fontSize: 10 }}>Easter egg trail</p>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: T.ad }}>🍽️ Everyone meets at <b>Fellinis</b> for lunch</div>
+              </div>
+            ),
+          },
+          {
+            icon: "🏠", title: "Last day: Departure planning",
+            subtitle: "Route home with stops, EV charges, and timing",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
+                <div style={{ background: T.s2, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>🏠 Heading back to Coulsdon, CR5!</p>
+                  <p style={{ fontSize: 11, color: T.t2 }}><b>From:</b> Keswick Lakeside Cottage</p>
+                  <p style={{ fontSize: 11, color: T.t2 }}><b>To:</b> Coulsdon, CR5</p>
+                </div>
+                <div style={{ fontSize: 11, marginBottom: 8 }}>
+                  <p style={{ fontWeight: 500, marginBottom: 4 }}>Suggested stops:</p>
+                  <p>1. Tebay Services — farm shop + cafe</p>
+                  <p>2. Rheged Centre — food hall + playground</p>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["10:00 AM", "After lunch"].map(t => (
+                    <span key={t} style={{ ...css.chip, fontSize: 10, padding: "4px 10px", ...(t === "10:00 AM" ? css.chipActive : {}) }}>{t}</span>
+                  ))}
+                </div>
+              </div>
+            ),
+          },
+          {
+            icon: "🗳️", title: "Decide together with polls",
+            subtitle: "Group voting on restaurants, activities, and routes",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
+                <p style={{ fontSize: 12, fontWeight: 500, marginBottom: 10 }}>Where should we eat dinner?</p>
+                {[
+                  { text: "The Drunken Duck — steaks, kids free", pct: 60, voted: true },
+                  { text: "The Unicorn — pub grills, playground", pct: 20 },
+                  { text: "Lake Road Kitchen — Nordic, upscale", pct: 20 },
+                ].map((o, i) => (
+                  <div key={i} style={{ marginBottom: 6, position: "relative", borderRadius: 8, overflow: "hidden", border: `.5px solid ${o.voted ? T.a : T.border}` }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${o.pct}%`, background: o.voted ? T.al : T.s2, transition: "width 1s ease" }} />
+                    <div style={{ position: "relative", padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11 }}>{o.voted ? "✓ " : ""}{o.text}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: T.t2 }}>{o.pct}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ),
+          },
+          {
+            icon: "📸", title: "Capture & relive memories",
+            subtitle: "Upload photos day-by-day and build your trip gallery",
+            mockup: (
+              <div style={{ background: T.s, borderRadius: 12, padding: 14, textAlign: "left" }}>
+                <p style={{ fontSize: 12, fontWeight: 500, marginBottom: 10 }}>Day 2 — Ambleside · 8 photos</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 10 }}>
+                  {[
+                    { label: "Fell view", color: "#5A8C6E" }, { label: "Lake", color: "#5A7EA0" },
+                    { label: "Lunch", color: "#A08060" }, { label: "Ella playing", color: "#7EA060" },
+                    { label: "Boat trip", color: "#4A8BA0" }, { label: "Ice cream", color: "#A04A8B" },
+                    { label: "Pub dinner", color: "#8A7348" }, { label: "Sunset", color: "#486A8A" },
+                  ].map((p, i) => (
+                    <div key={i} style={{ aspectRatio: "1", borderRadius: 6, background: p.color, display: "flex", alignItems: "flex-end", padding: 3 }}>
+                      <span style={{ fontSize: 7, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.5)" }}>{p.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <button style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", fontSize: 11 }}>📷 Add photos</button>
+              </div>
+            ),
+          },
+          {
+            icon: "✨", title: "AI-generated trip highlights",
+            subtitle: "Auto-curated video reel with music, narration & date stamps",
+            mockup: (
+              <div style={{ background: "#1a1a1a", borderRadius: 12, padding: 14, textAlign: "center", color: "#fff" }}>
+                <div style={{ display: "flex", gap: 3, marginBottom: 12, justifyContent: "center" }}>
+                  {[1,2,3,4,5].map(i => (
+                    <div key={i} style={{ height: 3, flex: 1, borderRadius: 2, background: i <= 3 ? T.a : "rgba(255,255,255,.2)" }} />
+                  ))}
+                </div>
+                <div style={{ width: 80, height: 80, borderRadius: 40, background: "linear-gradient(135deg, #5A8C6E, #4A8BA0)", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 32 }}>▶</span>
+                </div>
+                <p style={{ fontFamily: T.fontD, fontSize: 16, marginBottom: 4 }}>Easter Lake District 2026</p>
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginBottom: 12 }}>3 Apr – 7 Apr · 12 photos · AI narrated</p>
+                <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
+                  {["Music overlay", "AI narration", "Date stamps"].map(s => (
+                    <span key={s} style={{ fontSize: 9, padding: "3px 8px", borderRadius: 8, background: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.8)" }}>✓ {s}</span>
+                  ))}
+                </div>
+              </div>
+            ),
+          },
+          {
+            icon: "🚀", title: "Ready to plan your trip?",
+            subtitle: "Create your own adventure in minutes",
+            mockup: (
+              <div style={{ textAlign: "center", padding: 10 }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🌍</div>
+                <p style={{ fontSize: 13, color: T.t2, marginBottom: 16, lineHeight: 1.5 }}>
+                  Wanderly connects to 18 travel services — maps, weather, bookings, EV chargers, and more — to build your perfect trip.
+                </p>
+                <button onClick={() => { setShowDemo(false); setScreen("create"); setWizStep(0); resetWizard(); }}
+                  style={{ ...css.btn, ...css.btnP, width: "100%", padding: "14px 16px", justifyContent: "center", fontSize: 15, fontWeight: 500, marginBottom: 10 }}>
+                  Create my first trip
+                </button>
+                <button onClick={() => { setShowDemo(false); }}
+                  style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: T.t2 }}>
+                  Explore the demo trip
+                </button>
+              </div>
+            ),
+          },
+        ];
+        const total = DEMO_SLIDES.length;
+        const slide = DEMO_SLIDES[demoSlide];
+        const isLast = demoSlide === total - 1;
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "linear-gradient(180deg, #0D2818 0%, #1A3C2A 50%, #0D2818 100%)", display: "flex", flexDirection: "column", fontFamily: T.font }}
+            onClick={e => {
+              if (isLast) return;
+              const x = e.clientX;
+              const w = window.innerWidth;
+              if (x < w * 0.3) { setDemoSlide(Math.max(0, demoSlide - 1)); }
+              else { setDemoSlide(Math.min(total - 1, demoSlide + 1)); }
+            }}>
+            {/* Progress bar */}
+            <div style={{ display: "flex", gap: 3, padding: "12px 16px 0", flexShrink: 0 }}>
+              {DEMO_SLIDES.map((_, i) => (
+                <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: "rgba(255,255,255,.2)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", borderRadius: 2, background: i < demoSlide ? "#fff" : i === demoSlide ? T.a : "transparent", width: i <= demoSlide ? "100%" : "0%", transition: "width .4s ease" }} />
+                </div>
+              ))}
+            </div>
+            {/* Skip button */}
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px 0", flexShrink: 0 }}>
+              <button onClick={e => { e.stopPropagation(); setShowDemo(false); }}
+                style={{ background: "rgba(255,255,255,.1)", border: "none", color: "rgba(255,255,255,.7)", fontSize: 12, padding: "5px 14px", borderRadius: 16, cursor: "pointer", fontFamily: T.font }}>
+                Skip
+              </button>
+            </div>
+            {/* Slide content */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 24px", overflow: "hidden" }}>
+              <div style={{ fontSize: 44, marginBottom: 12, animation: "reelFadeIn .4s ease" }} key={`icon-${demoSlide}`}>{slide.icon}</div>
+              <h2 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: "#fff", textAlign: "center", marginBottom: 6, animation: "reelFadeIn .4s ease" }} key={`title-${demoSlide}`}>{slide.title}</h2>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", textAlign: "center", marginBottom: 20, animation: "reelFadeIn .5s ease" }} key={`sub-${demoSlide}`}>{slide.subtitle}</p>
+              <div style={{ width: "100%", maxWidth: 320, animation: "reelFadeIn .5s ease" }} key={`mock-${demoSlide}`}>
+                {slide.mockup}
+              </div>
+            </div>
+            {/* Bottom nav hint */}
+            {!isLast && (
+              <div style={{ textAlign: "center", padding: "16px 0 24px", color: "rgba(255,255,255,.3)", fontSize: 12, flexShrink: 0 }}>
+                Tap to continue · {demoSlide + 1}/{total}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {toast && (
         <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 9998, padding: "10px 20px", borderRadius: 20, background: toast.type === "error" ? T.red : T.ad, color: "#fff", fontSize: 13, fontFamily: T.font, boxShadow: "0 4px 12px rgba(0,0,0,.15)", animation: "reelFadeIn .3s ease" }}>
           {toast.type === "success" ? "✓ " : "⚠ "}{toast.message}
