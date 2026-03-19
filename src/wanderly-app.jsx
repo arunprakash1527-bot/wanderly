@@ -1047,8 +1047,12 @@ export default function WanderlyApp() {
               <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{TRIP.name}</h3>
               <p style={{ fontSize: 12, color: T.t2 }}>{TRIP.start} - {TRIP.end} {TRIP.year}</p>
             </div>
-            <Tag bg={T.al} color={T.ad}>Live</Tag>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <Tag bg={T.amberL} color={T.amber}>Demo</Tag>
+              <Tag bg={T.al} color={T.ad}>Live</Tag>
+            </div>
           </div>
+          <p style={{ fontSize: 11, color: T.t3, marginBottom: 10, fontStyle: "italic" }}>Sample trip — tap to explore how Wanderly works</p>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
             <Tag bg={T.blueL} color={T.blue}>EV road trip</Tag>
             <Tag bg={T.coralL} color={T.coral}>Mixed diet</Tag>
