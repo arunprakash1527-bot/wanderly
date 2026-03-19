@@ -53,7 +53,7 @@ const CONNECTORS = {
 const TRIP = {
   name: "Easter Lake District", start: "3 Apr", end: "7 Apr", year: "2026",
   places: ["Windermere", "Ambleside", "Keswick", "Grasmere"],
-  startLocation: "Manchester, M1 2AB",
+  startLocation: "Coulsdon, CR5",
   travelMode: "EV vehicle",
   travellers: { adults: 4, older: [{ name: "Max", age: 12 }], younger: [{ name: "Ella", age: 8 }] },
   stays: [
@@ -72,10 +72,11 @@ const DAYS = [
 
 const TIMELINE = {
   1: [
-    { time: "10:00 AM", title: "Arrive Windermere", desc: "Check in at hotel · EV charge in car park", for: "all", rating: null, price: null },
-    { time: "12:30 PM", title: "Lunch at Francine's", desc: "4.7★ · Veggie + non-veg · Kids menu", for: "all", rating: 4.7, price: "££" },
-    { time: "2:30 PM", title: "Lake Windermere walk", desc: "Gentle 1hr lakeside stroll · Dog friendly", for: "all", rating: 4.8, price: "Free" },
-    { time: "5:00 PM", title: "Settle into hotel", desc: "Windermere Boutique · Rooms 14 & 16", for: "all", rating: null, price: null },
+    { time: "8:00 AM", title: "Depart Coulsdon", desc: "Pack car · Final check · Full EV charge", for: "all", rating: null, price: null },
+    { time: "10:30 AM", title: "Stop at Oxford Services", desc: "EV charge (50kW) · Costa · Stretch legs · 30 min", for: "all", rating: null, price: null },
+    { time: "1:00 PM", title: "Lunch at Tebay Services", desc: "4.7★ · Farm shop · Proper food · EV charger", for: "all", rating: 4.7, price: "££" },
+    { time: "3:30 PM", title: "Arrive Windermere", desc: "Check in at Windermere Boutique Hotel · EV charge", for: "all", rating: null, price: null },
+    { time: "4:30 PM", title: "Lake Windermere walk", desc: "Gentle 1hr lakeside stroll · Stretch after drive", for: "all", rating: 4.8, price: "Free" },
     { time: "7:00 PM", title: "Dinner at The Angel Inn", desc: "4.5★ · Local ales · Roast lamb · Kids portions", for: "all", rating: 4.5, price: "£££" },
   ],
   2: [
@@ -113,7 +114,7 @@ const TIMELINE = {
     { time: "10:00 AM", title: "Catbells family hike", desc: "Moderate · 1.5 hrs · Spectacular views", for: "adults", rating: 4.9, price: "Free" },
     { time: "10:00 AM", title: "Keswick Pencil Museum", desc: "Interactive · World's largest pencil!", for: "kids", rating: 4.3, price: "£5.50" },
     { time: "12:30 PM", title: "Final lunch at Morrels", desc: "4.7★ · Bistro · Seasonal menu", for: "all", rating: 4.7, price: "££" },
-    { time: "2:00 PM", title: "Drive home", desc: "Stop at Tebay Services (EV charger · farm shop)", for: "all", rating: null, price: null },
+    { time: "2:00 PM", title: "Drive home to Coulsdon", desc: "~5 hrs · Stops at Tebay Services & Oxford (EV chargers)", for: "all", rating: null, price: null },
   ],
 };
 
