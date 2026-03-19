@@ -933,9 +933,17 @@ export default function WanderlyApp() {
     if (isLastDay) {
       const stay = TRIP.stays[TRIP.stays.length - 1];
       const travelMode = TRIP.travelMode || "car";
-      setChatFlowStep("ask_home");
-      setChatFlowData({});
-      return `🏠 **Final day — time to head home!**\n\n**From:** ${stay ? stay.name + ", " : ""}${loc}\n**Weather:** ${temp}°C ${icon} ${cond}\n\nWhere are you heading home to? I'll plan your departure with the best stops.`;
+      const modeIcon = travelMode.toLowerCase().includes("ev") ? "🔋" : travelMode.toLowerCase().includes("flight") ? "✈️" : travelMode.toLowerCase().includes("train") ? "🚆" : "🚗";
+      if (TRIP.startLocation) {
+        // Home location known — skip ask_home, go to departure time
+        setChatFlowStep("ask_departure_time");
+        setChatFlowData({ homeLocation: TRIP.startLocation });
+        return `🏠 **Final day — heading back to ${TRIP.startLocation}!**\n\n${modeIcon} **From:** ${stay ? stay.name + ", " : ""}${loc}\n**To:** ${TRIP.startLocation}\n**Mode:** ${travelMode}\n**Weather:** ${temp}°C ${icon} ${cond}\n\nWhat time would you like to leave?`;
+      } else {
+        setChatFlowStep("ask_home");
+        setChatFlowData({});
+        return `🏠 **Final day — time to head home!**\n\n**From:** ${stay ? stay.name + ", " : ""}${loc}\n**Weather:** ${temp}°C ${icon} ${cond}\n\nWhere are you heading home to? I'll plan your departure with the best stops.`;
+      }
     }
 
     // Middle days — activity-focused, anchored to current stay
