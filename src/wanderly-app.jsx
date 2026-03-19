@@ -53,6 +53,8 @@ const CONNECTORS = {
 const TRIP = {
   name: "Easter Lake District", start: "3 Apr", end: "7 Apr", year: "2026",
   places: ["Windermere", "Ambleside", "Keswick", "Grasmere"],
+  startLocation: "Manchester, M1 2AB",
+  travelMode: "EV vehicle",
   travellers: { adults: 4, older: [{ name: "Max", age: 12 }], younger: [{ name: "Ella", age: 8 }] },
   stays: [
     { name: "Windermere Boutique Hotel", dates: "3-5 Apr", nights: 2, type: "Hotel", tags: ["2 rooms", "Breakfast", "EV charger"] },
@@ -438,7 +440,7 @@ export default function WanderlyApp() {
   const [joinShareCode, setJoinShareCode] = useState("");
 
   // ─── New Trip Wizard State ───
-  const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "" });
+  const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "", startLocation: "" });
   const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
   const [wizStays, setWizStays] = useState([]);
   const [wizPrefs, setWizPrefs] = useState({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
@@ -451,6 +453,8 @@ export default function WanderlyApp() {
   const [olderActSearch, setOlderActSearch] = useState("");
   const [youngerActSearch, setYoungerActSearch] = useState("");
   const [lastChatTopic, setLastChatTopic] = useState("");
+  const [chatFlowStep, setChatFlowStep] = useState(null); // null | "ask_start" | "ask_pickups" | "ask_time" | "route_shown" | "ask_home" | "ask_departure_time" | "departure_shown"
+  const [chatFlowData, setChatFlowData] = useState({});
   const [toast, setToast] = useState(null);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('wanderly_welcomed'));
 
@@ -460,7 +464,7 @@ export default function WanderlyApp() {
   }, []);
 
   const resetWizard = useCallback(() => {
-    setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "" });
+    setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "", startLocation: "" });
     setWizTravellers({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
     setWizStays([]);
     setWizPrefs({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
@@ -765,6 +769,7 @@ export default function WanderlyApp() {
       places: [...wizTrip.places],
       travel: [...wizTrip.travel],
       budget: wizTrip.budget,
+      startLocation: wizTrip.startLocation,
       travellers: { adults: wizTravellers.adults.map(a => ({ ...a })), olderKids: wizTravellers.olderKids.map(c => ({ ...c })), youngerKids: wizTravellers.youngerKids.map(c => ({ ...c })) },
       stays: [...wizStays],
       stayNames: wizStays.map(s => s.name || s),
@@ -908,32 +913,62 @@ export default function WanderlyApp() {
     const activePolls = POLLS.filter(p => p.status === "active");
 
     if (isFirstDay) {
-      const arrival = items.find(it => it.title.toLowerCase().includes("arrive") || it.title.toLowerCase().includes("check in"));
-      const lunch = items.find(it => it.title.toLowerCase().includes("lunch"));
-      const dinner = items.find(it => it.title.toLowerCase().includes("dinner"));
       const stay = TRIP.stays[0];
-      return `Welcome to Day 1 — travel day! 🚗\n\n**Route:** Heading to **${loc}** · ${temp}°C ${icon} ${cond}\n**Accommodation:** ${stay ? stay.name + " (" + stay.tags.join(", ") + ")" : "Check your stays"}\n${arrival ? `**Arrival:** ${arrival.time} — ${arrival.desc}` : ""}\n${lunch ? `**Lunch:** ${lunch.time} at ${lunch.title.replace("Lunch at ", "")} — ${lunch.desc}` : ""}\n${dinner ? `**Dinner:** ${dinner.time} at ${dinner.title.replace("Dinner at ", "")} — ${dinner.desc}` : ""}\n\nNeed help with route planning, EV charging stops, or things to see on the way?`;
+      const travelMode = TRIP.travelMode || "car";
+      const modeIcon = travelMode.toLowerCase().includes("ev") ? "🔋" : travelMode.toLowerCase().includes("flight") ? "✈️" : travelMode.toLowerCase().includes("train") ? "🚆" : "🚗";
+      if (TRIP.startLocation) {
+        // Start location known — go straight to route suggestion
+        setChatFlowStep("ask_pickups");
+        setChatFlowData({ startLocation: TRIP.startLocation });
+        return `${modeIcon} **Travel day — heading to ${loc}!**\n\n**From:** ${TRIP.startLocation}\n**To:** ${stay ? stay.name : loc}\n**Mode:** ${travelMode}\n**Weather at destination:** ${temp}°C ${icon} ${cond}\n\nAnyone to pick up along the way?`;
+      } else {
+        // Need to ask for start location
+        setChatFlowStep("ask_start");
+        setChatFlowData({});
+        return `${modeIcon} **Travel day — heading to ${loc}!**\n\n**Staying at:** ${stay ? stay.name + " (" + stay.tags.join(", ") + ")" : loc}\n**Mode:** ${travelMode}\n**Weather at destination:** ${temp}°C ${icon} ${cond}\n\nWhere are you starting from? Enter your postcode or city so I can plan your route.`;
+      }
     }
 
     if (isLastDay) {
-      const checkout = items.find(it => it.title.toLowerCase().includes("pack") || it.title.toLowerCase().includes("checkout"));
-      const driveHome = items.find(it => it.title.toLowerCase().includes("drive home") || it.title.toLowerCase().includes("depart"));
-      const lunch = items.find(it => it.title.toLowerCase().includes("lunch"));
-      return `Final day — Day ${dayNum}! Time to head home.\n\n**${loc}** · ${temp}°C ${icon} ${cond}\n${checkout ? `**${checkout.time}:** ${checkout.title} — ${checkout.desc}` : ""}\n${lunch ? `**Last lunch:** ${lunch.time} at ${lunch.title.replace("Final lunch at ", "").replace("Lunch at ", "")} — ${lunch.desc}` : ""}\n${driveHome ? `**Departure:** ${driveHome.time} — ${driveHome.desc}` : ""}\n\nNeed help planning the drive home, stops en route, or want to revisit a favourite spot before leaving?`;
+      const stay = TRIP.stays[TRIP.stays.length - 1];
+      const travelMode = TRIP.travelMode || "car";
+      setChatFlowStep("ask_home");
+      setChatFlowData({});
+      return `🏠 **Final day — time to head home!**\n\n**From:** ${stay ? stay.name + ", " : ""}${loc}\n**Weather:** ${temp}°C ${icon} ${cond}\n\nWhere are you heading home to? I'll plan your departure with the best stops.`;
     }
 
-    // Middle days — activity-focused
+    // Middle days — activity-focused, anchored to current stay
+    setChatFlowStep(null);
+    setChatFlowData({});
+    // Find which stay covers this day
+    let currentStay = null;
+    let nightsSoFar = 0;
+    for (const stay of TRIP.stays) {
+      if (dayNum >= nightsSoFar + 1 && dayNum <= nightsSoFar + stay.nights) {
+        currentStay = stay;
+        break;
+      }
+      nightsSoFar += stay.nights;
+    }
+
     const adultItems = items.filter(it => it.for === "adults");
     const kidItems = items.filter(it => it.for === "kids");
     const allItems = items.filter(it => it.for === "all");
+
     let msg = `Good morning! Day ${dayNum} in **${loc}** · ${temp}°C ${icon} ${cond}\n\n`;
+    if (currentStay) {
+      msg += `🏨 Your base today: **${currentStay.name}** (${currentStay.type})\n`;
+      if (currentStay.tags.length) msg += `${currentStay.tags.join(" · ")}\n`;
+      msg += `\n`;
+    }
+
     if (adultItems.length && kidItems.length) {
       msg += `I've split activities today:\n**Adults:** ${adultItems.map(it => it.title).join(", ")}\n**Kids:** ${kidItems.map(it => it.title).join(", ")}\n`;
       const meetup = allItems.find(it => it.title.toLowerCase().includes("lunch"));
       if (meetup) msg += `Everyone meets at **${meetup.title.replace("Lunch at ", "")}** for lunch.\n`;
     } else {
       const highlights = items.slice(0, 3).map(it => `${it.time} — ${it.title}`).join("\n");
-      msg += highlights + "\n";
+      if (highlights) msg += highlights + "\n";
     }
     if (bookingsNeeded.length) msg += `\n📋 **Needs confirmation:** ${bookingsNeeded.join(", ")}`;
     if (activePolls.length) msg += `\n🗳️ ${activePolls.length} active poll${activePolls.length > 1 ? "s" : ""} — cast your vote!`;
@@ -1154,6 +1189,13 @@ export default function WanderlyApp() {
                 style={{ ...css.chip, ...(wizTrip.travel.has(o) ? css.chipActive : {}) }}>{o}</span>
             ))}
           </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Starting from</label>
+          <ControlledField value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
+            placeholder="Postcode or city — e.g. Manchester, M1 2AB"
+            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" }} />
+          <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>Helps plan your Day 1 route and departure time</p>
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Budget per person</label>
@@ -1766,6 +1808,111 @@ export default function WanderlyApp() {
 
     const findResponse = (msg) => {
       const lower = msg.toLowerCase();
+      const stay = TRIP.stays[0];
+      const lastStay = TRIP.stays[TRIP.stays.length - 1];
+      const travelMode = TRIP.travelMode || "car";
+      const isEV = travelMode.toLowerCase().includes("ev");
+
+      // ─── Conversational Flow Handler ───
+      if (chatFlowStep === "ask_start") {
+        // User is providing their start location
+        const startLoc = msg.trim();
+        setChatFlowData(prev => ({ ...prev, startLocation: startLoc }));
+        setChatFlowStep("ask_pickups");
+        return `Got it — starting from **${startLoc}**.\n\nAnyone to pick up along the way, or heading straight to **${stay ? stay.name : chatLoc}**?`;
+      }
+
+      if (chatFlowStep === "ask_pickups") {
+        const noPickup = /no|nah|none|straight|direct|just us|heading straight|nope/.test(lower);
+        const hasPickup = /yes|pick|stop|collect|get someone|picking/.test(lower);
+        if (hasPickup) {
+          setChatFlowStep("ask_pickup_detail");
+          return "Where do you need to pick someone up? Enter the location or postcode.";
+        }
+        // No pickup or any other response — proceed to time
+        setChatFlowStep("ask_time");
+        const startLoc = chatFlowData.startLocation || TRIP.startLocation || "your location";
+        return `No stops — straight to **${chatLoc}**.\n\nWhat time would you like to depart from ${startLoc}?`;
+      }
+
+      if (chatFlowStep === "ask_pickup_detail") {
+        const pickupLoc = msg.trim();
+        setChatFlowData(prev => ({ ...prev, pickups: [...(prev.pickups || []), pickupLoc] }));
+        setChatFlowStep("ask_more_pickups");
+        return `Added pickup at **${pickupLoc}**. Any more stops, or shall I plan the route?`;
+      }
+
+      if (chatFlowStep === "ask_more_pickups") {
+        const done = /no|done|that's it|plan|route|go|nope|let's go/.test(lower);
+        if (!done && lower.length > 3) {
+          // Another pickup
+          const pickupLoc = msg.trim();
+          setChatFlowData(prev => ({ ...prev, pickups: [...(prev.pickups || []), pickupLoc] }));
+          return `Added **${pickupLoc}**. Any more, or shall I plan the route?`;
+        }
+        setChatFlowStep("ask_time");
+        const startLoc = chatFlowData.startLocation || TRIP.startLocation || "your location";
+        const pickups = chatFlowData.pickups || [];
+        return `Route planned with ${pickups.length} pickup${pickups.length > 1 ? "s" : ""}: ${pickups.map(p => `**${p}**`).join(" → ")}.\n\nWhat time would you like to depart from ${startLoc}?`;
+      }
+
+      if (chatFlowStep === "ask_time") {
+        const startLoc = chatFlowData.startLocation || TRIP.startLocation || "your location";
+        const pickups = chatFlowData.pickups || [];
+        const departTime = msg.trim();
+        setChatFlowStep("route_shown");
+        setChatFlowData(prev => ({ ...prev, departTime }));
+
+        // Build route summary
+        const routeStops = [startLoc, ...pickups];
+        const routePath = routeStops.map(s => `**${s}**`).join(" → ");
+        const evSection = isEV ? `\n\n⚡ **EV charging stops:**\n• Tebay Services — 50kW CCS, farm shop while you wait\n• ${chatLoc === "Windermere" ? "Booths Windermere" : "Killington Lake"} — 50kW backup` : "";
+        const stayInfo = stay ? `\n\n🏨 **Check-in:** ${stay.name}\n${stay.tags.map(t => `• ${t}`).join("\n")}` : "";
+
+        return `🗺️ **Your Day 1 route:**\n\n${routePath} → **${chatLoc}**\n\n🕐 **Depart:** ${departTime}\n🕐 **Estimated arrival:** ~2 hours after departure\n\n**Recommended stops:**\n1. **Tebay Services** — best motorway services in UK, farm shop + cafe${pickups.length > 0 ? "\n2. Pickup" + (pickups.length > 1 ? "s" : "") + " at " + pickups.join(", ") : ""}${evSection}${stayInfo}\n\n**After arrival:**\n• Settle in and charge up${isEV ? " (EV)" : ""}\n• Lunch at a local spot\n• Gentle afternoon walk to ease into the trip\n\nLooks good? Or want to adjust the departure time?`;
+      }
+
+      if (chatFlowStep === "route_shown") {
+        if (/looks good|perfect|great|yes|ok|sure|thanks|awesome/.test(lower)) {
+          setChatFlowStep(null);
+          return "Brilliant! Your Day 1 route is all set. 🎉\n\nSwitch to **Timeline** to see your full itinerary, or ask me anything about today's plan.";
+        }
+        if (/adjust|change|earlier|later|different/.test(lower)) {
+          setChatFlowStep("ask_time");
+          return "No problem — what departure time works better?";
+        }
+        setChatFlowStep(null); // Exit flow on any other message
+      }
+
+      // ─── Last Day Flow ───
+      if (chatFlowStep === "ask_home") {
+        const homeLoc = msg.trim();
+        setChatFlowData(prev => ({ ...prev, homeLocation: homeLoc }));
+        setChatFlowStep("ask_departure_time");
+        return `Heading home to **${homeLoc}**. What time do you need to be back, or when would you like to leave **${chatLoc}**?`;
+      }
+
+      if (chatFlowStep === "ask_departure_time") {
+        const depTime = msg.trim();
+        const homeLoc = chatFlowData.homeLocation || "home";
+        setChatFlowStep("departure_shown");
+        setChatFlowData(prev => ({ ...prev, departTime: depTime }));
+        const evSection = isEV ? `\n\n⚡ **EV charging:** Tebay Services has 50kW CCS — perfect for a 30-min top-up while you grab a coffee.` : "";
+
+        return `🗺️ **Your journey home:**\n\n**${lastStay ? lastStay.name + ", " : ""}${chatLoc}** → **${homeLoc}**\n\n🕐 **Departure:** ${depTime}\n\n**Suggested stops:**\n1. **Tebay Services** — 30 min south, amazing farm shop + cafe\n2. **Rheged Centre** — near Penrith, food hall + playground (great for kids)\n3. **Penrith Castle** — free, quick 15-min stretch${evSection}\n\n**Before you go:**\n• Final checkout from ${lastStay ? lastStay.name : "accommodation"}\n• Last lunch in ${chatLoc}? Try **${chatItems.find(it => it.title.toLowerCase().includes("lunch"))?.title.replace("Final lunch at ", "") || "a local spot"}**\n\nLooks good, or want to adjust?`;
+      }
+
+      if (chatFlowStep === "departure_shown") {
+        if (/looks good|perfect|great|yes|ok|sure|thanks|awesome/.test(lower)) {
+          setChatFlowStep(null);
+          return "All sorted! Safe travels home. 🏠\n\nCheck your **Timeline** for the full day, or ask me anything.";
+        }
+        if (/adjust|change|earlier|later|different/.test(lower)) {
+          setChatFlowStep("ask_departure_time");
+          return "What time works better for leaving?";
+        }
+        setChatFlowStep(null);
+      }
 
       // Day-specific quick action responses
       const dayQuickResponses = {
@@ -1878,14 +2025,23 @@ export default function WanderlyApp() {
       }, 800);
     };
 
-    // Day-aware quick action chips
+    // Day-aware quick action chips — adapt to conversation flow
     const isFirstDay = selectedDay === 1;
     const isLastDay = selectedDay === DAYS.length;
-    const quickActions = isFirstDay
-      ? ["Route plan", "EV chargers", "Stops en route", "Weather", "Today's plan"]
-      : isLastDay
-      ? ["Stops en route", "Route plan", "EV chargers", "Today's plan", "Weather"]
-      : ["Today's plan", "Restaurants", "Kids activities", "EV chargers", "Bookings", "Create poll", "Weather"];
+    const getQuickActions = () => {
+      if (chatFlowStep === "ask_start") return ["Manchester", "London", "Birmingham", "Enter postcode"];
+      if (chatFlowStep === "ask_pickups") return ["No, heading straight there", "Yes, add a stop"];
+      if (chatFlowStep === "ask_pickup_detail") return [];
+      if (chatFlowStep === "ask_more_pickups") return ["No more, plan the route", "Add another stop"];
+      if (chatFlowStep === "ask_time") return ["7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM"];
+      if (chatFlowStep === "route_shown" || chatFlowStep === "departure_shown") return ["Looks good!", "Adjust time", "EV chargers", "Weather"];
+      if (chatFlowStep === "ask_home") return ["Manchester", "London", "Birmingham", "Enter postcode"];
+      if (chatFlowStep === "ask_departure_time") return ["9:00 AM", "10:00 AM", "11:00 AM", "After lunch"];
+      if (isFirstDay) return ["Route plan", "EV chargers", "Stops en route", "Weather", "Today's plan"];
+      if (isLastDay) return ["Stops en route", "Route plan", "EV chargers", "Today's plan", "Weather"];
+      return ["Today's plan", "Restaurants", "Kids activities", "EV chargers", "Bookings", "Create poll", "Weather"];
+    };
+    const quickActions = getQuickActions();
 
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
