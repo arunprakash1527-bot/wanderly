@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from '@supabase/supabase-js';
 
 // ─── Supabase Client (inline to avoid module init issues) ───
@@ -374,7 +374,7 @@ function generateLocalAccommodations(places) {
 // ─── Reusable Form Components (outside main component to prevent remount on state changes) ───
 function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max, onKeyDown }) {
   const inputStyle = { width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" };
-  const dateRef = React.useRef(null);
+  const dateRef = useRef(null);
   return (
     <div style={{ marginBottom: 14, ...wrapStyle }}>
       <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
