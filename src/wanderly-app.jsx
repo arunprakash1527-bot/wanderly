@@ -1056,13 +1056,18 @@ export default function WanderlyApp() {
           items.push({ time: fmtTime(startHour, startMin), title: `Depart ${trip.startLocation}`, desc: `${travelMode}${isEV ? " · Full charge before departure" : ""} · Head to ${loc}`, group: "Everyone", color: T.a });
         }
 
-        // EV charging & stopovers en route
+        // EV charging & stopovers en route (only stops for the first leg: startLocation → first place)
         const midHour = startHour + Math.floor(estimatedTravelHrs / 2);
-        enabledStops.filter(s => s.type === "ev_charge" && s.desc.includes(loc)).forEach((stop, si) => {
+        const firstLegStops = enabledStops.filter(s => {
+          // Match stops that go TO the first destination (not FROM it)
+          const isFirstLeg = s.desc.includes(trip.startLocation) && s.desc.includes(loc);
+          return isFirstLeg;
+        });
+        firstLegStops.filter(s => s.type === "ev_charge").forEach((stop, si) => {
           const stopHr = Math.min(midHour + si, arrivalHour - 1);
           items.push({ time: fmtTime(Math.max(stopHr, startHour + 1)), title: `⚡ EV Charging Stop`, desc: `${stop.desc}${stop.combineMeal ? " · Grab a coffee & stretch" : ""} · ~30 min`, group: "Everyone", color: T.amber });
         });
-        enabledStops.filter(s => s.type === "rest" && s.desc.includes(loc)).forEach((stop, si) => {
+        firstLegStops.filter(s => s.type === "rest").forEach((stop, si) => {
           const stopHr = Math.min(midHour + si, arrivalHour - 1);
           items.push({ time: fmtTime(Math.max(stopHr, startHour + 1)), title: `☕ Rest stop`, desc: `${stop.desc} · Quick break`, group: "Everyone", color: T.amber });
         });
