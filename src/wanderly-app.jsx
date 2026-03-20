@@ -381,10 +381,10 @@ function ControlledField({ label, type = "text", value, onChange, placeholder, s
       {type === "textarea" ? (
         <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} onKeyDown={onKeyDown} style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} />
       ) : type === "date" ? (
-        <div onClick={() => dateRef.current?.showPicker?.()} style={{ position: "relative", cursor: "pointer" }}>
+        <div onClick={() => dateRef.current?.showPicker?.()} style={{ cursor: "pointer" }}>
           <input ref={dateRef} type="date" value={value} onChange={e => onChange(e.target.value)} min={min} max={max}
-            style={{ ...inputStyle, cursor: "pointer", minHeight: 44, colorScheme: "light", color: value ? undefined : "transparent" }} />
-          {!value && <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: T.t3, pointerEvents: "none" }}>{placeholder || "Select date"}</div>}
+            placeholder={placeholder || "Select date"}
+            style={{ ...inputStyle, cursor: "pointer", minHeight: 44, colorScheme: "light" }} />
         </div>
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} min={min} max={max} onKeyDown={onKeyDown} style={{ ...inputStyle, minHeight: 44 }} />
@@ -445,7 +445,7 @@ export default function WanderlyApp() {
   const [tripChatMessages, setTripChatMessages] = useState([]);
   const [tripDetailTab, setTripDetailTab] = useState("itinerary");
   const [showActivationModal, setShowActivationModal] = useState(false);
-  const [activationPrefs, setActivationPrefs] = useState({ arrivalTime: "10:00", dayOnePace: "balanced", notes: "" });
+  const [activationPrefs, setActivationPrefs] = useState({ startTime: "08:00", dayOnePace: "balanced", notes: "", stopovers: [] });
   const [pendingActivationTripId, setPendingActivationTripId] = useState(null);
   const [settingsToggles, setSettingsToggles] = useState(() => {
     const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
@@ -1022,9 +1022,14 @@ export default function WanderlyApp() {
     const wantsPubs = /pub|pubs|tavern|inn/.test(ctxLower);
     const wantsAvoidSteep = /avoid.*steep|no.*steep|gentle|easy.*walk|flat/.test(ctxLower);
     const prefs = trip.activationPrefs || {};
-    const arrivalHour = prefs.arrivalTime ? parseInt(prefs.arrivalTime.split(":")[0]) : 10;
+    const startHour = prefs.startTime ? parseInt(prefs.startTime.split(":")[0]) : 8;
+    const startMin = prefs.startTime ? parseInt(prefs.startTime.split(":")[1] || "0") : 0;
+    const estimatedTravelHrs = 2; // default ~2hr journey to first destination
+    const arrivalHour = Math.min(startHour + estimatedTravelHrs, 18);
     const isPacked = prefs.dayOnePace === "packed";
     const isRelaxed = prefs.dayOnePace === "relaxed";
+    const isEV = trip.travel?.some(m => /ev/i.test(m));
+    const enabledStops = (prefs.stopovers || []).filter(s => s.enabled);
     const tags = (base) => { const t = [base]; if (wantsDogFriendly) t.push("🐕 Dog-friendly"); if (wantsAccessible) t.push("♿ Accessible"); return t.join(" · "); };
     const fmtTime = (h, m = 0) => { const suffix = h >= 12 ? "PM" : "AM"; const hr = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${hr}:${m.toString().padStart(2, "0")} ${suffix}`; };
 
@@ -1045,21 +1050,40 @@ export default function WanderlyApp() {
       const dateLabel = dayDate ? dayDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "";
 
       if (isFirst) {
-        // Day 1: Arrival day
+        // Day 1: Journey + Arrival day
+        // Depart from start location
+        if (trip.startLocation) {
+          items.push({ time: fmtTime(startHour, startMin), title: `Depart ${trip.startLocation}`, desc: `${travelMode}${isEV ? " · Full charge before departure" : ""} · Head to ${loc}`, group: "Everyone", color: T.a });
+        }
+
+        // EV charging & stopovers en route
+        const midHour = startHour + Math.floor(estimatedTravelHrs / 2);
+        enabledStops.filter(s => s.type === "ev_charge" && s.desc.includes(loc)).forEach((stop, si) => {
+          const stopHr = Math.min(midHour + si, arrivalHour - 1);
+          items.push({ time: fmtTime(Math.max(stopHr, startHour + 1)), title: `⚡ EV Charging Stop`, desc: `${stop.desc}${stop.combineMeal ? " · Grab a coffee & stretch" : ""} · ~30 min`, group: "Everyone", color: T.amber });
+        });
+        enabledStops.filter(s => s.type === "rest" && s.desc.includes(loc)).forEach((stop, si) => {
+          const stopHr = Math.min(midHour + si, arrivalHour - 1);
+          items.push({ time: fmtTime(Math.max(stopHr, startHour + 1)), title: `☕ Rest stop`, desc: `${stop.desc} · Quick break`, group: "Everyone", color: T.amber });
+        });
+
+        // Arrive at destination
         const arriveTime = fmtTime(arrivalHour);
-        const arriveDesc = trip.startLocation ? `${travelMode} from ${trip.startLocation} · Check in at ${stayName}` : `${travelMode} · Check in at ${stayName}`;
+        const arriveDesc = `Arrive at ${stayName} · Drop bags, freshen up`;
         items.push({ time: arriveTime, title: `Arrive ${loc}`, desc: arriveDesc, group: "Everyone", color: T.a });
 
-        const settleHour = arrivalHour + 1;
-        items.push({ time: fmtTime(settleHour), title: `Check in & settle`, desc: `${stayName} · Drop bags, freshen up`, group: "Everyone", color: T.t3 });
-
         if (!isRelaxed) {
-          const exploreHour = Math.min(settleHour + 1, 16);
+          const exploreHour = Math.min(arrivalHour + 1, 16);
           let morningAct = morningPool[0] || "Explore the area";
           if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
           items.push({ time: fmtTime(exploreHour), title: isPacked ? morningAct : `Explore ${loc}`, desc: tags(`${loc} · ${budgetTier.label}`), group: "Everyone", color: T.blue });
           if (isPacked && hasKids && kidPool.length > 0) {
             items.push({ time: fmtTime(exploreHour), title: kidPool[0], desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          }
+          if (isPacked) {
+            const lunchHr = Math.min(exploreHour + 2, 14);
+            const lunchDesc2 = wantsPubs ? `${budgetTier.label} pub · ${budgetTier.price}` : `${budgetTier.label} restaurant · ${budgetTier.price}`;
+            items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodLabel}`, desc: `${lunchDesc2}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
           }
         }
 
@@ -1079,13 +1103,26 @@ export default function WanderlyApp() {
         }
         items.push({ time: fmtTime(12), title: "Lunch & depart", desc: `${foodLabel} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home`, group: "Everyone", color: T.coral });
         if (trip.startLocation) {
-          items.push({ time: fmtTime(14), title: `${travelMode} home`, desc: `Return to ${trip.startLocation}`, group: "Everyone", color: T.a });
+          items.push({ time: fmtTime(14), title: `${travelMode} home`, desc: `Return to ${trip.startLocation}${isEV ? " · Plan charging stop en route" : ""}`, group: "Everyone", color: T.a });
+          if (isEV) {
+            items.push({ time: fmtTime(15, 30), title: `⚡ EV Charging Stop`, desc: `Services en route to ${trip.startLocation} · ~30 min`, group: "Everyone", color: T.amber });
+          }
         }
 
       } else {
         // Full middle day
-        items.push({ time: fmtTime(8), title: "Breakfast", desc: `${stayName}`, group: "Everyone", color: T.coral });
-        const morningHour = 10;
+        const prevLoc = places[(d - 2) % places.length];
+        const isTransitDay = prevLoc !== loc;
+        items.push({ time: fmtTime(8), title: "Breakfast", desc: `${isTransitDay ? `Check out · ${stayNames[Math.min(d - 2, stayNames.length - 1)] || stayNames[0]}` : stayName}`, group: "Everyone", color: T.coral });
+        // Travel to next location if places change
+        if (isTransitDay) {
+          items.push({ time: fmtTime(9, 30), title: `${travelMode} to ${loc}`, desc: `${prevLoc} → ${loc}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
+          if (isEV) {
+            items.push({ time: fmtTime(10, 30), title: `⚡ EV Charging Stop`, desc: `En route to ${loc} · ~30 min`, group: "Everyone", color: T.amber });
+          }
+          items.push({ time: fmtTime(isEV ? 11 : 10, 30), title: `Arrive ${loc}`, desc: `Check in at ${stayName}`, group: "Everyone", color: T.a });
+        }
+        const morningHour = isTransitDay ? (isEV ? 12 : 11) : 10;
         let morningAct = morningPool[(d - 1) % morningPool.length] || "Explore";
         if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
         if (hasKids && kidPool.length > 0) {
@@ -1123,8 +1160,27 @@ export default function WanderlyApp() {
   };
 
   const makeTripLive = (id) => {
+    const trip = createdTrips.find(t => t.id === id);
+    const isEV = trip?.travel?.some(m => /ev/i.test(m));
+    const places = trip?.places || [];
+    const startLoc = trip?.startLocation || "";
+    // Build smart stopovers: midpoint charging for EV, scenic break for others
+    const autoStops = [];
+    if (places.length > 0 && startLoc) {
+      if (isEV) {
+        autoStops.push({ type: "ev_charge", label: `EV charging stop`, desc: `Halfway between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: true });
+      } else {
+        autoStops.push({ type: "rest", label: "Rest & coffee stop", desc: `Between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: false });
+      }
+    }
+    // If multi-place trip, suggest stops between places
+    for (let i = 0; i < places.length - 1; i++) {
+      if (isEV) {
+        autoStops.push({ type: "ev_charge", label: `EV charge between destinations`, desc: `${places[i]} → ${places[i + 1]}`, time: "En route", enabled: true, combineMeal: true });
+      }
+    }
     setPendingActivationTripId(id);
-    setActivationPrefs({ arrivalTime: "10:00", dayOnePace: "balanced", notes: "" });
+    setActivationPrefs({ startTime: "08:00", dayOnePace: "balanced", notes: "", stopovers: autoStops });
     setShowActivationModal(true);
   };
 
@@ -2878,32 +2934,87 @@ export default function WanderlyApp() {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* ── Activation Preferences Modal ── */}
-        {showActivationModal && (
+        {showActivationModal && (() => {
+          const pendTrip = createdTrips.find(t => t.id === pendingActivationTripId);
+          const isEV = pendTrip?.travel?.some(m => /ev/i.test(m));
+          const startLoc = pendTrip?.startLocation || "";
+          const firstPlace = pendTrip?.places?.[0] || "";
+          const routePlaces = pendTrip?.places || [];
+          const startH = activationPrefs.startTime ? parseInt(activationPrefs.startTime.split(":")[0]) : 8;
+          const estArrival = Math.min(startH + 2, 18);
+          const fmtHr = (h) => { const s = h >= 12 ? "PM" : "AM"; return `${h > 12 ? h - 12 : h}:00 ${s}`; };
+          return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 360 }}>
-              <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400, marginBottom: 4 }}>Before we generate your plan</h3>
-              <p style={{ fontSize: 12, color: T.t2, marginBottom: 16 }}>A few quick questions to tailor your itinerary.</p>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, maxHeight: "85vh", overflowY: "auto" }}>
+              <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400, marginBottom: 4 }}>Plan your journey</h3>
+              <p style={{ fontSize: 12, color: T.t2, marginBottom: 16 }}>We'll build your itinerary around your travel.</p>
 
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>What time do you arrive on Day 1?</label>
-              <input type="time" value={activationPrefs.arrivalTime} onChange={e => setActivationPrefs(p => ({ ...p, arrivalTime: e.target.value }))}
-                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 14, minHeight: 44 }} />
+              {/* Route overview */}
+              {startLoc && routePlaces.length > 0 && (
+                <div style={{ background: T.s2, borderRadius: T.rs, padding: 12, marginBottom: 14 }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Your route</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: T.t1, fontWeight: 500 }}>{startLoc}</span>
+                    {routePlaces.map((p, i) => (
+                      <React.Fragment key={i}>
+                        <span style={{ fontSize: 10, color: T.t3 }}>→</span>
+                        <span style={{ fontSize: 12, color: T.ad, fontWeight: 500 }}>{p}</span>
+                      </React.Fragment>
+                    ))}
+                    <span style={{ fontSize: 10, color: T.t3 }}>→</span>
+                    <span style={{ fontSize: 12, color: T.t1, fontWeight: 500 }}>{startLoc}</span>
+                  </div>
+                  {isEV && <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, padding: "6px 10px", background: T.amberL, borderRadius: 8 }}>
+                    <span style={{ fontSize: 14 }}>⚡</span>
+                    <p style={{ fontSize: 11, color: T.amber, fontWeight: 500 }}>EV detected — we'll suggest charging stops along the way</p>
+                  </div>}
+                </div>
+              )}
+
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>What time do you start your journey?</label>
+              <input type="time" value={activationPrefs.startTime} onChange={e => setActivationPrefs(p => ({ ...p, startTime: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 4, minHeight: 44 }} />
+              {startLoc && firstPlace && <p style={{ fontSize: 11, color: T.t3, marginBottom: 14 }}>Estimated arrival at {firstPlace}: ~{fmtHr(estArrival)}</p>}
+
+              {/* Stopovers */}
+              {activationPrefs.stopovers.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>Suggested stops</label>
+                  {activationPrefs.stopovers.map((stop, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", marginBottom: 6, background: stop.enabled ? (stop.type === "ev_charge" ? T.amberL : T.s2) : T.s, borderRadius: T.rs, border: `.5px solid ${stop.enabled ? (stop.type === "ev_charge" ? T.amber : T.border) : T.border}`, opacity: stop.enabled ? 1 : 0.5, cursor: "pointer", transition: "all .15s" }}
+                      onClick={() => setActivationPrefs(p => ({ ...p, stopovers: p.stopovers.map((s, si) => si === i ? { ...s, enabled: !s.enabled } : s) }))}>
+                      <span style={{ fontSize: 16 }}>{stop.type === "ev_charge" ? "⚡" : "☕"}</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 12, fontWeight: 500, color: T.t1 }}>{stop.label}</p>
+                        <p style={{ fontSize: 10, color: T.t3 }}>{stop.desc} · {stop.time}</p>
+                      </div>
+                      <div style={{ width: 18, height: 18, borderRadius: 4, border: `.5px solid ${stop.enabled ? T.a : T.border}`, background: stop.enabled ? T.a : "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {stop.enabled && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
+                      </div>
+                    </div>
+                  ))}
+                  {isEV && activationPrefs.stopovers.some(s => s.type === "ev_charge" && s.enabled && s.combineMeal) && (
+                    <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>Charging stops include a meal/coffee break</p>
+                  )}
+                </div>
+              )}
 
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>Day 1 pace?</label>
-              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
                 {[{ id: "relaxed", label: "Relaxed", desc: "Settle in, easy start" }, { id: "balanced", label: "Balanced", desc: "Some exploring" }, { id: "packed", label: "Packed", desc: "Hit the ground running" }].map(opt => (
                   <div key={opt.id} onClick={() => setActivationPrefs(p => ({ ...p, dayOnePace: opt.id }))}
-                    style={{ flex: 1, padding: "10px 8px", borderRadius: T.rs, border: `.5px solid ${activationPrefs.dayOnePace === opt.id ? T.a : T.border}`,
+                    style={{ flex: 1, padding: "8px 6px", borderRadius: T.rs, border: `.5px solid ${activationPrefs.dayOnePace === opt.id ? T.a : T.border}`,
                       background: activationPrefs.dayOnePace === opt.id ? T.al : T.s, cursor: "pointer", textAlign: "center", transition: "all .15s" }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: activationPrefs.dayOnePace === opt.id ? T.ad : T.t1 }}>{opt.label}</p>
-                    <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{opt.desc}</p>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: activationPrefs.dayOnePace === opt.id ? T.ad : T.t1 }}>{opt.label}</p>
+                    <p style={{ fontSize: 9, color: T.t3, marginTop: 2 }}>{opt.desc}</p>
                   </div>
                 ))}
               </div>
 
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Anything else? (optional)</label>
               <textarea value={activationPrefs.notes} onChange={e => setActivationPrefs(p => ({ ...p, notes: e.target.value }))}
-                placeholder="e.g. We need a nap break after lunch, prefer outdoor activities..."
-                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 50, marginBottom: 16 }} />
+                placeholder="e.g. Nap break after lunch, prefer outdoor activities..."
+                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none", resize: "vertical", minHeight: 44, marginBottom: 16 }} />
 
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => { setShowActivationModal(false); setPendingActivationTripId(null); }} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center" }}>Cancel</button>
@@ -2911,7 +3022,8 @@ export default function WanderlyApp() {
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Header ── */}
         <div style={{ background: isLive ? T.ad : T.blue, color: "#fff", padding: "16px 20px 12px" }}>
