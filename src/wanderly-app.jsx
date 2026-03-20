@@ -1003,8 +1003,13 @@ export default function WanderlyApp() {
   // Multi-day timeline: returns { 1: [...], 2: [...], ... }
   const generateMultiDayTimeline = (trip) => {
     const numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd) - new Date(trip.rawStart)) / 86400000) + 1) : 1;
-    const places = trip.places.length > 0 ? trip.places : ["your destination"];
-    const stayNames = trip.stayNames.length > 0 ? trip.stayNames : ["accommodation"];
+    const smartPlaces = getSmartRouteOrder(trip);
+    const places = smartPlaces.length > 0 ? smartPlaces : ["your destination"];
+    // Match stay names to the smart route order
+    const staysByPlace = {};
+    (trip.stays || []).forEach(s => { if (s.location) staysByPlace[s.location.toLowerCase()] = s.name; });
+    const stayNames = places.map(p => staysByPlace[p.toLowerCase()] || null).filter(Boolean);
+    if (stayNames.length === 0) stayNames.push(trip.stayNames?.[0] || "accommodation");
     const food = trip.prefs.food.length > 0 ? trip.prefs.food : ["Local cuisine"];
     const foodLabel = food.join(" + ");
     const travelMode = trip.travel[0] || "Travel";
@@ -1164,10 +1169,36 @@ export default function WanderlyApp() {
     showToast("Itinerary generated!");
   };
 
+  // Smart route ordering: use stay check-in dates to order places logically
+  const getSmartRouteOrder = (trip) => {
+    const places = trip?.places || [];
+    const stays = trip?.stays || [];
+    if (places.length <= 1 || stays.length === 0) return places;
+    // Build a map of place → earliest check-in date from stays
+    const placeCheckIn = {};
+    stays.forEach(s => {
+      if (s.location && s.checkIn) {
+        const loc = s.location.toLowerCase();
+        const existing = placeCheckIn[loc];
+        if (!existing || s.checkIn < existing) placeCheckIn[loc] = s.checkIn;
+      }
+    });
+    // Sort places by their stay check-in date; places without stays go last
+    const sorted = [...places].sort((a, b) => {
+      const dateA = placeCheckIn[a.toLowerCase()];
+      const dateB = placeCheckIn[b.toLowerCase()];
+      if (dateA && dateB) return dateA.localeCompare(dateB);
+      if (dateA) return -1;
+      if (dateB) return 1;
+      return 0;
+    });
+    return sorted;
+  };
+
   const makeTripLive = (id) => {
     const trip = createdTrips.find(t => t.id === id);
     const isEV = trip?.travel?.some(m => /ev/i.test(m));
-    const places = trip?.places || [];
+    const places = getSmartRouteOrder(trip);
     const startLoc = trip?.startLocation || "";
     // Build smart stopovers: midpoint charging for EV, scenic break for others
     const autoStops = [];
@@ -3389,7 +3420,7 @@ export default function WanderlyApp() {
         const isEV = pendTrip?.travel?.some(m => /ev/i.test(m));
         const startLoc = pendTrip?.startLocation || "";
         const firstPlace = pendTrip?.places?.[0] || "";
-        const routePlaces = pendTrip?.places || [];
+        const routePlaces = pendTrip ? getSmartRouteOrder(pendTrip) : [];
         const startH = activationPrefs.startTime ? parseInt(activationPrefs.startTime.split(":")[0]) : 8;
         const estArrival = Math.min(startH + 2, 18);
         const fmtHr = (h) => { const s = h >= 12 ? "PM" : "AM"; return `${h > 12 ? h - 12 : h}:00 ${s}`; };
