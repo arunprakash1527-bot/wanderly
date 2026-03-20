@@ -1556,13 +1556,13 @@ export default function WanderlyApp() {
   );
 
   // ─── Screen: Create (render function) ───
-  const wizSteps = ["Details", "Travellers", "Stays", "Preferences"];
+  const wizSteps = ["Details", "Travellers", "Stays", "Preferences", "Review"];
   const renderCreateScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { if (editingTripId) { setEditingTripId(null); navigate("createdTrip"); } else navigate("home"); }}>Cancel</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>{editingTripId ? "Edit trip" : "New trip"}</h2>
-        <span style={{ fontSize: 11, color: T.t3 }}>Step {wizStep + 1} of 4</span>
+        <span style={{ fontSize: 11, color: T.t3 }}>Step {wizStep + 1} of 5</span>
       </div>
       <div style={{ display: "flex", gap: 4, padding: "10px 20px", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
         {wizSteps.map((step, i) => (
@@ -1573,17 +1573,18 @@ export default function WanderlyApp() {
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 2 }}>{wizSteps[wizStep]}</h3>
         <p style={{ fontSize: 12, color: T.t3, marginBottom: 16 }}>
-          {["Name, dates, and destinations", "Add your travel group", "Where you're staying", "Food, activities, and instructions"][wizStep]}
+          {["Name, dates, and destinations", "Add your travel group", "Where you're staying", "Food and activities", "Review your trip summary"][wizStep]}
         </p>
         {wizStep === 0 && renderWizDetails()}
         {wizStep === 1 && renderWizTravellers()}
         {wizStep === 2 && renderWizStays()}
         {wizStep === 3 && renderWizPrefs()}
+        {wizStep === 4 && renderWizReview()}
       </div>
       <div style={{ display: "flex", gap: 8, padding: "16px 24px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
         {wizStep > 0 && <button className="w-btn" style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
-        <button className="w-btn w-btnP" style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 3 ? setWizStep(wizStep + 1) : createTrip()}>
-          {wizStep < 3 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
+        <button className="w-btn w-btnP" style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 4 ? setWizStep(wizStep + 1) : createTrip()}>
+          {wizStep < 4 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
         </button>
       </div>
     </div>
@@ -2026,60 +2027,72 @@ export default function WanderlyApp() {
         {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...")}
         {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...")}
         {wizTravellers.youngerKids.length > 0 && renderPrefSection("Activities — Children 3-7", "youngerActs", suggestions.youngerKids, youngerActSearch, setYoungerActSearch, "Search or add a kids activity...")}
-        {/* Auto-generated trip summary */}
-        {(() => {
-          const parts = [];
-          // Trip shape
-          const numDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end) - new Date(wizTrip.start)) / 86400000) + 1) : null;
-          if (numDays && wizTrip.places.length > 0) parts.push(`${numDays}-day trip to ${wizTrip.places.join(", ")}`);
-          // Travel
-          if (wizTrip.travel.size > 0) parts.push(`travelling by ${[...wizTrip.travel].join(" + ").toLowerCase()}`);
-          if (wizTrip.startLocation) parts.push(`starting from ${wizTrip.startLocation}`);
-          // Group
-          const na = wizTravellers.adults.length, nok = wizTravellers.olderKids.length, nyk = wizTravellers.youngerKids.length;
-          const groupParts = [];
-          if (na > 0) groupParts.push(`${na} adult${na > 1 ? "s" : ""}`);
-          if (nok > 0) groupParts.push(`${nok} older kid${nok > 1 ? "s" : ""} (${wizTravellers.olderKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
-          if (nyk > 0) groupParts.push(`${nyk} younger kid${nyk > 1 ? "s" : ""} (${wizTravellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
-          if (groupParts.length) parts.push(`group: ${groupParts.join(", ")}`);
-          // Budget
-          if (wizTrip.budget) parts.push(`${wizTrip.budget.toLowerCase()} budget`);
-          // Food
-          if (wizPrefs.food.size > 0) parts.push(`food: ${[...wizPrefs.food].join(", ")}`);
-          // Activities
-          if (wizPrefs.adultActs.size > 0) parts.push(`adult activities: ${[...wizPrefs.adultActs].join(", ")}`);
-          if (wizPrefs.olderActs.size > 0) parts.push(`older kids activities: ${[...wizPrefs.olderActs].join(", ")}`);
-          if (wizPrefs.youngerActs.size > 0) parts.push(`younger kids activities: ${[...wizPrefs.youngerActs].join(", ")}`);
-          // Stays
-          if (wizStays.length > 0) parts.push(`staying at ${wizStays.map(s => s.name || s).join(", ")}`);
-          // Kids context
-          if (nok + nyk > 0) {
-            const ages = [...wizTravellers.olderKids, ...wizTravellers.youngerKids].map(k => parseInt(k.age) || 0);
-            const youngest = Math.min(...ages);
-            if (youngest <= 5) parts.push("plan for short activity blocks — young children in group");
-            else if (youngest <= 10) parts.push("mix family-friendly activities with some adult time");
-          }
-          const autoSummary = parts.length > 0 ? parts.join(". ") + "." : "";
-          // Auto-fill instructions with summary on first visit (if instructions is empty and summary exists)
-          if (autoSummary && !wizPrefs.instructions) {
-            setTimeout(() => setWizPrefs(prev => prev.instructions ? prev : { ...prev, instructions: autoSummary }), 0);
-          }
-          return (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Trip summary</label>
-                {autoSummary && wizPrefs.instructions !== autoSummary && (
-                  <button onClick={() => setWizPrefs(prev => ({ ...prev, instructions: autoSummary }))}
-                    style={{ fontSize: 10, color: T.a, background: "none", border: "none", cursor: "pointer", fontFamily: T.font, fontWeight: 500 }}>↻ Reset to auto</button>
-                )}
-              </div>
-              <textarea value={wizPrefs.instructions} onChange={e => setWizPrefs(prev => ({ ...prev, instructions: e.target.value }))}
-                placeholder="Your trip summary will appear here — edit freely to add preferences like dog-friendly, avoid steep trails, late starts..."
-                style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 80, lineHeight: 1.6 }} />
-              <p style={{ fontSize: 10, color: T.t3, marginTop: 4 }}>Auto-generated from your trip details — edit to add preferences like "dog-friendly", "avoid steep trails", "late starts"</p>
-            </div>
-          );
-        })()}
+      </>
+    );
+  };
+
+  const renderWizReview = () => {
+    // Build auto-summary from all wizard data
+    const parts = [];
+    const numDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end) - new Date(wizTrip.start)) / 86400000) + 1) : null;
+    if (numDays && wizTrip.places.length > 0) parts.push(`${numDays}-day trip to ${wizTrip.places.join(", ")}`);
+    if (wizTrip.travel.size > 0) parts.push(`travelling by ${[...wizTrip.travel].join(" + ").toLowerCase()}`);
+    if (wizTrip.startLocation) parts.push(`starting from ${wizTrip.startLocation}`);
+    const na = wizTravellers.adults.length, nok = wizTravellers.olderKids.length, nyk = wizTravellers.youngerKids.length;
+    const groupParts = [];
+    if (na > 0) groupParts.push(`${na} adult${na > 1 ? "s" : ""}`);
+    if (nok > 0) groupParts.push(`${nok} older kid${nok > 1 ? "s" : ""} (${wizTravellers.olderKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    if (nyk > 0) groupParts.push(`${nyk} younger kid${nyk > 1 ? "s" : ""} (${wizTravellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    if (groupParts.length) parts.push(`group: ${groupParts.join(", ")}`);
+    if (wizTrip.budget) parts.push(`${wizTrip.budget.toLowerCase()} budget`);
+    if (wizPrefs.food.size > 0) parts.push(`food: ${[...wizPrefs.food].join(", ")}`);
+    if (wizPrefs.adultActs.size > 0) parts.push(`adult activities: ${[...wizPrefs.adultActs].join(", ")}`);
+    if (wizPrefs.olderActs.size > 0) parts.push(`older kids activities: ${[...wizPrefs.olderActs].join(", ")}`);
+    if (wizPrefs.youngerActs.size > 0) parts.push(`younger kids activities: ${[...wizPrefs.youngerActs].join(", ")}`);
+    if (wizStays.length > 0) parts.push(`staying at ${wizStays.map(s => s.name || s).join(", ")}`);
+    if (nok + nyk > 0) {
+      const ages = [...wizTravellers.olderKids, ...wizTravellers.youngerKids].map(k => parseInt(k.age) || 0);
+      const youngest = Math.min(...ages);
+      if (youngest <= 5) parts.push("plan for short activity blocks — young children in group");
+      else if (youngest <= 10) parts.push("mix family-friendly activities with some adult time");
+    }
+    const autoSummary = parts.length > 0 ? parts.join(". ") + "." : "";
+
+    // Auto-fill on first visit to this step
+    if (autoSummary && !wizPrefs.instructions) {
+      setTimeout(() => setWizPrefs(prev => prev.instructions ? prev : { ...prev, instructions: autoSummary }), 0);
+    }
+
+    return (
+      <>
+        <p style={{ fontSize: 13, color: T.t2, lineHeight: 1.6, marginBottom: 16 }}>
+          This summary is generated from everything you've entered. It guides the AI when building your itinerary. Edit freely to add specific preferences.
+        </p>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Trip summary</label>
+          {autoSummary && wizPrefs.instructions !== autoSummary && (
+            <button onClick={() => setWizPrefs(prev => ({ ...prev, instructions: autoSummary }))}
+              style={{ fontSize: 10, color: T.a, background: "none", border: "none", cursor: "pointer", fontFamily: T.font, fontWeight: 500 }}>↻ Reset to auto</button>
+          )}
+        </div>
+        <textarea value={wizPrefs.instructions} onChange={e => setWizPrefs(prev => ({ ...prev, instructions: e.target.value }))}
+          placeholder="Your trip summary will appear here..."
+          style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 100, lineHeight: 1.6 }} />
+        <p style={{ fontSize: 10, color: T.t3, marginTop: 4, marginBottom: 16 }}>Add keywords like "dog-friendly", "avoid steep trails", "late starts", "accessible" to influence your itinerary</p>
+
+        {/* Quick glance at what's included */}
+        <div style={{ background: T.s2, borderRadius: T.rs, padding: 12 }}>
+          <p style={{ fontSize: 10, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Included in this trip</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {wizTrip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
+            {[...wizTrip.travel].map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}
+            {wizTrip.budget && <Tag bg={T.greenL} color={T.green}>{wizTrip.budget}</Tag>}
+            {[...wizPrefs.food].map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}
+            {[...wizPrefs.adultActs].map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}
+            {wizStays.map((s, i) => <Tag key={i} bg={T.amberL} color={T.amber}>{s.name}</Tag>)}
+          </div>
+        </div>
       </>
     );
   };
