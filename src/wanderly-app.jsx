@@ -383,7 +383,7 @@ function ControlledField({ label, type = "text", value, onChange, placeholder, s
       ) : type === "date" ? (
         <div onClick={() => dateRef.current?.showPicker?.()} style={{ position: "relative", cursor: "pointer" }}>
           <input ref={dateRef} type="date" value={value} onChange={e => onChange(e.target.value)} min={min} max={max}
-            style={{ ...inputStyle, cursor: "pointer", minHeight: 44, colorScheme: "light" }} />
+            style={{ ...inputStyle, cursor: "pointer", minHeight: 44, colorScheme: "light", color: value ? undefined : "transparent" }} />
           {!value && <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: T.t3, pointerEvents: "none" }}>{placeholder || "Select date"}</div>}
         </div>
       ) : (
@@ -443,6 +443,10 @@ export default function WanderlyApp() {
   const [expandedSections, setExpandedSections] = useState({});
   const [tripChatInput, setTripChatInput] = useState("");
   const [tripChatMessages, setTripChatMessages] = useState([]);
+  const [tripDetailTab, setTripDetailTab] = useState("itinerary");
+  const [showActivationModal, setShowActivationModal] = useState(false);
+  const [activationPrefs, setActivationPrefs] = useState({ arrivalTime: "10:00", dayOnePace: "balanced", notes: "" });
+  const [pendingActivationTripId, setPendingActivationTripId] = useState(null);
   const [settingsToggles, setSettingsToggles] = useState(() => {
     const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
     ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
@@ -869,7 +873,7 @@ export default function WanderlyApp() {
         if (t.id !== editingTripId) return t;
         const updated = { ...t, ...tripData };
         // Regenerate timeline if live
-        if (t.status === "live") updated.timeline = generateTimeline(updated);
+        if (t.status === "live") updated.timeline = generateMultiDayTimeline(updated);
         return updated;
       }));
       const updatedTrip = { ...createdTrips.find(t => t.id === editingTripId), ...tripData };
@@ -996,20 +1000,148 @@ export default function WanderlyApp() {
     return items;
   };
 
+  // Multi-day timeline: returns { 1: [...], 2: [...], ... }
+  const generateMultiDayTimeline = (trip) => {
+    const numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd) - new Date(trip.rawStart)) / 86400000) + 1) : 1;
+    const places = trip.places.length > 0 ? trip.places : ["your destination"];
+    const stayNames = trip.stayNames.length > 0 ? trip.stayNames : ["accommodation"];
+    const food = trip.prefs.food.length > 0 ? trip.prefs.food : ["Local cuisine"];
+    const foodLabel = food.join(" + ");
+    const travelMode = trip.travel[0] || "Travel";
+    const adultActs = trip.prefs.adultActs || trip.prefs.activities || [];
+    const olderActs = trip.prefs.olderActs || [];
+    const youngerActs = trip.prefs.youngerActs || [];
+    const kidActs = [...new Set([...olderActs, ...youngerActs])];
+    const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
+    const hasKids = allKids.length > 0;
+    const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
+    const ctx = (trip.summary || "") + " " + (trip.prefs.instructions || "");
+    const ctxLower = ctx.toLowerCase();
+    const wantsDogFriendly = /dog|pet/.test(ctxLower);
+    const wantsAccessible = /accessible|wheelchair|mobility|pushchair|buggy|pram/.test(ctxLower);
+    const wantsPubs = /pub|pubs|tavern|inn/.test(ctxLower);
+    const wantsAvoidSteep = /avoid.*steep|no.*steep|gentle|easy.*walk|flat/.test(ctxLower);
+    const prefs = trip.activationPrefs || {};
+    const arrivalHour = prefs.arrivalTime ? parseInt(prefs.arrivalTime.split(":")[0]) : 10;
+    const isPacked = prefs.dayOnePace === "packed";
+    const isRelaxed = prefs.dayOnePace === "relaxed";
+    const tags = (base) => { const t = [base]; if (wantsDogFriendly) t.push("🐕 Dog-friendly"); if (wantsAccessible) t.push("♿ Accessible"); return t.join(" · "); };
+    const fmtTime = (h, m = 0) => { const suffix = h >= 12 ? "PM" : "AM"; const hr = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${hr}:${m.toString().padStart(2, "0")} ${suffix}`; };
+
+    // Morning/afternoon activity pools (rotate across days)
+    const morningPool = adultActs.length > 0 ? adultActs : ["Explore the area", "Walking tour", "Local market visit", "Scenic viewpoint", "Cultural tour"];
+    const kidPool = kidActs.length > 0 ? kidActs : ["Playground & games", "Nature walk", "Soft play", "Bike ride", "Treasure hunt"];
+    const afternoonPool = ["Walking tour & sightseeing", "Shopping & souvenirs", "Boat trip", "Museum visit", "Garden walk", "Photography walk"];
+    const dinnerStyles = wantsPubs ? ["Dinner at local pub", "Pub supper", "Gastropub dinner", "Evening at the inn"] : ["Dinner", "Evening meal", "Dinner out", "Supper"];
+
+    const days = {};
+    for (let d = 1; d <= numDays; d++) {
+      const items = [];
+      const isFirst = d === 1;
+      const isLast = d === numDays;
+      const loc = places[(d - 1) % places.length];
+      const stayName = stayNames[Math.min(d - 1, stayNames.length - 1)] || stayNames[0];
+      const dayDate = trip.rawStart ? new Date(new Date(trip.rawStart).getTime() + (d - 1) * 86400000) : null;
+      const dateLabel = dayDate ? dayDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "";
+
+      if (isFirst) {
+        // Day 1: Arrival day
+        const arriveTime = fmtTime(arrivalHour);
+        const arriveDesc = trip.startLocation ? `${travelMode} from ${trip.startLocation} · Check in at ${stayName}` : `${travelMode} · Check in at ${stayName}`;
+        items.push({ time: arriveTime, title: `Arrive ${loc}`, desc: arriveDesc, group: "Everyone", color: T.a });
+
+        const settleHour = arrivalHour + 1;
+        items.push({ time: fmtTime(settleHour), title: `Check in & settle`, desc: `${stayName} · Drop bags, freshen up`, group: "Everyone", color: T.t3 });
+
+        if (!isRelaxed) {
+          const exploreHour = Math.min(settleHour + 1, 16);
+          let morningAct = morningPool[0] || "Explore the area";
+          if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
+          items.push({ time: fmtTime(exploreHour), title: isPacked ? morningAct : `Explore ${loc}`, desc: tags(`${loc} · ${budgetTier.label}`), group: "Everyone", color: T.blue });
+          if (isPacked && hasKids && kidPool.length > 0) {
+            items.push({ time: fmtTime(exploreHour), title: kidPool[0], desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          }
+        }
+
+        const dinnerHour = Math.max(arrivalHour + 3, 18);
+        const dinnerDesc = `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`;
+        items.push({ time: fmtTime(Math.min(dinnerHour, 20)), title: dinnerStyles[0], desc: `${dinnerDesc}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+
+      } else if (isLast && numDays > 1) {
+        // Last day: Departure
+        items.push({ time: fmtTime(8), title: "Breakfast", desc: `${stayName}`, group: "Everyone", color: T.coral });
+        items.push({ time: fmtTime(9, 30), title: "Check out & pack", desc: `${stayName} · Bags ready`, group: "Everyone", color: T.t3 });
+        const lastAct = morningPool[(d - 1) % morningPool.length] || "Last look around";
+        if (wantsAvoidSteep && /hik|trail|climb|trek/.test(lastAct.toLowerCase())) {
+          items.push({ time: fmtTime(10), title: `Farewell stroll in ${loc}`, desc: tags(`${loc} · Easy walk`), group: "Everyone", color: T.blue });
+        } else {
+          items.push({ time: fmtTime(10), title: lastAct, desc: tags(`${loc} · Final morning`), group: "Everyone", color: T.blue });
+        }
+        items.push({ time: fmtTime(12), title: "Lunch & depart", desc: `${foodLabel} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home`, group: "Everyone", color: T.coral });
+        if (trip.startLocation) {
+          items.push({ time: fmtTime(14), title: `${travelMode} home`, desc: `Return to ${trip.startLocation}`, group: "Everyone", color: T.a });
+        }
+
+      } else {
+        // Full middle day
+        items.push({ time: fmtTime(8), title: "Breakfast", desc: `${stayName}`, group: "Everyone", color: T.coral });
+        const morningHour = 10;
+        let morningAct = morningPool[(d - 1) % morningPool.length] || "Explore";
+        if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
+        if (hasKids && kidPool.length > 0) {
+          items.push({ time: fmtTime(morningHour), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Adults", color: T.blue });
+          items.push({ time: fmtTime(morningHour), title: kidPool[(d - 1) % kidPool.length], desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+        } else {
+          items.push({ time: fmtTime(morningHour), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Everyone", color: T.blue });
+        }
+        const lunchDesc = wantsPubs ? `${budgetTier.label} pub · ${budgetTier.price}` : `${budgetTier.label} restaurant · ${budgetTier.price}`;
+        items.push({ time: fmtTime(12, 30), title: `Lunch — ${foodLabel}`, desc: `${lunchDesc}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+        let afternoonAct = afternoonPool[(d - 1) % afternoonPool.length] || "Afternoon activity";
+        if (wantsAvoidSteep && /hik|trail|climb|trek/.test(afternoonAct.toLowerCase())) afternoonAct = "Scenic drive & viewpoints";
+        if (hasKids && kidPool.length > 1) {
+          items.push({ time: fmtTime(14, 30), title: afternoonAct, desc: tags(`${loc} · Afternoon`), group: "Adults", color: T.blue });
+          items.push({ time: fmtTime(14, 30), title: kidPool[d % kidPool.length] || "Free play", desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
+        } else {
+          items.push({ time: fmtTime(14, 30), title: afternoonAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
+        }
+        items.push({ time: fmtTime(17), title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
+        const dinnerDesc2 = `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`;
+        items.push({ time: fmtTime(19), title: dinnerStyles[(d - 1) % dinnerStyles.length], desc: `${dinnerDesc2}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+      }
+
+      days[d] = items;
+    }
+    return days;
+  };
+
   const generateAndSetTimeline = (id) => {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== id) return t;
-      return { ...t, timeline: generateTimeline(t) };
+      return { ...t, timeline: generateMultiDayTimeline(t) };
     }));
     showToast("Itinerary generated!");
   };
 
   const makeTripLive = (id) => {
+    setPendingActivationTripId(id);
+    setActivationPrefs({ arrivalTime: "10:00", dayOnePace: "balanced", notes: "" });
+    setShowActivationModal(true);
+  };
+
+  const confirmActivation = () => {
+    const id = pendingActivationTripId;
+    if (!id) return;
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== id) return { ...t, status: t.status === "live" ? "new" : t.status };
       updateTripStatusInDB(t.dbId || t.id, 'live');
-      return { ...t, status: "live", timeline: generateTimeline(t) };
+      const updated = { ...t, status: "live", activationPrefs: { ...activationPrefs } };
+      updated.timeline = generateMultiDayTimeline(updated);
+      return updated;
     }));
+    setShowActivationModal(false);
+    setPendingActivationTripId(null);
+    setSelectedDay(1);
+    setTripDetailTab("itinerary");
   };
 
   const viewCreatedTrip = (trip) => {
@@ -1017,21 +1149,25 @@ export default function WanderlyApp() {
     setEditingTimelineIdx(null);
     setTripChatMessages([]);
     setTripChatInput("");
+    setTripDetailTab("itinerary");
+    setSelectedDay(1);
     navigate("createdTrip");
   };
 
   const updateTimelineItem = (tripId, idx, field, value) => {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
-      const timeline = t.timeline.map((item, i) => i === idx ? { ...item, [field]: value } : item);
-      return { ...t, timeline };
+      const tl = t.timeline || {};
+      const dayItems = (tl[selectedDay] || []).map((item, i) => i === idx ? { ...item, [field]: value } : item);
+      return { ...t, timeline: { ...tl, [selectedDay]: dayItems } };
     }));
   };
 
   const deleteTimelineItem = (tripId, idx) => {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
-      return { ...t, timeline: t.timeline.filter((_, i) => i !== idx) };
+      const tl = t.timeline || {};
+      return { ...t, timeline: { ...tl, [selectedDay]: (tl[selectedDay] || []).filter((_, i) => i !== idx) } };
     }));
     setEditingTimelineIdx(null);
   };
@@ -1039,9 +1175,29 @@ export default function WanderlyApp() {
   const addTimelineItem = (tripId) => {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
+      const tl = t.timeline || {};
       const newItem = { time: "12:00 PM", title: "New activity", desc: "Tap to edit details", group: "Everyone", color: T.blue };
-      return { ...t, timeline: [...t.timeline, newItem] };
+      return { ...t, timeline: { ...tl, [selectedDay]: [...(tl[selectedDay] || []), newItem] } };
     }));
+  };
+
+  // Helper: get items for current day from timeline (supports both old array and new day-keyed format)
+  const getDayItems = (timeline, day) => {
+    if (!timeline) return [];
+    if (Array.isArray(timeline)) return day === 1 ? timeline : [];
+    return timeline[day] || [];
+  };
+
+  const getNumDays = (trip) => {
+    if (!trip.timeline) return 0;
+    if (Array.isArray(trip.timeline)) return trip.timeline.length > 0 ? 1 : 0;
+    return Object.keys(trip.timeline).length;
+  };
+
+  const hasTimeline = (trip) => {
+    if (!trip.timeline) return false;
+    if (Array.isArray(trip.timeline)) return trip.timeline.length > 0;
+    return Object.keys(trip.timeline).length > 0 && Object.values(trip.timeline).some(d => d.length > 0);
   };
 
   const handleTripChat = (tripId) => {
@@ -2696,222 +2852,330 @@ export default function WanderlyApp() {
     if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
     const isLive = trip.status === "live";
     const totalTravellers = trip.travellers.adults.length + trip.travellers.olderKids.length + trip.travellers.youngerKids.length;
+    const numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd) - new Date(trip.rawStart)) / 86400000) + 1) : 1;
+    const dayItems = getDayItems(trip.timeline, selectedDay);
+    const tripHasTimeline = hasTimeline(trip);
+    const tripStart = trip.rawStart ? new Date(trip.rawStart) : null;
+
+    // Edit trip handler
+    const editTrip = () => {
+      setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel), budget: trip.budget || "", startLocation: trip.startLocation || "" });
+      setWizTravellers({ adults: trip.travellers.adults.map(a => ({ ...a })), olderKids: trip.travellers.olderKids.map(c => ({ ...c })), youngerKids: trip.travellers.youngerKids.map(c => ({ ...c })) });
+      setWizStays(trip.stays || []);
+      setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.adultActs || trip.prefs.activities), olderActs: new Set(trip.prefs.olderActs || []), youngerActs: new Set(trip.prefs.youngerActs || []), instructions: trip.prefs.instructions || "" });
+      setWizStep(0);
+      setEditingTripId(trip.id);
+      navigate("create");
+    };
+
+    // Tab bar for live trips
+    const tripTabStyle = (tab) => ({
+      flex: 1, padding: "10px 0", textAlign: "center", fontSize: 12, fontWeight: tripDetailTab === tab ? 600 : 400,
+      color: tripDetailTab === tab ? T.a : T.t3, cursor: "pointer", border: "none", background: "none",
+      fontFamily: T.font, borderBottom: tripDetailTab === tab ? `2px solid ${T.a}` : "2px solid transparent", transition: "all .15s"
+    });
+
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ background: isLive ? T.ad : T.blue, color: "#fff", padding: "20px 20px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.15)", borderColor: "rgba(255,255,255,.25)", color: "#fff" }} onClick={() => navigate("home")}>← Back</button>
-            {isLive ? <Tag bg="rgba(255,255,255,0.2)" color="#fff">🟢 Live</Tag> : <Tag bg="rgba(255,255,255,0.2)" color="#fff">New</Tag>}
-          </div>
-          <h2 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400 }}>{trip.name}</h2>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-            <p style={{ fontSize: 12, opacity: 0.8 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
-            <button onClick={() => { /* pre-fill wizard with this trip's data and navigate to edit */
-              setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel), budget: trip.budget || "" });
-              setWizTravellers({ adults: trip.travellers.adults.map(a => ({ ...a })), olderKids: trip.travellers.olderKids.map(c => ({ ...c })), youngerKids: trip.travellers.youngerKids.map(c => ({ ...c })) });
-              setWizStays(trip.stays || []);
-              setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.adultActs || trip.prefs.activities), olderActs: new Set(trip.prefs.olderActs || []), youngerActs: new Set(trip.prefs.youngerActs || []), instructions: trip.prefs.instructions || "" });
-              setWizStep(0);
-              setEditingTripId(trip.id);
-              navigate("create");
-            }} style={{ ...css.btn, ...css.btnSm, color: "#fff", opacity: 0.8, fontSize: 11 }}>✏️ Edit details</button>
-          </div>
-        </div>
+        {/* ── Activation Preferences Modal ── */}
+        {showActivationModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 360 }}>
+              <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400, marginBottom: 4 }}>Before we generate your plan</h3>
+              <p style={{ fontSize: 12, color: T.t2, marginBottom: 16 }}>A few quick questions to tailor your itinerary.</p>
 
-        <div style={{ display: "flex", gap: 4, padding: "10px 20px", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
-          {[{ icon: "📍", label: trip.places.join(", ") || "No locations" }, { icon: "👥", label: `${totalTravellers} traveller${totalTravellers > 1 ? "s" : ""}` }, { icon: "🏨", label: `${trip.stayNames.length} stay${trip.stayNames.length !== 1 ? "s" : ""}` }].map((item, i) => (
-            <div key={i} style={{ flex: 1, background: T.s2, borderRadius: T.rs, padding: "8px 6px", textAlign: "center" }}>
-              <div style={{ fontSize: 14 }}>{item.icon}</div>
-              <div style={{ fontSize: 10, color: T.t2, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</div>
-            </div>
-          ))}
-        </div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>What time do you arrive on Day 1?</label>
+              <input type="time" value={activationPrefs.arrivalTime} onChange={e => setActivationPrefs(p => ({ ...p, arrivalTime: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 14, minHeight: 44 }} />
 
-        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-          {isLive && trip.shareCode && (
-            <Collapsible title="Share & Invite" icon="🔗" sectionKey="share" defaultOpen={false} expandedSections={expandedSections} setExpandedSections={setExpandedSections}
-              count={trip.travellers.adults.length}>
-            <div className="w-card" style={{ ...css.card, borderColor: T.a }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 8 }}>
-                <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${window.location.origin}?join=${trip.shareCode}`}</code>
-                <button className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}?join=${trip.shareCode}`); }}>Copy link</button>
-              </div>
-              {trip.travellers.adults.map((a, i) => {
-                const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
-                const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
-                const status = a.isLead ? "Organiser ✓" : a.email ? "Invite sent" : "Share link to join";
-                const statusColor = a.isLead ? T.ad : a.email ? T.blue : T.t3;
-                return (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < trip.travellers.adults.length - 1 ? `.5px solid ${T.border}` : "none" }}>
-                    <Avatar bg={adultColors[i % adultColors.length]} label={getInit(a.name)} size={28} />
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 13, fontWeight: 500 }}>{a.name || `Adult ${i + 1}`}</p>
-                      <p style={{ fontSize: 11, color: statusColor }}>{status}</p>
-                    </div>
-                    {!a.isLead && !a.email && (
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <input placeholder="Email" style={{ width: 110, padding: "4px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s2, outline: "none" }} />
-                        <button style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.a }}>Send invite</button>
-                      </div>
-                    )}
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>Day 1 pace?</label>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                {[{ id: "relaxed", label: "Relaxed", desc: "Settle in, easy start" }, { id: "balanced", label: "Balanced", desc: "Some exploring" }, { id: "packed", label: "Packed", desc: "Hit the ground running" }].map(opt => (
+                  <div key={opt.id} onClick={() => setActivationPrefs(p => ({ ...p, dayOnePace: opt.id }))}
+                    style={{ flex: 1, padding: "10px 8px", borderRadius: T.rs, border: `.5px solid ${activationPrefs.dayOnePace === opt.id ? T.a : T.border}`,
+                      background: activationPrefs.dayOnePace === opt.id ? T.al : T.s, cursor: "pointer", textAlign: "center", transition: "all .15s" }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: activationPrefs.dayOnePace === opt.id ? T.ad : T.t1 }}>{opt.label}</p>
+                    <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{opt.desc}</p>
                   </div>
-                );
-              })}
-              <button className="w-btn" onClick={() => { setSelectedCreatedTrip(trip); navigate("joinPreview"); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 8, fontSize: 11 }}>Preview join page</button>
-            </div>
-            </Collapsible>
-          )}
+                ))}
+              </div>
 
-          {!isLive && (
-            <div style={{ ...css.card, background: T.al, borderColor: T.a, marginBottom: 16, textAlign: "center", padding: "20px 16px" }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Anything else? (optional)</label>
+              <textarea value={activationPrefs.notes} onChange={e => setActivationPrefs(p => ({ ...p, notes: e.target.value }))}
+                placeholder="e.g. We need a nap break after lunch, prefer outdoor activities..."
+                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 50, marginBottom: 16 }} />
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setShowActivationModal(false); setPendingActivationTripId(null); }} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center" }}>Cancel</button>
+                <button onClick={confirmActivation} style={{ ...css.btn, ...css.btnP, flex: 2, justifyContent: "center", padding: "12px 16px" }}>Generate itinerary</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Header ── */}
+        <div style={{ background: isLive ? T.ad : T.blue, color: "#fff", padding: "16px 20px 12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.15)", borderColor: "rgba(255,255,255,.25)", color: "#fff" }} onClick={() => navigate("home")}>← Back</button>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {isLive ? <Tag bg="rgba(255,255,255,0.2)" color="#fff">Live</Tag> : <Tag bg="rgba(255,255,255,0.2)" color="#fff">New</Tag>}
+              <button onClick={editTrip} style={{ ...css.btn, ...css.btnSm, color: "#fff", opacity: 0.8, fontSize: 11, background: "rgba(255,255,255,.1)", borderColor: "rgba(255,255,255,.2)" }}>✏️ Edit</button>
+            </div>
+          </div>
+          <h2 style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400 }}>{trip.name}</h2>
+          <p style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>
+            {trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}
+            {` · ${trip.places.join(", ") || "No locations"} · ${totalTravellers} traveller${totalTravellers > 1 ? "s" : ""}`}
+          </p>
+        </div>
+
+        {/* ── Not live: activation CTA ── */}
+        {!isLive && (
+          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+            <div style={{ ...css.card, background: T.al, borderColor: T.a, marginBottom: 16, textAlign: "center", padding: "24px 16px" }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🚀</div>
               <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: T.ad }}>Ready to go live?</h3>
-              <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Wanderly will generate your day-by-day itinerary, connect travel services, and start monitoring weather & bookings.</p>
+              <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Wanderly will ask a few questions, then generate your day-by-day itinerary.</p>
               <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, justifyContent: "center", width: "100%", padding: "12px 16px", fontSize: 14 }}>🚀 Activate trip</button>
             </div>
-          )}
 
-          {isLive && trip.timeline.length === 0 && (
-            <>
-              <div style={{ ...css.card, textAlign: "center", padding: 24, marginTop: 12, background: T.al, borderColor: T.a }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>{"✨"}</div>
-                <p style={{ fontSize: 14, fontWeight: 500, color: T.ad, marginBottom: 4 }}>Your itinerary is being prepared</p>
-                <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.5 }}>Chat with Wanderly AI to refine your plans, or add activities manually.</p>
-                <button onClick={() => { generateAndSetTimeline(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, marginTop: 12 }}>Generate itinerary</button>
+            {/* Details preview for non-live */}
+            <Collapsible title="Details" icon="📍" sectionKey="details" defaultOpen={true} expandedSections={expandedSections} setExpandedSections={setExpandedSections}
+              count={trip.places.length + trip.travel.length + trip.stayNames.length}>
+              <div className="w-card" style={css.card}>
+                {trip.places.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Locations</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}</div></div>}
+                {trip.travel.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Travel</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.travel.map(tv => <Tag key={tv} bg={T.blueL} color={T.blue}>{tv}</Tag>)}</div></div>}
+                {trip.stayNames.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Stays</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.stayNames.map(s => <Tag key={s} bg={T.amberL} color={T.amber}>{s}</Tag>)}</div></div>}
               </div>
-              <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, marginTop: 8, width: "100%", justifyContent: "center" }}>+ Add activity</button>
-            </>
-          )}
-          {isLive && trip.timeline.length > 0 && (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={css.sectionTitle}>Day 1 Itinerary</div>
-                <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a }}>+ Add activity</button>
-              </div>
-              {trip.timeline.map((item, i) => (
-                <div key={i} style={{ display: "flex", gap: 12, marginBottom: editingTimelineIdx === i ? 8 : 16 }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
-                    {i < trip.timeline.length - 1 && <div style={{ width: 1.5, flex: 1, background: T.border, marginTop: 4 }} />}
-                  </div>
-                  <div style={{ flex: 1, paddingBottom: 4 }}>
-                    {editingTimelineIdx === i ? (
-                      <div style={{ ...css.card, padding: 10, marginBottom: 4 }}>
-                        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                          <input value={item.time} onChange={e => updateTimelineItem(trip.id, i, "time", e.target.value)}
-                            style={{ width: 90, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Time" />
-                          <input value={item.title} onChange={e => updateTimelineItem(trip.id, i, "title", e.target.value)}
-                            style={{ flex: 1, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Title" />
-                        </div>
-                        <input value={item.desc} onChange={e => updateTimelineItem(trip.id, i, "desc", e.target.value)}
-                          style={{ width: "100%", padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", marginBottom: 6 }} placeholder="Description" />
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => setEditingTimelineIdx(null)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 10 }}>✓ Done</button>
-                          <button onClick={() => deleteTimelineItem(trip.id, i)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.red }}>🗑️ Delete</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 11, color: T.t3, marginBottom: 2 }}>{item.time}</p>
-                          <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
-                          <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
-                          <Tag bg={item.group === "Adults" ? T.blueL : item.group === "Kids" ? T.pinkL : item.group === "Note" ? T.amberL : T.al} color={item.group === "Adults" ? T.blue : item.group === "Kids" ? T.pink : item.group === "Note" ? T.amber : T.ad}>{item.group}</Tag>
-                        </div>
-                        <button onClick={() => setEditingTimelineIdx(i)} style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 44, minHeight: 44, opacity: 0.5, justifyContent: "center" }}>✏️</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+            </Collapsible>
 
-              {/* Booking cost summary */}
-              {(() => {
-                const costs = Object.entries(bookingStates).filter(([k, v]) => v.cost && parseFloat(v.cost.replace(/[^0-9.]/g, '')));
-                const total = costs.reduce((sum, [, v]) => sum + (parseFloat(v.cost.replace(/[^0-9.]/g, '')) || 0), 0);
-                const booked = Object.values(bookingStates).filter(v => v.status === "booked").length;
-                return total > 0 ? (
-                  <div style={{ ...css.card, background: T.al, borderColor: T.a, marginTop: 8, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 500, color: T.ad }}>💰 Booked costs</p>
-                      <p style={{ fontSize: 10, color: T.t3 }}>{booked} item{booked !== 1 ? "s" : ""} booked</p>
-                    </div>
-                    <p style={{ fontSize: 16, fontWeight: 600, color: T.ad }}>£{total.toFixed(0)}</p>
-                  </div>
-                ) : null;
-              })()}
+            <button onClick={() => { deleteCreatedTrip(trip.id); navigate("home"); }} style={{ ...css.btn, ...css.btnSm, color: T.red, marginTop: 12, fontSize: 11, justifyContent: "center", width: "100%" }}>Remove trip</button>
+          </div>
+        )}
 
-              {/* Tonight's stay — matched from stay check-in/out dates */}
-              {trip.stays?.length > 0 && (() => {
-                const tripStart = trip.rawStart ? new Date(trip.rawStart) : null;
-                const currentDate = tripStart ? new Date(tripStart.getTime() + 0 * 86400000) : null; // Day 1 for now
-                const matchedStay = currentDate ? trip.stays.find(s => {
-                  if (!s.checkIn || !s.checkOut) return false;
-                  const ci = new Date(s.checkIn);
-                  const co = new Date(s.checkOut);
-                  return currentDate >= ci && currentDate < co;
-                }) : trip.stays[0];
-                return matchedStay ? (
-                  <div style={{ ...css.card, background: T.purpleL, borderColor: T.purple, marginTop: 8 }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "start" }}>
-                      <span style={{ fontSize: 16 }}>🏠</span>
-                      <div>
-                        <p style={{ fontSize: 13, fontWeight: 500, color: T.purple }}>Tonight's stay</p>
-                        <p style={{ fontSize: 12, color: T.t2 }}>{matchedStay.name}{matchedStay.checkIn ? ` · ${new Date(matchedStay.checkIn).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${new Date(matchedStay.checkOut).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</p>
-                      </div>
+        {/* ── Live trip: 3-tab layout ── */}
+        {isLive && (
+          <>
+            {/* Tab bar */}
+            <div style={{ display: "flex", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
+              <button className="w-tab" style={tripTabStyle("itinerary")} onClick={() => setTripDetailTab("itinerary")}>Itinerary</button>
+              <button className="w-tab" style={tripTabStyle("chat")} onClick={() => setTripDetailTab("chat")}>Chat</button>
+              <button className="w-tab" style={tripTabStyle("info")} onClick={() => setTripDetailTab("info")}>Info</button>
+            </div>
+
+            {/* ── ITINERARY TAB ── */}
+            {tripDetailTab === "itinerary" && (
+              <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+                {!tripHasTimeline && (
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>✨</div>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: T.ad, marginBottom: 4 }}>Your itinerary is being prepared</p>
+                      <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.5, marginBottom: 12 }}>Generate your plan or add activities manually.</p>
+                      <button onClick={() => { generateAndSetTimeline(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm }}>Generate itinerary</button>
                     </div>
                   </div>
-                ) : null;
-              })()}
+                )}
+                {tripHasTimeline && (
+                  <>
+                    {/* Day navigator pills */}
+                    <div style={{ display: "flex", gap: 6, padding: "10px 20px", overflowX: "auto", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
+                      {Array.from({ length: numDays }, (_, i) => i + 1).map(d => {
+                        const dayDate = tripStart ? new Date(tripStart.getTime() + (d - 1) * 86400000) : null;
+                        const dateStr = dayDate ? dayDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
+                        const isActive = selectedDay === d;
+                        const dayHasItems = getDayItems(trip.timeline, d).length > 0;
+                        return (
+                          <button key={d} onClick={() => { setSelectedDay(d); setEditingTimelineIdx(null); }}
+                            style={{ padding: "6px 14px", borderRadius: 20, border: `.5px solid ${isActive ? T.a : T.border}`,
+                              background: isActive ? T.a : dayHasItems ? T.s : T.s2, color: isActive ? "#fff" : dayHasItems ? T.t1 : T.t3,
+                              fontSize: 11, fontWeight: isActive ? 600 : 400, fontFamily: T.font, cursor: "pointer", whiteSpace: "nowrap",
+                              transition: "all .15s", flexShrink: 0, opacity: dayHasItems || isActive ? 1 : 0.6 }}>
+                            Day {d}{dateStr ? ` · ${dateStr}` : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-              <div style={{ ...css.card, marginTop: 8, padding: 12 }}>
-                <div style={css.sectionTitle}>Refine with AI</div>
-                <div style={{ maxHeight: 150, overflowY: "auto", marginBottom: 8 }}>
+                    {/* Timeline items for selected day */}
+                    <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>
+                          Day {selectedDay}
+                          {(() => { const dd = tripStart ? new Date(tripStart.getTime() + (selectedDay - 1) * 86400000) : null; return dd ? ` — ${dd.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}` : ""; })()}
+                          {(() => { const loc = trip.places[(selectedDay - 1) % trip.places.length]; return loc ? ` · ${loc}` : ""; })()}
+                        </p>
+                        <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a }}>+ Add</button>
+                      </div>
+
+                      {dayItems.length === 0 && (
+                        <div style={{ textAlign: "center", padding: "24px 0", color: T.t3 }}>
+                          <p style={{ fontSize: 13, marginBottom: 8 }}>No activities planned for Day {selectedDay} yet.</p>
+                          <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, color: T.a, fontSize: 11 }}>+ Add activity</button>
+                        </div>
+                      )}
+
+                      {dayItems.map((item, i) => (
+                        <div key={i} style={{ display: "flex", gap: 12, marginBottom: editingTimelineIdx === i ? 8 : 14 }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
+                            {i < dayItems.length - 1 && <div style={{ width: 1.5, flex: 1, background: T.border, marginTop: 4 }} />}
+                          </div>
+                          <div style={{ flex: 1, paddingBottom: 4 }}>
+                            {editingTimelineIdx === i ? (
+                              <div style={{ ...css.card, padding: 10, marginBottom: 4 }}>
+                                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                                  <input value={item.time} onChange={e => updateTimelineItem(trip.id, i, "time", e.target.value)}
+                                    style={{ width: 90, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Time" />
+                                  <input value={item.title} onChange={e => updateTimelineItem(trip.id, i, "title", e.target.value)}
+                                    style={{ flex: 1, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Title" />
+                                </div>
+                                <input value={item.desc} onChange={e => updateTimelineItem(trip.id, i, "desc", e.target.value)}
+                                  style={{ width: "100%", padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", marginBottom: 6 }} placeholder="Description" />
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button onClick={() => setEditingTimelineIdx(null)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 10 }}>Done</button>
+                                  <button onClick={() => deleteTimelineItem(trip.id, i)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.red }}>Delete</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                                <div style={{ flex: 1 }}>
+                                  <p style={{ fontSize: 11, color: T.t3, marginBottom: 2 }}>{item.time}</p>
+                                  <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
+                                  <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
+                                  <Tag bg={item.group === "Adults" ? T.blueL : item.group === "Kids" ? T.pinkL : item.group === "Note" ? T.amberL : T.al} color={item.group === "Adults" ? T.blue : item.group === "Kids" ? T.pink : item.group === "Note" ? T.amber : T.ad}>{item.group}</Tag>
+                                </div>
+                                <button onClick={() => setEditingTimelineIdx(i)} style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 40, minHeight: 40, opacity: 0.5, justifyContent: "center" }}>✏️</button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Tonight's stay — matched from selected day */}
+                      {trip.stays?.length > 0 && (() => {
+                        const currentDate = tripStart ? new Date(tripStart.getTime() + (selectedDay - 1) * 86400000) : null;
+                        const matchedStay = currentDate ? trip.stays.find(s => {
+                          if (!s.checkIn || !s.checkOut) return false;
+                          return currentDate >= new Date(s.checkIn) && currentDate < new Date(s.checkOut);
+                        }) : trip.stays[0];
+                        return matchedStay ? (
+                          <div style={{ ...css.card, background: T.purpleL, borderColor: T.purple, marginTop: 4 }}>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <span style={{ fontSize: 14 }}>🏠</span>
+                              <div>
+                                <p style={{ fontSize: 12, fontWeight: 500, color: T.purple }}>Tonight's stay</p>
+                                <p style={{ fontSize: 11, color: T.t2 }}>{matchedStay.name}{matchedStay.checkIn ? ` · ${new Date(matchedStay.checkIn).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${new Date(matchedStay.checkOut).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── CHAT TAB ── */}
+            {tripDetailTab === "chat" && (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
                   {tripChatMessages.length === 0 && (
-                    <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: "8px 0" }}>Ask Wanderly to adjust your itinerary — change times, add activities, find restaurants, and more.</p>
+                    <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>💬</div>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>Chat with Wanderly AI</p>
+                      <p style={{ fontSize: 12, lineHeight: 1.5 }}>Ask about restaurants, adjust times, add activities, get budget tips — anything about your trip.</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 16 }}>
+                        {["Find restaurants nearby", "Suggest kid-friendly activities", "What's the budget looking like?", "Regenerate itinerary"].map(q => (
+                          <button key={q} onClick={() => { setTripChatInput(q); }} className="w-btn"
+                            style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, background: T.al, borderColor: T.a }}>
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {tripChatMessages.map((msg, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 6 }}>
-                      <div style={{ maxWidth: "85%", padding: "8px 10px", borderRadius: 12, fontSize: 12, lineHeight: 1.4, background: msg.role === "user" ? T.a : T.s2, color: msg.role === "user" ? "#fff" : T.t1, whiteSpace: "pre-line" }}>{msg.text}</div>
+                    <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
+                      <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 16, fontSize: 13, lineHeight: 1.5,
+                        background: msg.role === "user" ? T.a : T.s2, color: msg.role === "user" ? "#fff" : T.t1, whiteSpace: "pre-line",
+                        borderBottomRightRadius: msg.role === "user" ? 4 : 16, borderBottomLeftRadius: msg.role === "user" ? 16 : 4 }}>
+                        {msg.text}
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input value={tripChatInput} onChange={e => setTripChatInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
-                    style={{ flex: 1, padding: "8px 10px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none" }}
-                    placeholder="e.g. Add a museum visit in the afternoon..." />
-                  <button onClick={() => handleTripChat(trip.id)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>Send</button>
+                <div style={{ padding: "12px 20px", borderTop: `.5px solid ${T.border}`, background: T.s }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input value={tripChatInput} onChange={e => setTripChatInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
+                      style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 13, background: "#fff", outline: "none" }}
+                      placeholder="Ask about your trip..." />
+                    <button onClick={() => handleTripChat(trip.id)} style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 12 }}>Send</button>
+                  </div>
                 </div>
               </div>
-            </>
-          )}
+            )}
 
-          {trip.brief && (
-            <Collapsible title="Trip brief" icon="📋" sectionKey="brief" expandedSections={expandedSections} setExpandedSections={setExpandedSections}>
-              <p style={{ fontSize: 13, color: T.t2, lineHeight: 1.5, padding: "8px 0" }}>{trip.brief}</p>
-            </Collapsible>
-          )}
+            {/* ── INFO TAB ── */}
+            {tripDetailTab === "info" && (
+              <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+                {/* Share & Invite */}
+                {trip.shareCode && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Share & Invite</p>
+                    <div className="w-card" style={{ ...css.card, borderColor: T.a }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 8 }}>
+                        <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${window.location.origin}?join=${trip.shareCode}`}</code>
+                        <button className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}?join=${trip.shareCode}`); showToast("Link copied!"); }}>Copy</button>
+                      </div>
+                      {trip.travellers.adults.map((a, i) => {
+                        const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
+                        const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
+                        const status = a.isLead ? "Organiser" : a.email ? "Invited" : "Pending";
+                        const statusColor = a.isLead ? T.ad : a.email ? T.blue : T.t3;
+                        return (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < trip.travellers.adults.length - 1 ? `.5px solid ${T.border}` : "none" }}>
+                            <Avatar bg={adultColors[i % adultColors.length]} label={getInit(a.name)} size={24} />
+                            <p style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{a.name || `Adult ${i + 1}`}</p>
+                            <p style={{ fontSize: 10, color: statusColor }}>{status}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
-          <Collapsible title="Details" icon="📍" sectionKey="details" expandedSections={expandedSections} setExpandedSections={setExpandedSections}
-            count={trip.places.length + trip.travel.length + trip.stayNames.length}>
-            <div className="w-card" style={css.card}>
-              {trip.places.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Locations</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}</div></div>}
-              {trip.travel.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Travel</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}</div></div>}
-              {trip.stayNames.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Accommodation</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.stayNames.map(s => <Tag key={s} bg={T.amberL} color={T.amber}>{s}</Tag>)}</div></div>}
-              {trip.prefs.food.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Food</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.food.map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}</div></div>}
-              {(trip.prefs.adultActs?.length > 0 || trip.prefs.activities?.length > 0) && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Adult activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{(trip.prefs.adultActs || trip.prefs.activities).map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}</div></div>}
-              {trip.prefs.olderActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Older kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.olderActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
-              {trip.prefs.youngerActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Younger kids activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.youngerActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
-              {trip.prefs.instructions && <div><label style={{ fontSize: 11, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Special instructions</label><p style={{ fontSize: 12, color: T.t2, marginTop: 4, lineHeight: 1.5 }}>📝 {trip.prefs.instructions}</p></div>}
-            </div>
-          </Collapsible>
+                {/* Trip brief */}
+                {trip.brief && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Trip Summary</p>
+                    <p style={{ fontSize: 13, color: T.t2, lineHeight: 1.5, background: T.s2, padding: 12, borderRadius: T.rs }}>{trip.brief}</p>
+                  </div>
+                )}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            {!isLive && <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }}>🚀 Activate trip</button>}
-            <button onClick={() => { deleteCreatedTrip(trip.id); navigate("home"); }} style={{ ...css.btn, flex: isLive ? 0 : 1, justifyContent: "center", color: T.red }}>Remove trip</button>
-          </div>
-        </div>
+                {/* Details */}
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Trip Details</p>
+                  <div className="w-card" style={css.card}>
+                    {trip.places.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Locations</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}</div></div>}
+                    {trip.travel.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Travel</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.travel.map(tv => <Tag key={tv} bg={T.blueL} color={T.blue}>{tv}</Tag>)}</div></div>}
+                    {trip.stayNames.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Stays</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.stayNames.map(s => <Tag key={s} bg={T.amberL} color={T.amber}>{s}</Tag>)}</div></div>}
+                    {trip.prefs.food.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Food</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.food.map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}</div></div>}
+                    {(trip.prefs.adultActs?.length > 0 || trip.prefs.activities?.length > 0) && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Adult activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{(trip.prefs.adultActs || trip.prefs.activities).map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}</div></div>}
+                    {trip.prefs.olderActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Older kids</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.olderActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
+                    {trip.prefs.youngerActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Younger kids</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.youngerActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
+                    {trip.prefs.instructions && <div><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Instructions</label><p style={{ fontSize: 12, color: T.t2, marginTop: 4, lineHeight: 1.5 }}>{trip.prefs.instructions}</p></div>}
+                  </div>
+                </div>
+
+                <button onClick={() => { deleteCreatedTrip(trip.id); navigate("home"); }}
+                  style={{ ...css.btn, ...css.btnSm, color: T.red, fontSize: 11, justifyContent: "center", width: "100%", padding: "8px 16px" }}>Remove trip</button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     );
   };
