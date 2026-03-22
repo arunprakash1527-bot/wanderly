@@ -3499,7 +3499,8 @@ export default function TripWithMeApp() {
         </div>
         <textarea value={wizPrefs.instructions} onChange={e => setWizPrefs(prev => ({ ...prev, instructions: e.target.value }))}
           placeholder="Your trip summary will appear here..."
-          style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 100, lineHeight: 1.6 }} />
+          ref={el => { if (el) { el.style.height = "auto"; el.style.height = Math.max(140, el.scrollHeight + 4) + "px"; } }}
+          style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", resize: "vertical", minHeight: 140, maxHeight: 300, lineHeight: 1.6, overflow: "auto" }} />
         <p style={{ fontSize: 10, color: T.t3, marginTop: 4, marginBottom: 16 }}>Add keywords like "dog-friendly", "avoid steep trails", "late starts", "accessible" to influence your itinerary</p>
 
         {/* Quick glance at what's included */}
