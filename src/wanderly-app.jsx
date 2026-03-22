@@ -670,7 +670,12 @@ function TripMap({ places, routePolyline, height, onDirectionsLoaded, travelMode
       }
     });
 
-    // Cleanup on unmount or places change
+    // Cleanup only on unmount — do NOT reset renderedPlacesKey on every dependency change
+    // (resetting it causes the route to be drawn twice when the effect re-fires)
+  }, [mapReady, placesKey]);
+
+  // Cleanup on unmount only
+  React.useEffect(() => {
     return () => {
       markersRef.current.forEach(m => m.setMap(null));
       markersRef.current = [];
@@ -678,7 +683,7 @@ function TripMap({ places, routePolyline, height, onDirectionsLoaded, travelMode
       if (rendererRef.current) { rendererRef.current.setMap(null); rendererRef.current = null; }
       renderedPlacesKey.current = "";
     };
-  }, [mapReady, placesKey]);
+  }, []);
 
   if (mapError) {
     return (
@@ -2513,7 +2518,7 @@ export default function TripWithMeApp() {
       let reply = "";
       const lower = msg.toLowerCase();
       if (lower.includes("restaurant") || lower.includes("food") || lower.includes("eat") || lower.includes("lunch") || lower.includes("dinner") || lower.includes("nearby")) {
-        // Use Places API for real restaurant search — based on current day location
+        // Use Places API for real restaurant search — always try GPS first
         const extras = [];
         if (wantsDog) extras.push("🐕 dog-friendly");
         if (wantsAccessible) extras.push("♿ accessible");
@@ -2521,7 +2526,7 @@ export default function TripWithMeApp() {
         const filterStr = extras.length > 0 ? `\nFiltering for: ${extras.join(", ")}` : "";
         const searchQuery = `${budgetLabel} ${foodPref} restaurants ${hasKids ? "family friendly" : ""} in ${firstLoc}`;
 
-        // Try GPS location first for "nearby" queries, then fall back to day's location
+        // Always try GPS first for restaurant searches — traveller might be en route
         const doPlacesSearch = async (gpsLat, gpsLng) => {
           const body = { query: searchQuery, type: "restaurant" };
           if (gpsLat && gpsLng) { body.location = { lat: gpsLat, lng: gpsLng }; body.radius = 5000; }
@@ -2533,14 +2538,15 @@ export default function TripWithMeApp() {
           return placesRes;
         };
 
-        // Try Places API — with GPS if available, else by current day location name
+        // Try Places API — always attempt GPS first, fall back to location name
         try {
           let placesRes;
-          if (lower.includes("nearby") && navigator.geolocation) {
-            // Attempt GPS first
+          let usedGps = false;
+          if (navigator.geolocation) {
             try {
               const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
               placesRes = await doPlacesSearch(pos.coords.latitude, pos.coords.longitude);
+              usedGps = true;
             } catch (gpsErr) {
               placesRes = await doPlacesSearch(null, null);
             }
@@ -2558,43 +2564,13 @@ export default function TripWithMeApp() {
               return `${i + 1}. **${p.name}** ${stars} ${price}\n   ${p.address}${status ? ` · ${status}` : ""}\n   [View on Maps](${mapLink})`;
             }).join("\n\n");
 
-            reply = `🍽️ **Top restaurants near ${firstLoc}** (Day ${selectedDay}, ${foodPref}):${filterStr}\n\n${placesList}\n\n💡 Say **"Add [name] to Day ${selectedDay}"** to plug it into your itinerary!`;
+            const locNote = usedGps ? "your current location" : firstLoc;
+            reply = `🍽️ **Top restaurants near ${locNote}** (Day ${selectedDay}, ${foodPref}):${filterStr}\n\n${placesList}\n\n📍 *Results based on ${usedGps ? "your GPS location" : "trip destination"}*\n\n💡 Say **"Add [name] to Day ${selectedDay}"** to plug it into your itinerary!`;
             setTripChatTyping(false);
             setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
             return;
           }
-        } catch (e) { /* Places API unavailable — use geolocation fallback */ }
-
-        // Geolocation fallback
-        if (lower.includes("nearby") && navigator.geolocation) {
-          setTripChatMessages(prev => [...prev, { role: "ai", text: "📍 Finding your location..." }]);
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const { latitude, longitude } = pos.coords;
-              const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}/@${latitude},${longitude},15z`;
-              const locReply = `📍 Found your location!\n\n🍽️ Searching for ${budgetLabel} restaurants (${foodPref}) near you:${filterStr}\n\n🔗 [Open in Google Maps](${mapsUrl})\n\nWant me to add a dinner slot to your itinerary?`;
-              setTripChatMessages(prev => {
-                const updated = [...prev];
-                const locIdx = updated.findLastIndex(m => m.text === "📍 Finding your location...");
-                if (locIdx >= 0) updated[locIdx] = { role: "ai", text: locReply };
-                else updated.push({ role: "ai", text: locReply });
-                return updated;
-              });
-            },
-            () => {
-              const fallbackReply = `🍽️ Showing suggestions for **${firstLoc}**:\n${filterStr}\n\nI'd suggest ${budgetLabel} ${wantsPubs ? "pubs & gastropubs" : "restaurants"} with ${foodPref} options.${hasKids ? `\n👧 Look for family-friendly spots with kids' menus.` : ""}\n\nTap ✏️ on any meal to update.`;
-              setTripChatMessages(prev => {
-                const updated = [...prev];
-                const locIdx = updated.findLastIndex(m => m.text === "📍 Finding your location...");
-                if (locIdx >= 0) updated[locIdx] = { role: "ai", text: fallbackReply };
-                else updated.push({ role: "ai", text: fallbackReply });
-                return updated;
-              });
-            },
-            { enableHighAccuracy: false, timeout: 8000 }
-          );
-          return;
-        }
+        } catch (e) { /* Places API unavailable — use static fallback */ }
 
         reply = `For ${budgetLabel} dining in ${firstLoc} (${foodPref}):${filterStr}\n\n🍽️ I'd suggest ${budgetLabel} ${wantsPubs ? "pubs & gastropubs" : "restaurants"} with ${foodPref} options.${hasKids ? `\n👧 With ${kidNames}, look for family-friendly spots.` : ""}\n\nTap ✏️ on any meal to update.`;
       } else if (lower.includes("earlier") || lower.includes("later") || lower.includes("time") || lower.includes("move")) {
@@ -4036,8 +4012,89 @@ export default function TripWithMeApp() {
       setChatMessages(prev => [...prev, { role: "user", text: msg }]);
       setChatTyping(true);
 
-      // Try Claude API first, fall back to local responses
+      const lower = msg.trim().toLowerCase();
+      const isNearby = /nearby|nearest|near me|near here|around me|close by|closest/i.test(lower);
+      const isPlaceSearch = /restaurant|food|eat|dining|cafe|coffee|pub|bar|pizza|burger|takeaway|lunch|dinner|breakfast|brunch|supermarket|petrol|fuel|pharmacy|hospital|atm|ev|charger|charging/i.test(lower);
+
+      // ── GPS-based nearby search (restaurants, EV chargers, etc.) ──
+      if (isNearby || (isPlaceSearch && isNearby)) {
+        const searchType = /ev|charger|charging/i.test(lower) ? "electric_vehicle_charging_station"
+          : /cafe|coffee/i.test(lower) ? "cafe"
+          : /pub|bar/i.test(lower) ? "bar"
+          : /supermarket|grocery/i.test(lower) ? "supermarket"
+          : /petrol|fuel|gas station/i.test(lower) ? "gas_station"
+          : /pharmacy|chemist/i.test(lower) ? "pharmacy"
+          : /hospital|a&e|emergency/i.test(lower) ? "hospital"
+          : /atm|cash/i.test(lower) ? "atm"
+          : "restaurant";
+        const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType === "electric_vehicle_charging_station" ? "EV chargers" : searchType + "s";
+        const searchIcon = /ev|charger|charging/i.test(lower) ? "⚡" : /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : "🍽️";
+        const fallbackLoc = DAYS[selectedDay - 1]?.location || TRIP.places?.[0] || "your destination";
+
+        setChatMessages(prev => [...prev, { role: "ai", text: `📍 Finding ${searchLabel} near your current location...` }]);
+
+        const handleResults = async (lat, lng, locLabel) => {
+          try {
+            const body = lat && lng
+              ? { location: { lat, lng }, type: searchType, radius: 8000 }
+              : { query: `${searchType} near ${fallbackLoc}`, radius: 8000 };
+            const res = await fetch("/api/places", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (res.ok && data.places?.length > 0) {
+              const results = data.places.slice(0, 6);
+              const list = results.map((p, i) => {
+                const stars = p.rating ? ` · ${p.rating}★` : "";
+                const price = p.priceLevel || "";
+                const status = p.openNow === true ? " · **Open now**" : p.openNow === false ? " · Closed" : "";
+                const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
+                return `${i + 1}. **${p.name}** ${price}${stars}${status}\n   ${p.address}\n   [Navigate in Maps](${mapLink})`;
+              }).join("\n\n");
+              return `${searchIcon} **${searchLabel.charAt(0).toUpperCase() + searchLabel.slice(1)} near ${locLabel}:**\n\n${list}\n\n💡 *These results are based on your ${lat ? "current GPS location" : "trip destination"}.*`;
+            }
+          } catch (e) { /* fallback below */ }
+          return `${searchIcon} Couldn't find ${searchLabel} via search. Try [Google Maps](https://www.google.com/maps/search/${encodeURIComponent(searchType + " near me")}) for real-time results near you.`;
+        };
+
+        const updateChat = (reply) => {
+          setChatTyping(false);
+          setChatMessages(prev => {
+            const updated = [...prev];
+            const idx = updated.findLastIndex(m => m.text.includes(`Finding ${searchLabel} near`));
+            if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+            else updated.push({ role: "ai", text: reply });
+            return updated;
+          });
+        };
+
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => updateChat(await handleResults(pos.coords.latitude, pos.coords.longitude, "your location")),
+            async () => updateChat(await handleResults(null, null, fallbackLoc)),
+            { enableHighAccuracy: false, timeout: 8000 }
+          );
+        } else {
+          handleResults(null, null, fallbackLoc).then(updateChat);
+        }
+        return;
+      }
+
+      // ── Claude API for all other queries (with GPS context when available) ──
+      const getGpsContext = () => new Promise((resolve) => {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: false, timeout: 5000 }
+          );
+        } else resolve(null);
+      });
+
       try {
+        const gps = isPlaceSearch ? await getGpsContext() : null;
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -4052,6 +4109,7 @@ export default function TripWithMeApp() {
               stays: TRIP.stays,
               currentDay: selectedDay,
               currentLocation: DAYS[selectedDay - 1]?.location,
+              ...(gps ? { gpsLocation: gps } : {}),
             },
             chatHistory: chatMessages.slice(-8),
           }),
