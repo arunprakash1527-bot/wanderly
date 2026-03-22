@@ -5220,9 +5220,9 @@ export default function TripWithMeApp() {
               <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 {/* Add Expense Modal */}
                 {showAddExpense && (
-                  <div style={{ position: "absolute", inset: 0, zIndex: 100, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+                  <div style={{ position: "absolute", inset: 0, zIndex: 100, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "20px 0" }}
                     onClick={(e) => { if (e.target === e.currentTarget) resetExpenseForm(); }}>
-                    <div style={{ background: T.bg, borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto", padding: "20px 20px 30px" }}>
+                    <div style={{ background: T.bg, borderRadius: 20, width: "calc(100% - 32px)", maxWidth: 480, padding: "20px 20px 30px", margin: "auto 0" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                         <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{editingExpense ? "Edit Expense" : "Add Expense"}</h3>
                         <button onClick={resetExpenseForm} style={{ ...css.btn, ...css.btnSm, fontSize: 18, padding: "2px 8px" }}>&times;</button>
