@@ -153,7 +153,7 @@ const MEMORIES = [
 const css = {
   btn: { display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: T.rs, border: `.5px solid ${T.border}`, background: T.s, fontFamily: T.font, fontSize: 13, cursor: "pointer", color: T.t1, transition: "all .15s", fontWeight: 500, outline: "none", minHeight: 44 },
   btnP: { background: T.a, color: "#fff", borderColor: T.ad },
-  btnSm: { padding: "8px 16px", fontSize: 12, minHeight: 40 },
+  btnSm: { padding: "6px 14px", fontSize: 12, minHeight: 36 },
   chip: { padding: "8px 16px", borderRadius: 24, fontSize: 12, border: `.5px solid ${T.border}`, background: T.s, cursor: "pointer", transition: "all .15s", userSelect: "none", fontFamily: T.font, minHeight: 40 },
   chipActive: { background: T.al, borderColor: T.a, color: T.ad },
   card: { background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 8, boxShadow: T.shadow, transition: "all .2s" },
@@ -2755,8 +2755,9 @@ export default function TripWithMeApp() {
               {trip.budget && <Tag bg={T.greenL} color={T.green}>{trip.budget}</Tag>}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {trip.status !== "live" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>🚀 Activate trip</button>}
-              <button onClick={e => { e.stopPropagation(); deleteCreatedTrip(trip.id); }} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.red }}>Remove</button>
+              {trip.status !== "live" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 12 }}>Activate trip</button>}
+              <button onClick={e => { e.stopPropagation(); if (window.confirm(`Remove "${trip.name}"? This cannot be undone.`)) deleteCreatedTrip(trip.id); }}
+                style={{ ...css.btn, ...css.btnSm, fontSize: 12, color: T.red, borderColor: "rgba(200,50,50,.2)" }}>Remove</button>
             </div>
           </div>
         ))}
@@ -3568,7 +3569,7 @@ export default function TripWithMeApp() {
               <h1 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginBottom: 2 }}>{TRIP.name}</h1>
               <p style={{ fontSize: 13, opacity: 0.8 }}>{TRIP.start} - {TRIP.end} {TRIP.year}</p>
             </div>
-            <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.15)", borderColor: "rgba(255,255,255,.25)", color: "#fff" }} onClick={() => navigate("home")}>Back</button>
+            <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.18)", borderColor: "rgba(255,255,255,.3)", color: "#fff", fontSize: 12, fontWeight: 500 }} onClick={() => navigate("home")}>← Back</button>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             {[["Day", `${day.day} of 5`], ["Location", day.location], ["Weather", `${day.weather.temp}°C ${day.weather.icon}`]].map(([l, v]) => (
@@ -4684,10 +4685,13 @@ export default function TripWithMeApp() {
         {/* ── Header ── */}
         <div style={{ background: isLive ? T.ad : T.blue, color: "#fff", padding: "16px 20px 12px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.15)", borderColor: "rgba(255,255,255,.25)", color: "#fff" }} onClick={() => navigate("home")}>← Back</button>
+            <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.18)", borderColor: "rgba(255,255,255,.3)", color: "#fff", fontSize: 12, fontWeight: 500 }} onClick={() => navigate("home")}>← Back</button>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              {isLive ? <Tag bg="rgba(255,255,255,0.2)" color="#fff">Live</Tag> : <Tag bg="rgba(255,255,255,0.2)" color="#fff">New</Tag>}
-              <button onClick={editTrip} style={{ ...css.btn, ...css.btnSm, color: "#fff", opacity: 0.8, fontSize: 11, background: "rgba(255,255,255,.1)", borderColor: "rgba(255,255,255,.2)" }}>✏️ Edit</button>
+              {isLive
+                ? <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(255,255,255,.22)", color: "#fff", padding: "3px 10px", borderRadius: 12, letterSpacing: 0.5, textTransform: "uppercase" }}>● Live</span>
+                : <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(255,255,255,.22)", color: "#fff", padding: "3px 10px", borderRadius: 12, letterSpacing: 0.5, textTransform: "uppercase" }}>Draft</span>
+              }
+              <button onClick={editTrip} style={{ ...css.btn, ...css.btnSm, color: "#fff", fontSize: 12, fontWeight: 500, background: "rgba(255,255,255,.18)", borderColor: "rgba(255,255,255,.3)" }}>Edit</button>
             </div>
           </div>
           <h2 style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400 }}>{trip.name}</h2>
@@ -4700,11 +4704,11 @@ export default function TripWithMeApp() {
         {/* ── Not live: activation CTA ── */}
         {!isLive && (
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-            <div style={{ ...css.card, background: T.al, borderColor: T.a, marginBottom: 16, textAlign: "center", padding: "24px 16px" }}>
+            <div style={{ ...css.card, background: T.al, borderColor: T.a, marginBottom: 16, textAlign: "center", padding: "24px 20px" }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🚀</div>
-              <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: T.ad }}>Ready to go live?</h3>
-              <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Trip With Me will ask a few questions, then generate your day-by-day itinerary.</p>
-              <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, justifyContent: "center", width: "100%", padding: "12px 16px", fontSize: 14 }}>🚀 Activate trip</button>
+              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: T.ad }}>Ready to go live?</h3>
+              <p style={{ fontSize: 12, color: T.t2, marginBottom: 16, lineHeight: 1.5 }}>Trip With Me will generate your day-by-day itinerary based on your places, stays, and preferences.</p>
+              <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, justifyContent: "center", width: "100%", padding: "14px 16px", fontSize: 15, fontWeight: 600, borderRadius: T.r, boxShadow: "0 2px 8px rgba(27,143,106,.25)" }}>Activate trip</button>
             </div>
 
             {/* Details preview for non-live */}
@@ -4717,7 +4721,8 @@ export default function TripWithMeApp() {
               </div>
             </Collapsible>
 
-            <button onClick={() => { deleteCreatedTrip(trip.id); navigate("home"); }} style={{ ...css.btn, ...css.btnSm, color: T.red, marginTop: 12, fontSize: 11, justifyContent: "center", width: "100%" }}>Remove trip</button>
+            <button onClick={() => { if (window.confirm(`Are you sure you want to remove "${trip.name}"? This cannot be undone.`)) { deleteCreatedTrip(trip.id); navigate("home"); } }}
+              style={{ ...css.btn, ...css.btnSm, color: T.red, borderColor: "rgba(200,50,50,.2)", background: "rgba(200,50,50,.04)", marginTop: 16, fontSize: 12, justifyContent: "center", width: "100%" }}>Remove trip</button>
           </div>
         )}
 
@@ -5303,8 +5308,8 @@ export default function TripWithMeApp() {
                   </div>
                 </div>
 
-                <button onClick={() => { deleteCreatedTrip(trip.id); navigate("home"); }}
-                  style={{ ...css.btn, ...css.btnSm, color: T.red, fontSize: 11, justifyContent: "center", width: "100%", padding: "8px 16px" }}>Remove trip</button>
+                <button onClick={() => { if (window.confirm(`Are you sure you want to remove "${trip.name}"? This cannot be undone.`)) { deleteCreatedTrip(trip.id); navigate("home"); } }}
+                  style={{ ...css.btn, ...css.btnSm, color: T.red, borderColor: "rgba(200,50,50,.2)", background: "rgba(200,50,50,.04)", fontSize: 12, justifyContent: "center", width: "100%", marginTop: 16 }}>Remove trip</button>
               </div>
             )}
           </>
