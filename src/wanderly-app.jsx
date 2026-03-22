@@ -776,6 +776,7 @@ export default function TripWithMeApp() {
   const [photos, setPhotos] = useState(MEMORIES);
   const [videoState, setVideoState] = useState("idle");
   const [chatMessages, setChatMessages] = useState([]);
+  const [chatAddDayPicker, setChatAddDayPicker] = useState(null);
   const [chatDayInit, setChatDayInit] = useState(null);
   const [bookingStates, setBookingStates] = useState({});
   const chatRef = useRef(null);
@@ -925,7 +926,7 @@ export default function TripWithMeApp() {
               olderKids: (data.trip_travellers || []).filter(tr => tr.role === 'child_older').map(tr => ({ name: tr.name, age: tr.age || 10, dbId: tr.id })),
               youngerKids: (data.trip_travellers || []).filter(tr => tr.role === 'child_younger').map(tr => ({ name: tr.name, age: tr.age || 5, dbId: tr.id })),
             },
-            stays: (data.trip_stays || []).map(s => ({ name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, checkIn: s.check_in, checkOut: s.check_out, dbId: s.id })),
+            stays: (data.trip_stays || []).map(s => ({ name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, checkIn: s.check_in, checkOut: s.check_out, cost: s.cost ? String(s.cost) : "", bookingRef: s.booking_ref || "", address: s.address || "", dbId: s.id })),
             stayNames: (data.trip_stays || []).map(s => s.name),
             prefs: data.trip_preferences?.[0] ? {
               food: data.trip_preferences[0].food_prefs || [], adultActs: data.trip_preferences[0].adult_activities || [],
@@ -1251,7 +1252,7 @@ export default function TripWithMeApp() {
             })),
           },
           stays: (t.trip_stays || []).map(s => ({
-            name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, dbId: s.id
+            name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, checkIn: s.check_in, checkOut: s.check_out, cost: s.cost ? String(s.cost) : "", bookingRef: s.booking_ref || "", address: s.address || "", dbId: s.id
           })),
           stayNames: (t.trip_stays || []).map(s => s.name),
           prefs: t.trip_preferences && t.trip_preferences.length > 0 ? {
@@ -1344,6 +1345,11 @@ export default function TripWithMeApp() {
           rating: s.rating,
           price: s.price,
           location: s.location,
+          check_in: s.checkIn || null,
+          check_out: s.checkOut || null,
+          cost: s.cost ? parseFloat(s.cost) : null,
+          booking_ref: s.bookingRef || null,
+          address: s.address || null,
         }));
         await supabase.from('trip_stays').insert(stayRows);
       }
@@ -5016,23 +5022,41 @@ export default function TripWithMeApp() {
                         dangerouslySetInnerHTML={{ __html: renderChatHtml(msg.text, msg.role === "user" ? "#fff" : T.a) }} />
                       {/* Action buttons for AI suggestions */}
                       {actionItems.length > 0 && (
-                        <div style={{ maxWidth: "85%", display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                          {actionItems.map((item, j) => (
-                            <button key={j} onClick={() => {
-                              const curLoc = trip.places?.[(selectedDay - 1) % (trip.places?.length || 1)] || "your destination";
-                              const newItem = { time: "12:00 PM", title: item, desc: `${curLoc} \u00B7 Added from chat`, group: "Everyone", color: T.blue };
-                              setCreatedTrips(prev => prev.map(t => {
-                                if (t.id !== trip.id) return t;
-                                const tl = t.timeline || {};
-                                return { ...t, timeline: { ...tl, [selectedDay]: [...(tl[selectedDay] || []), newItem] } };
-                              }));
-                              showToast(`Added "${item}" to Day ${selectedDay}`);
-                            }}
-                              className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 8px", borderRadius: 12,
-                                color: T.a, background: T.al, borderColor: T.a }}>
-                              + Day {selectedDay}: {item.length > 20 ? item.slice(0, 20) + "\u2026" : item}
-                            </button>
-                          ))}
+                        <div style={{ maxWidth: "85%", display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4, position: "relative" }}>
+                          {actionItems.map((item, j) => {
+                            const pickerOpen = chatAddDayPicker?.msgIdx === i && chatAddDayPicker?.itemIdx === j;
+                            const tripDays = trip.start && trip.end ? Math.max(1, Math.ceil((new Date(trip.end) - new Date(trip.start)) / 86400000) + 1) : Object.keys(trip.timeline || {}).length || 5;
+                            return (
+                              <div key={j} style={{ position: "relative" }}>
+                                <button onClick={() => setChatAddDayPicker(pickerOpen ? null : { msgIdx: i, itemIdx: j })}
+                                  className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 8px", borderRadius: 12,
+                                    color: T.a, background: T.al, borderColor: T.a }}>
+                                  + {item.length > 22 ? item.slice(0, 22) + "\u2026" : item}
+                                </button>
+                                {pickerOpen && (
+                                  <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: T.bg, border: `.5px solid ${T.border}`, borderRadius: 10, padding: 4, marginTop: 4, boxShadow: "0 4px 12px rgba(0,0,0,.12)", display: "flex", flexWrap: "wrap", gap: 3, minWidth: 140 }}>
+                                    {Array.from({ length: tripDays }, (_, d) => d + 1).map(day => (
+                                      <button key={day} onClick={() => {
+                                        const curLoc = trip.places?.[(day - 1) % (trip.places?.length || 1)] || "your destination";
+                                        const newItem = { time: "12:00 PM", title: item, desc: `${curLoc} \u00B7 Added from chat`, group: "Everyone", color: T.blue };
+                                        setCreatedTrips(prev => prev.map(t => {
+                                          if (t.id !== trip.id) return t;
+                                          const tl = t.timeline || {};
+                                          return { ...t, timeline: { ...tl, [day]: [...(tl[day] || []), newItem] } };
+                                        }));
+                                        showToast(`Added "${item}" to Day ${day}`);
+                                        setChatAddDayPicker(null);
+                                      }}
+                                        style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+                                          background: day === selectedDay ? T.a : T.s2, color: day === selectedDay ? "#fff" : T.t1, border: `.5px solid ${day === selectedDay ? T.ad : T.border}` }}>
+                                        Day {day}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
