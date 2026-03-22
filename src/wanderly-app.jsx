@@ -5159,9 +5159,16 @@ export default function TripWithMeApp() {
             {/* ── EXPENSES TAB ── */}
             {tripDetailTab === "expenses" && (() => {
               const adults = (trip.travellers?.adults || []).map(a => a.name).filter(Boolean);
-              const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
-              const catBreakdown = getCategoryBreakdown(expenses);
-              const settlements = calculateSettlement(expenses);
+              // Include accommodation costs from stays
+              const stayCosts = (trip.stays || []).filter(s => s.cost && parseFloat(s.cost) > 0).map(s => ({
+                id: `stay-${s.name}`, description: s.name || "Accommodation", amount: parseFloat(s.cost),
+                category: "accommodation", paid_by: adults[0] || "You", isStay: true,
+                splits: adults.map(name => ({ participant_name: name, share_amount: Math.round(parseFloat(s.cost) / adults.length * 100) / 100 })),
+              }));
+              const allExpenses = [...stayCosts, ...expenses];
+              const totalSpent = allExpenses.reduce((s, e) => s + e.amount, 0);
+              const catBreakdown = getCategoryBreakdown(allExpenses);
+              const settlements = calculateSettlement(allExpenses);
 
               const openAddExpense = (existingExpense) => {
                 if (existingExpense) {
@@ -5328,7 +5335,7 @@ export default function TripWithMeApp() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <div>
                       <p style={{ fontSize: 22, fontWeight: 700, fontFamily: T.fontD, color: T.t1 }}>{"£"}{totalSpent.toFixed(2)}</p>
-                      <p style={{ fontSize: 11, color: T.t3 }}>total spent{expenses.length > 0 ? ` \u00B7 ${expenses.length} expense${expenses.length !== 1 ? "s" : ""}` : ""}</p>
+                      <p style={{ fontSize: 11, color: T.t3 }}>total spent{allExpenses.length > 0 ? ` \u00B7 ${allExpenses.length} item${allExpenses.length !== 1 ? "s" : ""}${stayCosts.length > 0 ? ` (incl. ${stayCosts.length} stay${stayCosts.length > 1 ? "s" : ""})` : ""}` : ""}</p>
                     </div>
                     <button onClick={() => openAddExpense()} style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 12, fontWeight: 600 }}>
                       + Add
@@ -5384,13 +5391,33 @@ export default function TripWithMeApp() {
                     </div>
                   )}
 
+                  {/* Accommodation costs from stays */}
+                  {stayCosts.length > 0 && (
+                    <div className="w-card" style={{ ...css.card, marginBottom: 16, padding: 14, borderColor: T.amber }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>🏨 Accommodation Costs</p>
+                      {stayCosts.map((sc, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < stayCosts.length - 1 ? `.5px solid ${T.border}` : "none" }}>
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 500 }}>{sc.description}</p>
+                            <p style={{ fontSize: 10, color: T.t3 }}>Split equally · {adults.length} people · £{(sc.amount / adults.length).toFixed(2)} each</p>
+                          </div>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: T.amber }}>£{sc.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <p style={{ fontSize: 10, color: T.t3, marginTop: 6, fontStyle: "italic" }}>Auto-added from accommodation details</p>
+                    </div>
+                  )}
+
                   {/* Expense list */}
-                  {expenses.length === 0 && (
+                  {expenses.length === 0 && stayCosts.length === 0 && (
                     <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
                       <div style={{ fontSize: 36, marginBottom: 8 }}>{"💷"}</div>
                       <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>No expenses yet</p>
                       <p style={{ fontSize: 12, lineHeight: 1.5 }}>Tap <b>+ Add</b> to log group expenses and track who owes what.</p>
                     </div>
+                  )}
+                  {expenses.length === 0 && stayCosts.length > 0 && (
+                    <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: "12px 0" }}>No additional expenses logged yet. Tap <b>+ Add</b> to log meals, activities, and more.</p>
                   )}
                   {expenses.map((exp, i) => {
                     const cat = getCatInfo(exp.category);
