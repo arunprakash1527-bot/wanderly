@@ -4802,13 +4802,76 @@ export default function TripWithMeApp() {
                           onDirectionsLoaded={setTripDirections}
                           travelMode={trip.travel?.[0] || trip.travel?.values?.().next?.().value || ""}
                         />
-                        {tripDirections && (
-                          <div style={{ display: "flex", gap: 12, justifyContent: "center", padding: "8px 0 4px", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 11, color: T.t2 }}>{(() => { const m = (trip.travel?.[0] || "").toLowerCase(); if (/train|transit/.test(m)) return "🚂"; if (/walk/.test(m)) return "🚶"; if (/bicy|bike/.test(m)) return "🚴"; if (/flight|fly/.test(m)) return "✈️"; if (/ev/i.test(m)) return "⚡🚗"; return "🚗"; })()} <b>{tripDirections.totalDistance}</b></span>
-                            <span style={{ fontSize: 11, color: T.t2 }}>⏱️ <b>{tripDirections.totalDuration}</b></span>
-                            {tripDirections.legs?.length > 1 && <span style={{ fontSize: 11, color: T.t3 }}>{tripDirections.legs.length} legs</span>}
-                          </div>
-                        )}
+                        {tripDirections && (() => {
+                          const travelIcon = (() => { const m = (trip.travel?.[0] || "").toLowerCase(); if (/train|transit/.test(m)) return "🚂"; if (/walk/.test(m)) return "🚶"; if (/bicy|bike/.test(m)) return "🚴"; if (/flight|fly/.test(m)) return "✈️"; if (/ev/i.test(m)) return "⚡🚗"; return "🚗"; })();
+                          const legs = tripDirections.legs || [];
+                          const nDays = numDays || legs.length || 1;
+
+                          // Map legs to days: spread legs evenly across trip days
+                          // If more days than legs, some days have no driving
+                          // If more legs than days, group legs into days
+                          const getDayLegs = () => {
+                            if (legs.length === 0) return [];
+                            if (legs.length <= nDays) {
+                              // Assign one leg per travel day: Day 1 = leg 0, Day 2 = leg 1, etc.
+                              // But first day might be travel to first stop, last leg is return
+                              const legIdx = selectedDay - 1;
+                              if (legIdx < legs.length) return [legs[legIdx]];
+                              return []; // Rest day — no driving
+                            }
+                            // More legs than days — divide evenly
+                            const legsPerDay = Math.ceil(legs.length / nDays);
+                            const startIdx = (selectedDay - 1) * legsPerDay;
+                            return legs.slice(startIdx, startIdx + legsPerDay);
+                          };
+
+                          const dayLegs = getDayLegs();
+                          const hasDayDriving = dayLegs.length > 0;
+
+                          // Parse distance/duration text to numbers for day totals
+                          const parseMiles = (text) => { const m = text?.match(/([\d,.]+)\s*mi/); return m ? parseFloat(m[1].replace(",", "")) : 0; };
+                          const parseDuration = (text) => {
+                            const hrs = text?.match(/(\d+)\s*hr/); const mins = text?.match(/(\d+)\s*min/);
+                            return (hrs ? parseInt(hrs[1]) * 60 : 0) + (mins ? parseInt(mins[1]) : 0);
+                          };
+                          const fmtDuration = (totalMins) => {
+                            const h = Math.floor(totalMins / 60), m = totalMins % 60;
+                            return h > 0 ? `${h} hr ${m} min` : `${m} min`;
+                          };
+
+                          const dayDist = dayLegs.reduce((s, l) => s + parseMiles(l.distance), 0);
+                          const dayDur = dayLegs.reduce((s, l) => s + parseDuration(l.duration), 0);
+                          const dayRoute = dayLegs.length > 0 ? `${dayLegs[0].start.split(",")[0]} → ${dayLegs[dayLegs.length - 1].end.split(",")[0]}` : "";
+
+                          return (
+                            <div style={{ padding: "6px 0 2px" }}>
+                              {hasDayDriving ? (
+                                <div style={{ textAlign: "center" }}>
+                                  <p style={{ fontSize: 10, color: T.t3, marginBottom: 4, fontWeight: 500 }}>Day {selectedDay} driving</p>
+                                  <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                                    <span style={{ fontSize: 11, color: T.t2 }}>{travelIcon} <b>{dayDist.toFixed(1)} mi</b></span>
+                                    <span style={{ fontSize: 11, color: T.t2 }}>⏱️ <b>{fmtDuration(dayDur)}</b></span>
+                                  </div>
+                                  <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{dayRoute}</p>
+                                </div>
+                              ) : (
+                                <p style={{ fontSize: 10, color: T.t3, textAlign: "center" }}>No driving today — rest & explore</p>
+                              )}
+                              <details style={{ textAlign: "center", marginTop: 4 }}>
+                                <summary style={{ fontSize: 10, color: T.t3, cursor: "pointer", listStyle: "none" }}>
+                                  <span style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>Full trip: {tripDirections.totalDistance} · {tripDirections.totalDuration}</span>
+                                </summary>
+                                <div style={{ display: "flex", gap: 8, justifyContent: "center", padding: "4px 0", flexWrap: "wrap" }}>
+                                  {legs.map((l, i) => (
+                                    <span key={i} style={{ fontSize: 9, color: i === selectedDay - 1 ? T.a : T.t3, fontWeight: i === selectedDay - 1 ? 600 : 400 }}>
+                                      Leg {i + 1}: {l.distance}
+                                    </span>
+                                  ))}
+                                </div>
+                              </details>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                     {!showMap && trip.places?.length > 0 && (
