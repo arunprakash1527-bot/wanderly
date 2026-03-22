@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from '@supabase/supabase-js';
 
-// ─── Supabase Client (inline to avoid module init issues) ───
+// ─── Supabase Client ───
 const supabase = createClient(
-  'https://bwahdnkptexvvsoofidg.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3YWhkbmtwdGV4dnZzb29maWRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NjMyNTgsImV4cCI6MjA4OTQzOTI1OH0.0XeadG7jWY3_n39SUfI0zImB4NUKK1RLo37gYrGONGs'
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
 // ─── Design Tokens ───
@@ -289,7 +289,102 @@ function getRegion(places) {
   if (/bangkok|thailand|phuket|chiang mai/.test(all)) return "thailand";
   if (/bali|indonesia|jakarta/.test(all)) return "indonesia";
   if (/maldives/.test(all)) return "maldives";
+  if (/edinburgh|glasgow|inverness|aberdeen|isle of skye|skye|highlands|loch ness|stirling|dundee|fort william|oban|st andrews/.test(all)) return "scotland";
+  if (/london|manchester|birmingham|liverpool|bristol|oxford|cambridge|york|bath|brighton|cornwall|lake district|cotswolds|leeds|newcastle|nottingham|sheffield/.test(all)) return "england";
   return "uk";
+}
+
+// ─── Travel Time Estimates (driving hours between common UK/EU city pairs) ───
+const TRAVEL_TIMES = {
+  // UK driving times (hours) — keys are "from|to" lowercase, sorted alphabetically
+  "london|edinburgh": 7, "london|manchester": 4, "london|birmingham": 2.5, "london|glasgow": 7,
+  "london|liverpool": 4.5, "london|bristol": 2, "london|york": 3.5, "london|bath": 2.5,
+  "london|oxford": 1.5, "london|cambridge": 1.5, "london|brighton": 1.5, "london|cornwall": 5,
+  "london|lake district": 5, "london|inverness": 9, "london|isle of skye": 10.5,
+  "manchester|edinburgh": 3.5, "manchester|glasgow": 3.5, "manchester|liverpool": 1,
+  "manchester|birmingham": 1.5, "manchester|lake district": 1.5, "manchester|york": 1.5,
+  "manchester|inverness": 6.5, "manchester|isle of skye": 8,
+  "edinburgh|glasgow": 1, "edinburgh|inverness": 3, "edinburgh|isle of skye": 5,
+  "edinburgh|aberdeen": 2.5, "edinburgh|st andrews": 1.5, "edinburgh|stirling": 1,
+  "edinburgh|fort william": 3, "edinburgh|oban": 3, "edinburgh|dundee": 1.5,
+  "edinburgh|loch ness": 3.5, "edinburgh|york": 4, "edinburgh|lake district": 3,
+  "glasgow|inverness": 3.5, "glasgow|isle of skye": 5, "glasgow|oban": 2.5,
+  "glasgow|fort william": 2.5, "glasgow|aberdeen": 2.5, "glasgow|stirling": 0.75,
+  "inverness|isle of skye": 2.5, "inverness|fort william": 1.5, "inverness|loch ness": 0.5,
+  "inverness|aberdeen": 2.5, "inverness|oban": 3,
+  "birmingham|manchester": 1.5, "birmingham|bristol": 1.5, "birmingham|liverpool": 1.5,
+  "birmingham|york": 2.5, "birmingham|oxford": 1, "birmingham|cambridge": 2,
+  "liverpool|manchester": 1, "liverpool|lake district": 1.5, "liverpool|york": 2,
+  "bristol|bath": 0.25, "bristol|cornwall": 3, "bristol|oxford": 1.5,
+  "york|lake district": 2, "york|newcastle": 1.5, "york|leeds": 0.75,
+  // EU common routes
+  "paris|lyon": 4.5, "paris|nice": 8, "paris|marseille": 7.5, "paris|bordeaux": 6,
+  "rome|florence": 3, "rome|naples": 2.5, "rome|venice": 5, "rome|milan": 5.5,
+  "florence|venice": 2.5, "florence|milan": 3, "florence|pisa": 1.5,
+  "barcelona|madrid": 6, "barcelona|valencia": 3.5, "barcelona|seville": 10,
+  "madrid|seville": 5.5, "madrid|valencia": 3.5,
+  "amsterdam|brussels": 2, "amsterdam|paris": 5, "amsterdam|berlin": 6.5,
+  "berlin|munich": 6, "berlin|hamburg": 3, "berlin|prague": 3.5,
+  "munich|vienna": 4, "munich|zurich": 3.5, "munich|salzburg": 1.5,
+  "zurich|geneva": 3, "zurich|milan": 3.5,
+};
+
+function estimateTravelHours(from, to) {
+  if (!from || !to) return 2;
+  const a = from.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  const b = to.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  if (a === b) return 0;
+  // Try direct lookup both ways
+  const key1 = `${a}|${b}`, key2 = `${b}|${a}`;
+  if (TRAVEL_TIMES[key1]) return TRAVEL_TIMES[key1];
+  if (TRAVEL_TIMES[key2]) return TRAVEL_TIMES[key2];
+  // Try partial match (e.g. "AL7 3FD" won't match, but "london" in key might)
+  for (const [k, v] of Object.entries(TRAVEL_TIMES)) {
+    const [ka, kb] = k.split("|");
+    if ((a.includes(ka) || ka.includes(a)) && (b.includes(kb) || kb.includes(b))) return v;
+    if ((a.includes(kb) || kb.includes(a)) && (b.includes(ka) || ka.includes(b))) return v;
+  }
+  // Fallback: estimate from UK postcode → assume southern/central England, rough distances
+  const isPostcode = /^[a-z]{1,2}\d/.test(a) || /^[a-z]{1,2}\d/.test(b);
+  if (isPostcode) {
+    // Check if destination is in Scotland/North
+    const scottish = /edinburgh|glasgow|inverness|aberdeen|dundee|stirling|fort william|oban|isle of skye|skye|loch ness|highlands|st andrews/;
+    const northern = /manchester|liverpool|leeds|york|newcastle|lake district|sheffield/;
+    const midlands = /birmingham|nottingham|leicester|coventry/;
+    const dest = scottish.test(b) ? 7 : northern.test(b) ? 4 : midlands.test(b) ? 2.5 : scottish.test(a) ? 7 : northern.test(a) ? 4 : midlands.test(a) ? 2.5 : 3;
+    return dest;
+  }
+  return 3; // generic fallback
+}
+
+// ─── Location-specific activity pools ───
+const LOCATION_ACTIVITIES = {
+  edinburgh: { morning: ["Royal Mile walking tour", "Edinburgh Castle visit", "Arthur's Seat hike", "Holyrood Palace tour", "Scottish National Museum"], afternoon: ["Grassmarket & Victoria St stroll", "Calton Hill viewpoint", "Dean Village walk", "Camera Obscura", "Princes Street Gardens"], dinner: ["Haggis & whisky tasting at The Witchery", "Scottish seafood at Ondine", "Gastropub on Royal Mile", "Fine dining on George Street", "Cosy pub with live folk music"], kids: ["Edinburgh Zoo — pandas & penguins", "Dynamic Earth — interactive science", "Camera Obscura & World of Illusions", "Royal Mile treasure hunt", "Princes Street Gardens playground"] },
+  glasgow: { morning: ["Kelvingrove Art Gallery", "Glasgow Cathedral visit", "Riverside Museum", "George Square walking tour", "Buchanan Street shopping"], afternoon: ["West End & Ashton Lane", "Botanic Gardens", "Street art tour", "The Necropolis walk", "Science Centre"], dinner: ["Italian on Byres Road", "Merchant City gastropub", "Finnieston seafood restaurant", "Curry Mile on Gibson Street", "Rooftop bar & dinner"], kids: ["Glasgow Science Centre — hands-on exhibits", "Riverside Museum — ship & transport play", "Kelvingrove Museum dinosaur gallery", "Botanic Gardens & Kibble Palace", "Victoria Park splash play"] },
+  inverness: { morning: ["Loch Ness boat cruise", "Urquhart Castle ruins", "Culloden Battlefield visit", "Inverness Castle viewpoint", "Ness Islands walk"], afternoon: ["Dolphin watching at Chanonry Point", "Cawdor Castle & gardens", "Highland wildlife safari", "Clava Cairns ancient site", "Victorian Market browsing"], dinner: ["Scottish seafood on the riverside", "Highland game restaurant", "Traditional inn with real ales", "Whisky tasting dinner", "Farm-to-table bistro"], kids: ["Loch Ness Exhibition Centre", "Highland Wildlife Park — wolves & polar bears", "Nairn beach & East Beach playground", "Ness Islands wobbly bridges walk", "Chanonry Point dolphin spotting"] },
+  "isle of skye": { morning: ["Old Man of Storr hike", "Fairy Pools walk", "Dunvegan Castle visit", "Quiraing ridge walk", "Neist Point lighthouse"], afternoon: ["Talisker Distillery tour", "Fairy Glen exploration", "Portree harbour & coloured houses", "Dinosaur footprints at An Corran", "Sligachan Bridge & Cuillin views"], dinner: ["Fresh seafood at Scorrybreac, Portree", "Oyster shed at Carbost", "Highland venison at Dulse & Brose", "Cosy B&B supper", "Fish & chips at The Chippy, Portree"], kids: ["Dinosaur footprints at An Corran beach", "Fairy Glen magical landscape walk", "Fairy Pools paddling & rock hopping", "Portree harbour coloured houses walk", "Wildlife spotting — eagles & seals"] },
+  "loch ness": { morning: ["Loch Ness boat cruise", "Urquhart Castle visit", "Great Glen Way walk", "Drumnadrochit exhibition"], afternoon: ["Falls of Foyers walk", "Fort Augustus locks & canal", "Loch Ness Centre visit", "South Loch Ness trail"], dinner: ["Lochside pub dinner", "Scottish lamb at local inn", "Whisky & haggis evening", "Cosy Highland restaurant"], kids: ["Loch Ness Centre — Nessie exhibition", "Fort Augustus canal locks exploration", "Urquhart Castle ruins adventure", "Falls of Foyers short walk"] },
+  london: { morning: ["Tower of London visit", "British Museum tour", "Buckingham Palace & St James's Park", "Borough Market food tour", "Westminster walking tour"], afternoon: ["South Bank & Tate Modern", "Camden Market & Regent's Canal", "Covent Garden & West End", "Hyde Park & Kensington Gardens", "Greenwich & Cutty Sark"], dinner: ["Soho restaurant district", "Brick Lane curry house", "Rooftop dining with city views", "Thames-side gastropub", "Chinatown feast"], kids: ["Natural History Museum — dinosaurs", "Science Museum — interactive galleries", "London Zoo in Regent's Park", "Diana Memorial Playground, Kensington", "HMS Belfast & Tower Bridge"] },
+  manchester: { morning: ["Manchester Art Gallery", "John Rylands Library", "Northern Quarter walk", "Science & Industry Museum", "Old Trafford tour"], afternoon: ["Canal Street & Gay Village", "Chetham's Library", "Ancoats coffee & street art", "Piccadilly Gardens & shopping", "Media City & The Lowry"], dinner: ["Curry Mile on Wilmslow Road", "Northern Quarter craft beer & pizza", "Spinningfields fine dining", "Traditional pub supper", "Deansgate bar & grill"], kids: ["Science & Industry Museum — hands-on", "LEGOLAND Discovery Centre", "Chill Factore — indoor snow slope", "Old Trafford stadium tour", "Heaton Park playground & tram museum"] },
+  york: { morning: ["York Minster visit", "Shambles walking tour", "Clifford's Tower", "JORVIK Viking Centre", "City walls walk"], afternoon: ["Betty's Tea Room", "National Railway Museum", "York Chocolate Story", "Merchant Adventurers' Hall", "River Ouse boat cruise"], dinner: ["Medieval banquet experience", "Riverside gastropub", "Yorkshire pudding wrap", "Fine dining on Fossgate", "Traditional ale house"], kids: ["JORVIK Viking Centre — interactive", "National Railway Museum — trains", "York Chocolate Story — make your own", "York Dungeon — spooky history", "Rowntree Park adventure playground"] },
+  bath: { morning: ["Roman Baths visit", "Royal Crescent & Circus walk", "Thermae Bath Spa", "Bath Abbey tour", "Pulteney Bridge & weir"], afternoon: ["Prior Park landscape garden", "Jane Austen Centre", "Bath Skyline walk", "Artisan market browsing", "Assembly Rooms & Fashion Museum"], dinner: ["Georgian-era restaurant", "Bath ale house", "Sally Lunn's historic eating house", "Fine dining on Milsom Street", "Canal-side pub"], kids: ["Roman Baths — audio trail for kids", "Victoria Park adventure playground", "Bath Skyline easy loop walk", "Alice Park paddling pool", "Bath Boating Station rowing"] },
+  "lake district": { morning: ["Windermere boat cruise", "Helvellyn summit hike", "Castlerigg Stone Circle", "Beatrix Potter's Hill Top", "Aira Force waterfall walk"], afternoon: ["Grasmere gingerbread & Wordsworth's Dove Cottage", "Keswick pencil museum", "Ambleside village stroll", "Tarn Hows circular walk", "Honister Slate Mine"], dinner: ["Lakeside inn with fell views", "Cumberland sausage pub dinner", "Ambleside gastropub", "Farm-to-fork restaurant", "Cosy fireside supper"], kids: ["Windermere boat cruise & islands", "Beatrix Potter World, Bowness", "Brockhole adventure playground & zip wire", "Wray Castle — National Trust explorer trail", "Keswick pencil museum & craft workshop"] },
+  cornwall: { morning: ["St Ives beaches & galleries", "Eden Project visit", "Tintagel Castle ruins", "Land's End walk", "Minack Theatre cliffside"], afternoon: ["Padstow harbour & Rick Stein's", "Coastal path walk", "Falmouth maritime museum", "St Michael's Mount", "Cream tea at a harbour café"], dinner: ["Cornish pasty & seafood", "Fish & chips by the harbour", "Seafood restaurant Padstow", "Pub with sea views", "Cream tea & supper"], kids: ["Eden Project — rainforest biome", "Flambards theme park", "Newquay Zoo", "Rock pool exploring at low tide", "Lappa Valley steam railway"] },
+  paris: { morning: ["Eiffel Tower & Champ de Mars", "Louvre Museum visit", "Montmartre & Sacré-Cœur", "Notre-Dame & Île de la Cité", "Musée d'Orsay"], afternoon: ["Seine river cruise", "Le Marais walk", "Luxembourg Gardens", "Champs-Élysées & Arc de Triomphe", "Saint-Germain-des-Prés cafés"], dinner: ["Bistro in Le Marais", "Michelin-starred tasting menu", "Crêperie in Montparnasse", "Wine bar & charcuterie", "Brasserie on Boulevard Saint-Germain"], kids: ["Jardin du Luxembourg puppet show & boats", "Cité des Sciences — interactive museum", "Disneyland Paris (day trip)", "Seine river cruise — open-top boat", "Jardin d'Acclimatation fun park"] },
+  rome: { morning: ["Colosseum & Roman Forum", "Vatican Museums & Sistine Chapel", "Trevi Fountain & Pantheon", "Spanish Steps walking tour", "Borghese Gallery"], afternoon: ["Trastevere neighbourhood walk", "Villa Borghese gardens", "Appian Way & catacombs", "Piazza Navona & gelato", "Campo de' Fiori market"], dinner: ["Pasta in Trastevere", "Pizza al taglio in Testaccio", "Aperitivo in Monti", "Rooftop restaurant near Pantheon", "Roman trattoria"], kids: ["Gladiator school experience", "Villa Borghese gardens & bike rental", "Gelato tasting tour", "Explora Children's Museum", "Catacomb torch-light tour"] },
+  florence: { morning: ["Uffizi Gallery", "Duomo & Brunelleschi's Dome climb", "Ponte Vecchio walk", "Accademia (David)", "San Lorenzo Market"], afternoon: ["Boboli Gardens", "Piazzale Michelangelo sunset viewpoint", "Oltrarno artisan workshops", "Leather market shopping", "Santa Croce basilica"], dinner: ["Bistecca Fiorentina at local trattoria", "Wine bar in Santo Spirito", "Tuscan ribollita & pappa al pomodoro", "Enoteca wine tasting dinner", "Rooftop aperitivo"], kids: ["Gelato making class", "Boboli Gardens maze & grotto", "Palazzo Vecchio secret passages tour", "Leonardo da Vinci Museum — interactive", "Piazzale Michelangelo picnic & views"] },
+  barcelona: { morning: ["Sagrada Familia visit", "Park Güell", "Gothic Quarter walk", "La Boqueria market", "Casa Batlló"], afternoon: ["Barceloneta beach", "Montjuïc cable car & castle", "El Born neighbourhood", "Picasso Museum", "Las Ramblas stroll"], dinner: ["Tapas crawl in El Born", "Paella by the beach", "Pintxos in Gràcia", "Rooftop cocktails & dinner", "Seafood at Barceloneta"], kids: ["Barcelona Aquarium", "Tibidabo amusement park", "Barceloneta beach & sandcastles", "CosmoCaixa science museum", "Park Güell — Gaudí's mosaic playground"] },
+  amsterdam: { morning: ["Anne Frank House", "Rijksmuseum", "Van Gogh Museum", "Canal ring walking tour", "Jordaan neighbourhood"], afternoon: ["Vondelpark picnic", "Albert Cuyp Market", "NDSM Wharf art district", "Heineken Experience", "Bike ride along canals"], dinner: ["Indonesian rijsttafel", "Brown café pub dinner", "Waterfront restaurant", "Pancake house", "De Pijp neighbourhood dinner"], kids: ["NEMO Science Museum — rooftop water play", "Vondelpark playground & paddle pool", "Artis Zoo", "Canal boat tour", "Pancake house lunch"] },
+};
+
+function getLocationActivities(place) {
+  const key = place.toLowerCase();
+  if (LOCATION_ACTIVITIES[key]) return LOCATION_ACTIVITIES[key];
+  // Partial match
+  for (const [k, v] of Object.entries(LOCATION_ACTIVITIES)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return null;
 }
 
 const REGION_ACCOM_TEMPLATES = {
@@ -371,7 +466,254 @@ function generateLocalAccommodations(places) {
   return results.sort((a, b) => b.rating - a.rating);
 }
 
+// ─── Expense Categories ───
+const EXPENSE_CATEGORIES = [
+  { key: 'food', label: 'Food & Drink', icon: '\uD83C\uDF7D\uFE0F', color: '#D85A30' },
+  { key: 'travel', label: 'Travel', icon: '\uD83D\uDE97', color: '#2E7CC9' },
+  { key: 'charging', label: 'Charging', icon: '\u26A1', color: '#1B8F6A' },
+  { key: 'entertainment', label: 'Entertainment', icon: '\uD83C\uDFAD', color: '#7B6FD6' },
+  { key: 'accommodation', label: 'Accommodation', icon: '\uD83C\uDFE8', color: '#B87215' },
+  { key: 'activities', label: 'Activities', icon: '\uD83C\uDFAF', color: '#CF4D78' },
+  { key: 'other', label: 'Other', icon: '\uD83D\uDCE6', color: '#6B7280' },
+];
+const getCatInfo = (key) => EXPENSE_CATEGORIES.find(c => c.key === key) || EXPENSE_CATEGORIES[6];
+
+// ─── Google Maps Integration ───
+const GOOGLE_MAPS_KEY = "AIzaSyDgxJ9_XHRH2bjcddSdT7Yo5em65KcrHf8";
+let mapsLoaded = false;
+let mapsLoadPromise = null;
+
+function loadGoogleMaps() {
+  if (mapsLoaded && window.google?.maps) return Promise.resolve();
+  if (mapsLoadPromise) return mapsLoadPromise;
+  mapsLoadPromise = new Promise((resolve, reject) => {
+    if (window.google?.maps) { mapsLoaded = true; resolve(); return; }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places,marker&v=weekly`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => { mapsLoaded = true; resolve(); };
+    script.onerror = () => reject(new Error("Failed to load Google Maps"));
+    document.head.appendChild(script);
+  });
+  return mapsLoadPromise;
+}
+
+// Decode Google polyline encoding
+function decodePolyline(encoded) {
+  const points = [];
+  let index = 0, lat = 0, lng = 0;
+  while (index < encoded.length) {
+    let shift = 0, result = 0, byte;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return points;
+}
+
+// Trip Map Component — embedded Google Map with route + pins
+function TripMap({ places, routePolyline, height, onDirectionsLoaded, travelMode: travelModeProp }) {
+  const mapRef = React.useRef(null);
+  const mapInstanceRef = React.useRef(null);
+  const markersRef = React.useRef([]);
+  const polylineRef = React.useRef(null);
+  const rendererRef = React.useRef(null);
+  const callbackRef = React.useRef(onDirectionsLoaded);
+  const renderedPlacesKey = React.useRef("");
+  const [mapReady, setMapReady] = React.useState(false);
+  const [mapError, setMapError] = React.useState(null);
+
+  // Keep callback ref up to date without triggering re-renders
+  callbackRef.current = onDirectionsLoaded;
+
+  // Stable places key to detect actual changes (includes travel mode)
+  const placesKey = (places || []).join("|") + "|" + (travelModeProp || "driving");
+
+  // Load Google Maps API
+  React.useEffect(() => {
+    loadGoogleMaps()
+      .then(() => setMapReady(true))
+      .catch(() => setMapError("Maps failed to load"));
+  }, []);
+
+  // Initialize map
+  React.useEffect(() => {
+    if (!mapReady || !mapRef.current || !window.google?.maps) return;
+    if (mapInstanceRef.current) return;
+
+    const map = new window.google.maps.Map(mapRef.current, {
+      zoom: 7,
+      center: { lat: 54.5, lng: -3.0 },
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      zoomControl: true,
+      styles: [
+        { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "transit", stylers: [{ visibility: "off" }] },
+      ],
+    });
+    mapInstanceRef.current = map;
+  }, [mapReady]);
+
+  // Add markers and route — only when places actually change
+  React.useEffect(() => {
+    if (!mapInstanceRef.current || !places || places.length === 0) return;
+    if (renderedPlacesKey.current === placesKey) return; // already rendered these places
+    renderedPlacesKey.current = placesKey;
+
+    const map = mapInstanceRef.current;
+    const google = window.google;
+
+    // Clear old markers, polylines, and direction renderers
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
+    if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null; }
+    if (rendererRef.current) { rendererRef.current.setMap(null); rendererRef.current = null; }
+
+    const bounds = new google.maps.LatLngBounds();
+    const geocoder = new google.maps.Geocoder();
+
+    // Check if last place is same as first (return trip)
+    const isReturnTrip = places.length > 2 && places[0].toLowerCase().trim() === places[places.length - 1].toLowerCase().trim();
+    // If return trip, skip the duplicate last marker (Directions will handle the route back)
+    const markerPlaces = isReturnTrip ? places.slice(0, -1) : places;
+
+    const geocodePromises = markerPlaces.map((place, i) =>
+      new Promise((resolve) => {
+        geocoder.geocode({ address: place }, (results, status) => {
+          if (status === "OK" && results[0]) {
+            const pos = results[0].geometry.location;
+            const isStart = i === 0;
+            const isEnd = i === markerPlaces.length - 1;
+            const pinColor = isStart ? "#1B8F6A" : isEnd ? "#D85A30" : "#2E7CC9";
+            const stopLabel = isStart ? "Start" : isEnd ? (isReturnTrip ? "Last stop" : "End") : `Stop ${i + 1}`;
+            const marker = new google.maps.Marker({
+              position: pos, map, title: place,
+              label: { text: `${i + 1}`, color: "#fff", fontWeight: "600", fontSize: "11px" },
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE, scale: 14,
+                fillColor: pinColor,
+                fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2,
+              },
+            });
+            const info = new google.maps.InfoWindow({ content: `<div style="font-family:DM Sans,sans-serif;padding:2px 4px"><b>${place}</b><br><span style="font-size:11px;color:#666">${stopLabel}</span></div>` });
+            marker.addListener("click", () => info.open(map, marker));
+            markersRef.current.push(marker);
+            bounds.extend(pos);
+            resolve({ place, location: { lat: pos.lat(), lng: pos.lng() } });
+          } else {
+            resolve(null);
+          }
+        });
+      })
+    );
+
+    Promise.all(geocodePromises).then((resolved) => {
+      const validLocations = resolved.filter(Boolean);
+      if (validLocations.length > 1) {
+        map.fitBounds(bounds, { top: 30, bottom: 30, left: 30, right: 30 });
+
+        // For return trips, the destination is the start (loop back)
+        const dirOrigin = validLocations[0].place;
+        const dirDestination = isReturnTrip ? validLocations[0].place : validLocations[validLocations.length - 1].place;
+        const dirWaypoints = isReturnTrip
+          ? validLocations.slice(1).map(l => ({ location: l.place, stopover: true }))
+          : validLocations.slice(1, -1).map(l => ({ location: l.place, stopover: true }));
+
+        // Map user travel mode to Google Directions TravelMode
+        const gmTravelMode = (() => {
+          const m = (travelModeProp || "").toLowerCase();
+          if (/train|rail|transit|bus|public/.test(m)) return google.maps.TravelMode.TRANSIT;
+          if (/walk|hiking|foot/.test(m)) return google.maps.TravelMode.WALKING;
+          if (/bicy|bike|cycling/.test(m)) return google.maps.TravelMode.BICYCLING;
+          return google.maps.TravelMode.DRIVING; // Car, EV, Non-EV, Flight all use driving for road route
+        })();
+
+        const directionsService = new google.maps.DirectionsService();
+        directionsService.route({
+          origin: dirOrigin,
+          destination: dirDestination,
+          waypoints: gmTravelMode === google.maps.TravelMode.TRANSIT ? [] : dirWaypoints, // Transit doesn't support waypoints
+          travelMode: gmTravelMode,
+          optimizeWaypoints: false,
+        }, (result, status) => {
+          if (status === "OK") {
+            // Use DirectionsRenderer for a single clean route line (no duplicates)
+            const renderer = new google.maps.DirectionsRenderer({
+              map,
+              directions: result,
+              suppressMarkers: true, // we draw our own numbered markers
+              polylineOptions: { strokeColor: "#1B8F6A", strokeOpacity: 0.8, strokeWeight: 4 },
+            });
+            rendererRef.current = renderer;
+
+            if (callbackRef.current) {
+              const legs = result.routes[0].legs;
+              const totalDist = legs.reduce((s, l) => s + l.distance.value, 0);
+              const totalDur = legs.reduce((s, l) => s + l.duration.value, 0);
+              callbackRef.current({
+                legs: legs.map(l => ({ start: l.start_address, end: l.end_address, distance: l.distance.text, duration: l.duration.text })),
+                totalDistance: (totalDist / 1609.34).toFixed(1) + " mi",
+                totalDuration: Math.floor(totalDur / 3600) + " hr " + Math.round((totalDur % 3600) / 60) + " min",
+              });
+            }
+          }
+        });
+      } else if (validLocations.length === 1) {
+        map.setCenter(bounds.getCenter());
+        map.setZoom(12);
+      }
+    });
+
+    // Cleanup on unmount or places change
+    return () => {
+      markersRef.current.forEach(m => m.setMap(null));
+      markersRef.current = [];
+      if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null; }
+      if (rendererRef.current) { rendererRef.current.setMap(null); rendererRef.current = null; }
+      renderedPlacesKey.current = "";
+    };
+  }, [mapReady, placesKey]);
+
+  if (mapError) {
+    return (
+      <div style={{ height: height || 200, background: T.s2, borderRadius: T.rs, display: "flex", alignItems: "center", justifyContent: "center", color: T.t3, fontSize: 12 }}>
+        🗺️ Map unavailable
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative", borderRadius: T.rs, overflow: "hidden", border: `.5px solid ${T.border}` }}>
+      <div ref={mapRef} style={{ width: "100%", height: height || 200 }} />
+      {!mapReady && (
+        <div style={{ position: "absolute", inset: 0, background: T.s2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.t3 }}>
+          Loading map...
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Reusable Form Components (outside main component to prevent remount on state changes) ───
+// ─── Sanitise HTML to prevent XSS in chat ───
+function sanitizeForHtml(text) {
+  if (!text) return "";
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+function renderChatHtml(text, linkColor) {
+  const safe = sanitizeForHtml(text);
+  return safe
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="color:${linkColor || "#1B8F6A"};text-decoration:underline;font-weight:500">$1</a>`)
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br/>");
+}
+
 function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max, onKeyDown }) {
   const inputStyle = { width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none" };
   const dateRef = useRef(null);
@@ -404,24 +746,24 @@ function TabBar({ active, onNav }) {
   ];
   if (active === "home") {
     return (
-      <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
+      <nav role="navigation" aria-label="Main navigation" style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
         {[["home", "Trips"], ["explore", "Explore"], ["settings", "Settings"]].map(([id, label]) => (
-          <button key={id} className="w-tab" onClick={() => onNav(id)} style={tabStyle(active === id)}>{label}</button>
+          <button key={id} className="w-tab" onClick={() => onNav(id)} style={tabStyle(active === id)} aria-label={label} aria-current={active === id ? "page" : undefined}>{label}</button>
         ))}
-      </div>
+      </nav>
     );
   }
   return (
-    <div style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
+    <nav role="navigation" aria-label="Trip navigation" style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
       {tabs.map(t => (
-        <button key={t.id} className="w-tab" onClick={() => onNav(t.screen)} style={tabStyle(active === t.id)}>{t.label}</button>
+        <button key={t.id} className="w-tab" onClick={() => onNav(t.screen)} style={tabStyle(active === t.id)} aria-label={t.label} aria-current={active === t.id ? "page" : undefined}>{t.label}</button>
       ))}
-    </div>
+    </nav>
   );
 }
 
 // ─── Main App ───
-export default function WanderlyApp() {
+export default function TripWithMeApp() {
   const [screen, setScreen] = useState("home");
   const [wizStep, setWizStep] = useState(0);
   const [selectedDay, setSelectedDay] = useState(1);
@@ -443,6 +785,7 @@ export default function WanderlyApp() {
   const [expandedSections, setExpandedSections] = useState({});
   const [tripChatInput, setTripChatInput] = useState("");
   const [tripChatMessages, setTripChatMessages] = useState([]);
+  const tripChatEndRef = useRef(null);
   const [tripDetailTab, setTripDetailTab] = useState("itinerary");
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [activationPrefs, setActivationPrefs] = useState({ startTime: "08:00", dayOnePace: "balanced", notes: "", stopovers: [] });
@@ -460,6 +803,21 @@ export default function WanderlyApp() {
   const [reelPlaying, setReelPlaying] = useState(false);
   const [reelIndex, setReelIndex] = useState(0);
   const [reelPaused, setReelPaused] = useState(false);
+  const [tripDirections, setTripDirections] = useState(null);
+  const [showMap, setShowMap] = useState(true);
+
+  // ─── Expense Tracking State ───
+  const [expenses, setExpenses] = useState([]);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [expenseDesc, setExpenseDesc] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('food');
+  const [expensePaidBy, setExpensePaidBy] = useState('');
+  const [expenseSplitMethod, setExpenseSplitMethod] = useState('equal');
+  const [expenseParticipants, setExpenseParticipants] = useState([]);
+  const [expenseCustomSplits, setExpenseCustomSplits] = useState({});
+  const [showSettlement, setShowSettlement] = useState(false);
 
   // Auth state
   const [user, setUser] = useState(null);
@@ -470,6 +828,7 @@ export default function WanderlyApp() {
   const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [joinShareCode, setJoinShareCode] = useState("");
 
   // ─── New Trip Wizard State ───
@@ -486,10 +845,12 @@ export default function WanderlyApp() {
   const [olderActSearch, setOlderActSearch] = useState("");
   const [youngerActSearch, setYoungerActSearch] = useState("");
   const [lastChatTopic, setLastChatTopic] = useState("");
+  const [chatTyping, setChatTyping] = useState(false);
+  const [tripChatTyping, setTripChatTyping] = useState(false);
   const [chatFlowStep, setChatFlowStep] = useState(null); // null | "ask_start" | "ask_pickups" | "ask_time" | "route_shown" | "ask_home" | "ask_departure_time" | "departure_shown"
   const [chatFlowData, setChatFlowData] = useState({});
   const [toast, setToast] = useState(null);
-  const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('wanderly_welcomed'));
+  const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('twm_welcomed'));
   const [showDemo, setShowDemo] = useState(false);
   const [demoSlide, setDemoSlide] = useState(0);
   const [demoTick, setDemoTick] = useState(0);
@@ -497,6 +858,11 @@ export default function WanderlyApp() {
   const [demoInteracted, setDemoInteracted] = useState({});
   const demoTimerRef = useRef(null);
   const demoTickRef = useRef(null);
+
+  // Auto-scroll trip chat to bottom when messages change
+  useEffect(() => {
+    if (tripChatEndRef.current) tripChatEndRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [tripChatMessages, tripChatTyping]);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -532,15 +898,245 @@ export default function WanderlyApp() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Check for share code in URL
+  // Check for share code in URL and fetch trip data
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const joinCode = params.get('join');
     if (joinCode) {
-      setScreen('joinPreview');
       setJoinShareCode(joinCode);
+      // Fetch trip by share code from Supabase
+      lookupTripByShareCode(joinCode).then(data => {
+        if (data) {
+          const mapped = {
+            id: data.id, dbId: data.id, name: data.name, brief: data.brief,
+            start: data.start_date, end: data.end_date, rawStart: data.start_date, rawEnd: data.end_date,
+            places: data.places || [], travel: data.travel_modes || [], status: data.status,
+            shareCode: data.share_code,
+            year: data.start_date ? new Date(data.start_date).getFullYear() : new Date().getFullYear(),
+            travellers: {
+              adults: (data.trip_travellers || []).filter(tr => tr.role === 'lead' || tr.role === 'adult').map(tr => ({
+                name: tr.name, email: tr.email || "", isLead: tr.role === 'lead', dbId: tr.id, isClaimed: tr.is_claimed
+              })),
+              olderKids: (data.trip_travellers || []).filter(tr => tr.role === 'child_older').map(tr => ({ name: tr.name, age: tr.age || 10, dbId: tr.id })),
+              youngerKids: (data.trip_travellers || []).filter(tr => tr.role === 'child_younger').map(tr => ({ name: tr.name, age: tr.age || 5, dbId: tr.id })),
+            },
+            stays: (data.trip_stays || []).map(s => ({ name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, checkIn: s.check_in, checkOut: s.check_out, dbId: s.id })),
+            stayNames: (data.trip_stays || []).map(s => s.name),
+            prefs: data.trip_preferences?.[0] ? {
+              food: data.trip_preferences[0].food_prefs || [], adultActs: data.trip_preferences[0].adult_activities || [],
+              olderActs: data.trip_preferences[0].older_kid_activities || [], youngerActs: data.trip_preferences[0].younger_kid_activities || [],
+              instructions: data.trip_preferences[0].instructions || "",
+              activities: [...(data.trip_preferences[0].adult_activities || []), ...(data.trip_preferences[0].older_kid_activities || []), ...(data.trip_preferences[0].younger_kid_activities || [])],
+            } : { food: [], adultActs: [], olderActs: [], youngerActs: [], instructions: "", activities: [] },
+            timeline: [],
+          };
+          setSelectedCreatedTrip(mapped);
+          setScreen('joinPreview');
+        } else {
+          setScreen('joinPreview');
+        }
+      });
     }
   }, []);
+
+  // ─── Real-time Sync — Supabase Realtime subscriptions ───
+  useEffect(() => {
+    if (!user || user.id === 'demo') return;
+
+    const channel = supabase.channel('trip-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, (payload) => {
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const updated = payload.new;
+          setCreatedTrips(prev => prev.map(t => {
+            if (t.dbId === updated.id) {
+              return { ...t, name: updated.name || t.name, status: updated.status || t.status,
+                start: updated.start_date || t.start, end: updated.end_date || t.end,
+                places: updated.places || t.places, travel: updated.travel_modes || t.travel };
+            }
+            return t;
+          }));
+          // Update selected trip if it's the one being viewed
+          setSelectedCreatedTrip(prev => {
+            if (prev?.dbId === updated.id) {
+              return { ...prev, name: updated.name || prev.name, status: updated.status || prev.status,
+                start: updated.start_date || prev.start, end: updated.end_date || prev.end,
+                places: updated.places || prev.places, travel: updated.travel_modes || prev.travel };
+            }
+            return prev;
+          });
+        }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trip_travellers' }, (payload) => {
+        if (payload.new) {
+          const newTraveller = payload.new;
+          setCreatedTrips(prev => prev.map(t => {
+            if (t.dbId === newTraveller.trip_id) {
+              const role = newTraveller.role;
+              const entry = { name: newTraveller.name, dbId: newTraveller.id, email: newTraveller.email || "" };
+              const travellers = { ...t.travellers };
+              if (role === 'lead' || role === 'adult') {
+                travellers.adults = [...(travellers.adults || []), { ...entry, isLead: role === 'lead', isClaimed: newTraveller.is_claimed }];
+              } else if (role === 'child_older') {
+                travellers.olderKids = [...(travellers.olderKids || []), { ...entry, age: newTraveller.age || 10 }];
+              } else if (role === 'child_younger') {
+                travellers.youngerKids = [...(travellers.youngerKids || []), { ...entry, age: newTraveller.age || 5 }];
+              }
+              return { ...t, travellers };
+            }
+            return t;
+          }));
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trip_travellers' }, (payload) => {
+        if (payload.new?.is_claimed) {
+          // A co-traveller claimed their slot — show a toast
+          showToast(`${payload.new.name || "Someone"} joined the trip!`);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  // ─── Chat Persistence: Load messages from Supabase ───
+  const loadTripMessages = async (tripDbId) => {
+    if (!tripDbId) return;
+    try {
+      const { data } = await supabase.from('messages').select('*').eq('trip_id', tripDbId).order('created_at', { ascending: true });
+      if (data && data.length > 0) {
+        setTripChatMessages(data.map(m => ({ id: m.id, role: m.sender_role || 'user', text: m.text, senderName: m.sender_name })));
+      }
+    } catch (e) { /* messages table may not exist yet — silent fail */ }
+  };
+  const saveChatMessage = async (tripDbId, role, text, senderName) => {
+    if (!tripDbId) return;
+    try {
+      await supabase.from('messages').insert({ trip_id: tripDbId, sender_role: role, text, sender_name: senderName || (role === 'ai' ? 'Trip With Me AI' : 'You') });
+    } catch (e) { /* silent fail if table doesn't exist */ }
+  };
+
+  // ─── Expense Functions ───
+  const getExpenseParticipantDefaults = (trip) => {
+    // Default: all adults (one per family, kids aren't expense participants)
+    return (trip?.travellers?.adults || []).map(a => a.name).filter(Boolean);
+  };
+
+  const loadExpenses = async (tripDbId) => {
+    if (!tripDbId) return;
+    try {
+      const { data } = await supabase.from('expenses').select('*, expense_splits(*)').eq('trip_id', tripDbId).order('created_at', { ascending: false });
+      setExpenses((data || []).map(e => ({ ...e, splits: e.expense_splits || [] })));
+    } catch (e) { setExpenses([]); }
+  };
+
+  const resetExpenseForm = () => {
+    setExpenseDesc(''); setExpenseAmount(''); setExpenseCategory('food');
+    setExpensePaidBy(''); setExpenseSplitMethod('equal'); setExpenseParticipants([]);
+    setExpenseCustomSplits({}); setShowAddExpense(false); setEditingExpense(null);
+  };
+
+  const saveExpense = async (trip) => {
+    const amount = parseFloat(expenseAmount);
+    if (!expenseDesc.trim() || isNaN(amount) || amount <= 0 || !expensePaidBy || expenseParticipants.length === 0) {
+      showToast("Fill in all fields", "error"); return;
+    }
+    const tripDbId = trip.dbId || trip.id;
+    let splits;
+    const selected = expenseParticipants;
+    if (expenseSplitMethod === 'equal') {
+      const share = Math.round((amount / selected.length) * 100) / 100;
+      splits = selected.map((name, i) => ({
+        participant_name: name,
+        share_amount: i === selected.length - 1 ? Math.round((amount - share * (selected.length - 1)) * 100) / 100 : share,
+      }));
+    } else if (expenseSplitMethod === 'percentage') {
+      const totalPct = selected.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0);
+      if (Math.abs(totalPct - 100) > 0.5) { showToast("Percentages must add up to 100%", "error"); return; }
+      splits = selected.map(name => ({
+        participant_name: name,
+        share_amount: Math.round(amount * (parseFloat(expenseCustomSplits[name]) || 0) / 100 * 100) / 100,
+        share_percentage: parseFloat(expenseCustomSplits[name]) || 0,
+      }));
+    } else {
+      const totalCustom = selected.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0);
+      if (Math.abs(totalCustom - amount) > 0.01) { showToast(`Custom amounts must add up to \u00A3${amount.toFixed(2)}`, "error"); return; }
+      splits = selected.map(name => ({
+        participant_name: name,
+        share_amount: parseFloat(expenseCustomSplits[name]) || 0,
+      }));
+    }
+    try {
+      if (editingExpense) {
+        // Update existing
+        await supabase.from('expense_splits').delete().eq('expense_id', editingExpense.id);
+        await supabase.from('expenses').update({
+          description: expenseDesc.trim(), amount, category: expenseCategory,
+          paid_by: expensePaidBy, split_method: expenseSplitMethod, updated_at: new Date().toISOString(),
+        }).eq('id', editingExpense.id);
+        await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: editingExpense.id, ...s })));
+        showToast("Expense updated");
+      } else {
+        const { data: exp } = await supabase.from('expenses').insert({
+          trip_id: tripDbId, description: expenseDesc.trim(), amount, category: expenseCategory,
+          paid_by: expensePaidBy, split_method: expenseSplitMethod,
+          created_by: user?.user_metadata?.full_name || user?.email || 'You',
+        }).select().single();
+        if (exp) {
+          await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: exp.id, ...s })));
+        }
+        showToast("Expense added");
+      }
+    } catch (e) {
+      showToast("Failed to save expense", "error"); return;
+    }
+    resetExpenseForm();
+    loadExpenses(tripDbId);
+  };
+
+  const deleteExpense = async (expenseId, tripDbId) => {
+    try {
+      await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
+      await supabase.from('expenses').delete().eq('id', expenseId);
+      showToast("Expense removed");
+      loadExpenses(tripDbId);
+    } catch (e) { showToast("Failed to delete", "error"); }
+  };
+
+  const calculateSettlement = (expensesList) => {
+    const balances = {};
+    expensesList.forEach(exp => {
+      balances[exp.paid_by] = (balances[exp.paid_by] || 0) + exp.amount;
+      (exp.splits || []).forEach(s => {
+        balances[s.participant_name] = (balances[s.participant_name] || 0) - s.share_amount;
+      });
+    });
+    const creditors = [], debtors = [];
+    Object.entries(balances).forEach(([name, bal]) => {
+      if (bal > 0.01) creditors.push({ name, amount: bal });
+      else if (bal < -0.01) debtors.push({ name, amount: -bal });
+    });
+    creditors.sort((a, b) => b.amount - a.amount);
+    debtors.sort((a, b) => b.amount - a.amount);
+    const settlements = [];
+    let ci = 0, di = 0;
+    while (ci < creditors.length && di < debtors.length) {
+      const amt = Math.min(creditors[ci].amount, debtors[di].amount);
+      if (amt > 0.01) settlements.push({ from: debtors[di].name, to: creditors[ci].name, amount: Math.round(amt * 100) / 100 });
+      creditors[ci].amount -= amt; debtors[di].amount -= amt;
+      if (creditors[ci].amount < 0.01) ci++;
+      if (debtors[di].amount < 0.01) di++;
+    }
+    return settlements;
+  };
+
+  const getCategoryBreakdown = (expensesList) => {
+    const byCategory = {};
+    expensesList.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + e.amount; });
+    const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+    return Object.entries(byCategory).map(([cat, amount]) => ({
+      ...getCatInfo(cat), amount, percentage: total > 0 ? (amount / total) * 100 : 0,
+    })).sort((a, b) => b.amount - a.amount);
+  };
 
   // Trip Reel auto-advance timer
   useEffect(() => {
@@ -567,7 +1163,7 @@ export default function WanderlyApp() {
   }, [showDemo, demoPaused]);
 
   // Demo auto-advance slides (ticks at 220ms each)
-  const DEMO_SLIDE_DURATIONS = [52, 42, 40, 62, 48, 52, 48, 42, 44, 999];
+  const DEMO_SLIDE_DURATIONS = [62, 56, 54, 72, 58, 62, 58, 56, 54, 999];
   useEffect(() => {
     if (!showDemo) return;
     const dur = DEMO_SLIDE_DURATIONS[demoSlide] || 50;
@@ -815,7 +1411,27 @@ export default function WanderlyApp() {
 
   const buildTripSummary = (trip) => {
     const parts = [];
-    const numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd) - new Date(trip.rawStart)) / 86400000) + 1) : null;
+    // Smart numDays: prefer stay date span if available
+    let numDays = null;
+    const stays = trip.stays || [];
+    if (stays.length > 0) {
+      const checkIns = stays.map(s => s.checkIn).filter(Boolean).sort();
+      const checkOuts = stays.map(s => s.checkOut).filter(Boolean).sort();
+      if (checkIns.length > 0 && checkOuts.length > 0) {
+        const stayStart = checkIns[0];
+        const stayEnd = checkOuts[checkOuts.length - 1];
+        const stayDays = Math.max(1, Math.round((new Date(stayEnd + "T12:00:00") - new Date(stayStart + "T12:00:00")) / 86400000) + 1);
+        const rawDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1) : null;
+        if (rawDays && stayDays < rawDays && stayDays <= 30) {
+          numDays = stayDays;
+        } else {
+          numDays = rawDays;
+        }
+      }
+    }
+    if (!numDays) {
+      numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1) : null;
+    }
     if (numDays && trip.places?.length > 0) parts.push(`${numDays}-day trip to ${trip.places.join(", ")}`);
     if (trip.travel?.length > 0) parts.push(`travelling by ${trip.travel.join(" + ").toLowerCase()}`);
     if (trip.startLocation) parts.push(`starting from ${trip.startLocation}`);
@@ -842,21 +1458,37 @@ export default function WanderlyApp() {
     return parts.join(". ") + (parts.length ? "." : "");
   };
 
-  const createTrip = () => {
+  const createTrip = async () => {
     if (wizTrip.name.trim().length < 2) {
       alert("Please enter a trip name (at least 2 characters)");
       return;
     }
+    setSaving(true);
     const name = wizTrip.name.trim();
-    const formatDate = (d) => { if (!d) return ""; const dt = new Date(d); return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+    const formatDate = (d) => { if (!d) return ""; const dt = new Date(d + "T12:00:00"); return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+    // Smart dates: if stays exist and their span is shorter than entered dates, use stay dates
+    let effectiveStart = wizTrip.start;
+    let effectiveEnd = wizTrip.end;
+    if (wizStays.length > 0) {
+      const cis = wizStays.map(s => s.checkIn).filter(Boolean).sort();
+      const cos = wizStays.map(s => s.checkOut).filter(Boolean).sort();
+      if (cis.length > 0 && cos.length > 0) {
+        const staySpan = Math.round((new Date(cos[cos.length - 1] + "T12:00:00") - new Date(cis[0] + "T12:00:00")) / 86400000);
+        const enteredSpan = wizTrip.start && wizTrip.end ? Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) : 0;
+        if (enteredSpan > 0 && staySpan < enteredSpan && staySpan <= 30) {
+          effectiveStart = cis[0];
+          effectiveEnd = cos[cos.length - 1];
+        }
+      }
+    }
     const tripData = {
       name,
       brief: wizTrip.brief,
-      start: formatDate(wizTrip.start),
-      end: formatDate(wizTrip.end),
-      rawStart: wizTrip.start,
-      rawEnd: wizTrip.end,
-      year: wizTrip.start ? new Date(wizTrip.start).getFullYear() : new Date().getFullYear(),
+      start: formatDate(effectiveStart),
+      end: formatDate(effectiveEnd),
+      rawStart: effectiveStart,
+      rawEnd: effectiveEnd,
+      year: effectiveStart ? new Date(effectiveStart + "T12:00:00").getFullYear() : new Date().getFullYear(),
       places: [...wizTrip.places],
       travel: [...wizTrip.travel],
       budget: wizTrip.budget,
@@ -879,6 +1511,7 @@ export default function WanderlyApp() {
       const updatedTrip = { ...createdTrips.find(t => t.id === editingTripId), ...tripData };
       setSelectedCreatedTrip(updatedTrip);
       setEditingTripId(null);
+      setSaving(false);
       navigate("createdTrip");
     } else {
       const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
@@ -895,14 +1528,28 @@ export default function WanderlyApp() {
         });
       }
       setEditingTripId(null);
+      setSaving(false);
       showToast("Trip created!");
-      navigate("home");
+      setSelectedCreatedTrip(newTrip);
+      navigate("createdTrip");
     }
   };
 
-  const deleteCreatedTrip = (id) => {
+  const deleteCreatedTrip = async (id) => {
     const trip = createdTrips.find(t => t.id === id);
     if (!window.confirm("Remove '" + (trip?.name || "this trip") + "'? This cannot be undone.")) return;
+    // Sync deletion to Supabase if user is authenticated and trip has a DB ID
+    if (user && user.id !== 'demo' && trip?.dbId) {
+      try {
+        await supabase.from('trip_preferences').delete().eq('trip_id', trip.dbId);
+        await supabase.from('trip_stays').delete().eq('trip_id', trip.dbId);
+        await supabase.from('trip_travellers').delete().eq('trip_id', trip.dbId);
+        await supabase.from('trips').delete().eq('id', trip.dbId);
+      } catch (err) {
+        console.error('Error deleting trip from DB:', err);
+        showToast("Failed to delete from cloud", "error");
+      }
+    }
     setCreatedTrips(prev => prev.filter(t => t.id !== id));
     showToast("Trip removed");
   };
@@ -1002,21 +1649,30 @@ export default function WanderlyApp() {
 
   // Multi-day timeline: returns { 1: [...], 2: [...], ... }
   const generateMultiDayTimeline = (trip) => {
-    const numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd) - new Date(trip.rawStart)) / 86400000) + 1) : 1;
-    const smartPlaces = getSmartRouteOrder(trip);
-    const places = smartPlaces.length > 0 ? smartPlaces : ["your destination"];
-    // Match stay names to the smart route order
-    const staysByPlace = {};
-    (trip.stays || []).forEach(s => { if (s.location) staysByPlace[s.location.toLowerCase()] = s.name; });
-    const stayNames = places.map(p => staysByPlace[p.toLowerCase()] || null).filter(Boolean);
-    if (stayNames.length === 0) stayNames.push(trip.stayNames?.[0] || "accommodation");
+    // Smart numDays: prefer stay date span if stays indicate shorter trip
+    let numDays = 1;
+    const stays = trip.stays || [];
+    if (stays.length > 0) {
+      const checkIns = stays.map(s => s.checkIn).filter(Boolean).sort();
+      const checkOuts = stays.map(s => s.checkOut).filter(Boolean).sort();
+      if (checkIns.length > 0 && checkOuts.length > 0) {
+        const stayStart = checkIns[0];
+        const stayEnd = checkOuts[checkOuts.length - 1];
+        const stayDays = Math.max(1, Math.round((new Date(stayEnd + "T12:00:00") - new Date(stayStart + "T12:00:00")) / 86400000) + 1);
+        const rawDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1) : null;
+        if (rawDays && stayDays < rawDays && stayDays <= 30) {
+          numDays = stayDays;
+        } else {
+          numDays = rawDays || stayDays;
+        }
+      }
+    }
+    if (numDays <= 1 && trip.rawStart && trip.rawEnd) {
+      numDays = Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1);
+    }
     const food = trip.prefs.food.length > 0 ? trip.prefs.food : ["Local cuisine"];
     const foodLabel = food.join(" + ");
     const travelMode = trip.travel[0] || "Travel";
-    const adultActs = trip.prefs.adultActs || trip.prefs.activities || [];
-    const olderActs = trip.prefs.olderActs || [];
-    const youngerActs = trip.prefs.youngerActs || [];
-    const kidActs = [...new Set([...olderActs, ...youngerActs])];
     const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
     const hasKids = allKids.length > 0;
     const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
@@ -1029,131 +1685,342 @@ export default function WanderlyApp() {
     const prefs = trip.activationPrefs || {};
     const startHour = prefs.startTime ? parseInt(prefs.startTime.split(":")[0]) : 8;
     const startMin = prefs.startTime ? parseInt(prefs.startTime.split(":")[1] || "0") : 0;
-    const estimatedTravelHrs = 2; // default ~2hr journey to first destination
-    const arrivalHour = Math.min(startHour + estimatedTravelHrs, 18);
     const isPacked = prefs.dayOnePace === "packed";
     const isRelaxed = prefs.dayOnePace === "relaxed";
     const isEV = trip.travel?.some(m => /ev/i.test(m));
     const enabledStops = (prefs.stopovers || []).filter(s => s.enabled);
     const tags = (base) => { const t = [base]; if (wantsDogFriendly) t.push("🐕 Dog-friendly"); if (wantsAccessible) t.push("♿ Accessible"); return t.join(" · "); };
-    const fmtTime = (h, m = 0) => { const suffix = h >= 12 ? "PM" : "AM"; const hr = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${hr}:${m.toString().padStart(2, "0")} ${suffix}`; };
+    const fmtTime = (h, m = 0) => { const hh = Math.floor(h); const mm = m || Math.round((h - hh) * 60); const suffix = hh >= 12 ? "PM" : "AM"; const hr = hh > 12 ? hh - 12 : hh === 0 ? 12 : hh; return `${hr}:${mm.toString().padStart(2, "0")} ${suffix}`; };
 
-    // Morning/afternoon activity pools (rotate across days)
-    const morningPool = adultActs.length > 0 ? adultActs : ["Explore the area", "Walking tour", "Local market visit", "Scenic viewpoint", "Cultural tour"];
-    const kidPool = kidActs.length > 0 ? kidActs : ["Playground & games", "Nature walk", "Soft play", "Bike ride", "Treasure hunt"];
-    const afternoonPool = ["Walking tour & sightseeing", "Shopping & souvenirs", "Boat trip", "Museum visit", "Garden walk", "Photography walk"];
-    const dinnerStyles = wantsPubs ? ["Dinner at local pub", "Pub supper", "Gastropub dinner", "Evening at the inn"] : ["Dinner", "Evening meal", "Dinner out", "Supper"];
+    // ─── BUILD DAY-TO-PLACE MAP ───
+    // 3 patterns:
+    //   A) Multiple stays → road trip: each day mapped to its stay's location
+    //   B) 1 stay + multiple places → base camp: day trips from accommodation
+    //   C) No stays → spread places evenly across days
+    const sortedStays = [...(trip.stays || [])].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+    const tripStartDate = trip.rawStart ? new Date(trip.rawStart + "T12:00:00") : new Date();
+    const places = trip.places || [];
 
+    // Detect unique stay locations
+    const uniqueStayLocations = [...new Set(sortedStays.map(s => s.location.toLowerCase().trim()))];
+    const isBaseCamp = sortedStays.length >= 1 && uniqueStayLocations.length === 1 && places.length > 1;
+
+    const dayMap = {};
+    if (isBaseCamp) {
+      // ─── BASE CAMP PATTERN ───
+      // Single accommodation, multiple places to visit as day trips
+      // Day 1: Travel to base + explore base location
+      // Middle days: Day trips to other places (return to base each night)
+      // Last day: Explore base or return journey
+      const baseStay = sortedStays[0];
+      const baseLoc = baseStay.location;
+      const baseStayName = baseStay.name;
+      // Places to visit as day trips (exclude the base location itself)
+      const dayTripPlaces = places.filter(p => p.toLowerCase().trim() !== baseLoc.toLowerCase().trim());
+      // All places including base for activity generation
+      const allVisitPlaces = [baseLoc, ...dayTripPlaces];
+
+      for (let d = 1; d <= numDays; d++) {
+        const isFirst = d === 1;
+        const isLast = d === numDays;
+        let dayPlace, isDayTrip = false;
+
+        if (isFirst) {
+          // Day 1: arrive at base, explore base location
+          dayPlace = baseLoc;
+        } else if (isLast) {
+          // Last day: base location (pack up + return journey)
+          dayPlace = baseLoc;
+        } else {
+          // Middle days: cycle through day trip destinations
+          const dtIdx = (d - 2) % Math.max(1, dayTripPlaces.length);
+          if (dayTripPlaces.length > 0) {
+            dayPlace = dayTripPlaces[dtIdx];
+            isDayTrip = true;
+          } else {
+            dayPlace = baseLoc; // No other places, stay at base
+          }
+        }
+
+        const prevDay = dayMap[d - 1];
+        dayMap[d] = {
+          place: dayPlace,
+          stayName: baseStayName,
+          prevPlace: prevDay ? prevDay.place : null,
+          isTransit: false, // Not moving accommodation
+          isBaseCamp: true,
+          isDayTrip,
+          baseLoc,
+          baseStayName,
+        };
+      }
+    } else if (sortedStays.length > 1) {
+      // ─── ROAD TRIP PATTERN ───
+      // Multiple stays: each day mapped to the covering stay's location
+      for (let d = 1; d <= numDays; d++) {
+        const dayDateStr = new Date(tripStartDate.getTime() + (d - 1) * 86400000).toISOString().split("T")[0];
+        let matchedStay = sortedStays.find(s => s.checkIn <= dayDateStr && s.checkOut > dayDateStr);
+        if (!matchedStay) matchedStay = sortedStays.find(s => s.checkIn === dayDateStr);
+        if (!matchedStay && d === 1) matchedStay = sortedStays[0];
+        if (!matchedStay) {
+          matchedStay = sortedStays.reduce((best, s) => {
+            const diff = Math.abs(new Date(s.checkIn + "T12:00:00") - new Date(dayDateStr + "T12:00:00"));
+            return (!best || diff < best.diff) ? { ...s, diff } : best;
+          }, null);
+        }
+        const place = matchedStay?.location || places[0] || "your destination";
+        const stayName = matchedStay?.name || "accommodation";
+        const prevDay = dayMap[d - 1];
+        const prevPlace = prevDay ? prevDay.place : null;
+        const isTransit = prevPlace && prevPlace.toLowerCase() !== place.toLowerCase();
+        dayMap[d] = { place, stayName, prevPlace, isTransit };
+      }
+    } else if (places.length > 0) {
+      // ─── NO STAYS: spread locations evenly across days ───
+      // e.g. 3 places over 5 days → Edinburgh(2), Inverness(2), Isle of Skye(1)
+      const daysPerPlace = Math.floor(numDays / places.length);
+      const extraDays = numDays % places.length;
+      let dayIdx = 1;
+      for (let p = 0; p < places.length; p++) {
+        const daysForThis = daysPerPlace + (p < extraDays ? 1 : 0);
+        for (let dd = 0; dd < daysForThis; dd++) {
+          const prevDay = dayMap[dayIdx - 1];
+          const prevPlace = prevDay ? prevDay.place : null;
+          const isTransit = prevPlace && prevPlace.toLowerCase() !== places[p].toLowerCase();
+          dayMap[dayIdx] = { place: places[p], stayName: `accommodation in ${places[p]}`, prevPlace, isTransit };
+          dayIdx++;
+        }
+      }
+    } else {
+      // No places at all — fallback
+      for (let d = 1; d <= numDays; d++) {
+        dayMap[d] = { place: "your destination", stayName: "accommodation", prevPlace: null, isTransit: false };
+      }
+    }
+
+    // ─── ACTIVITY & DINNER BUILDERS ───
+    const getLocPools = (loc) => {
+      const locActs = getLocationActivities(loc);
+      if (locActs) return locActs;
+      return {
+        morning: [`Explore ${loc}`, `Walking tour of ${loc}`, `Local market in ${loc}`, "Scenic viewpoint", "Cultural tour"],
+        afternoon: [`${loc} sightseeing walk`, "Shopping & souvenirs", "Museum visit", "Garden walk", "Photography walk"],
+        dinner: wantsPubs ? [`Local pub in ${loc}`, "Pub supper", "Gastropub dinner"] : [`Dinner in ${loc}`, "Evening meal", "Dinner out"],
+        kids: [`${loc} playground`, `Nature walk in ${loc}`, "Soft play", "Family activity"],
+      };
+    };
+
+    const buildDinnerTitle = (loc, dayIdx) => {
+      const locActs = getLocationActivities(loc);
+      if (locActs?.dinner?.length > 0) return locActs.dinner[dayIdx % locActs.dinner.length];
+      if (food.length > 0 && food[0] !== "Local cuisine") {
+        const cuisine = food[dayIdx % food.length];
+        return `${cuisine} ${wantsPubs ? "pub" : "restaurant"} in ${loc}`;
+      }
+      return wantsPubs ? "Dinner at local pub" : `Dinner in ${loc}`;
+    };
+
+    const pickAct = (pool, dayIdx, avoid) => {
+      if (!pool || pool.length === 0) return null;
+      let act = pool[dayIdx % pool.length];
+      if (avoid && avoid.test(act.toLowerCase())) {
+        act = pool.find(a => !avoid.test(a.toLowerCase())) || act;
+      }
+      return act;
+    };
+    const steepTest = wantsAvoidSteep ? /hik|trail|climb|trek|summit|ridge/ : null;
+
+    // ─── GENERATE EACH DAY ───
     const days = {};
+    // Track which activities we've used per location to avoid repeats
+    const usedActIdx = {};
+    const nextActIdx = (loc, pool) => {
+      const key = loc + pool;
+      usedActIdx[key] = (usedActIdx[key] || 0) + 1;
+      return usedActIdx[key] - 1;
+    };
+
     for (let d = 1; d <= numDays; d++) {
       const items = [];
       const isFirst = d === 1;
       const isLast = d === numDays;
-      const loc = places[(d - 1) % places.length];
-      const stayName = stayNames[Math.min(d - 1, stayNames.length - 1)] || stayNames[0];
-      const dayDate = trip.rawStart ? new Date(new Date(trip.rawStart).getTime() + (d - 1) * 86400000) : null;
-      const dateLabel = dayDate ? dayDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "";
+      const { place: loc, stayName, prevPlace, isTransit } = dayMap[d];
+      const locPools = getLocPools(loc);
+      const kidPool = locPools.kids || [`Family activity in ${loc}`, "Nature walk", "Playground"];
 
       if (isFirst) {
-        // Day 1: Journey + Arrival day
-        // Depart from start location
+        // ── Day 1: Journey + arrival ──
+        const travelHrs = estimateTravelHours(trip.startLocation || "", loc);
+        const evTime = isEV ? (enabledStops.filter(s => s.type === "ev_charge" && s.enabled).length * 0.5) : 0;
+        const totalTravelHrs = travelHrs + evTime;
+        const arrivalHour = Math.min(Math.floor(startHour + startMin / 60 + totalTravelHrs), 22);
+        const arrivalMin = Math.round((totalTravelHrs % 1) * 60);
+        const remainingHours = 22 - arrivalHour;
+
         if (trip.startLocation) {
-          items.push({ time: fmtTime(startHour, startMin), title: `Depart ${trip.startLocation}`, desc: `${travelMode}${isEV ? " · Full charge before departure" : ""} · Head to ${loc}`, group: "Everyone", color: T.a });
+          const tLabel = travelHrs >= 1 ? `~${Math.round(travelHrs * 10) / 10} hrs` : `~${Math.round(travelHrs * 60)} min`;
+          items.push({ time: fmtTime(startHour, startMin), title: `Depart ${trip.startLocation}`, desc: `${travelMode} · ${tLabel} to ${loc}${isEV ? " · Full charge before departure" : ""}`, group: "Everyone", color: T.a });
         }
 
-        // EV charging & stopovers en route (only stops for the first leg: startLocation → first place)
-        const midHour = startHour + Math.floor(estimatedTravelHrs / 2);
-        const firstLegStops = enabledStops.filter(s => {
-          // Match stops that go TO the first destination (not FROM it)
-          const isFirstLeg = s.desc.includes(trip.startLocation) && s.desc.includes(loc);
-          return isFirstLeg;
-        });
+        // Stopovers
+        const midHour = startHour + Math.floor(travelHrs / 2);
+        const firstLegStops = enabledStops.filter(s => s.desc && s.desc.includes(trip.startLocation) && s.desc.includes(loc));
         firstLegStops.filter(s => s.type === "ev_charge").forEach((stop, si) => {
-          const stopHr = Math.min(midHour + si, arrivalHour - 1);
-          items.push({ time: fmtTime(Math.max(stopHr, startHour + 1)), title: `⚡ EV Charging Stop`, desc: `${stop.desc}${stop.combineMeal ? " · Grab a coffee & stretch" : ""} · ~30 min`, group: "Everyone", color: T.amber });
+          items.push({ time: fmtTime(Math.max(Math.min(midHour + si, arrivalHour - 1), startHour + 1)), title: `⚡ Charge & Refresh`, desc: `${stop.desc} · ~30 min rapid charge · Grab coffee & snacks while charging`, group: "Everyone", color: T.amber, evSearch: { from: trip.startLocation, to: loc } });
         });
         firstLegStops.filter(s => s.type === "rest").forEach((stop, si) => {
-          const stopHr = Math.min(midHour + si, arrivalHour - 1);
-          items.push({ time: fmtTime(Math.max(stopHr, startHour + 1)), title: `☕ Rest stop`, desc: `${stop.desc} · Quick break`, group: "Everyone", color: T.amber });
+          items.push({ time: fmtTime(Math.max(Math.min(midHour + si, arrivalHour - 1), startHour + 1)), title: `☕ Rest stop`, desc: `${stop.desc} · Quick break`, group: "Everyone", color: T.amber });
         });
 
-        // Arrive at destination
-        const arriveTime = fmtTime(arrivalHour);
-        const arriveDesc = `Arrive at ${stayName} · Drop bags, freshen up`;
-        items.push({ time: arriveTime, title: `Arrive ${loc}`, desc: arriveDesc, group: "Everyone", color: T.a });
+        items.push({ time: fmtTime(arrivalHour, arrivalMin), title: `Arrive ${loc}`, desc: `Check in at ${stayName} · Drop bags, freshen up`, group: "Everyone", color: T.a });
 
-        if (!isRelaxed) {
-          const exploreHour = Math.min(arrivalHour + 1, 16);
-          let morningAct = morningPool[0] || "Explore the area";
-          if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
-          items.push({ time: fmtTime(exploreHour), title: isPacked ? morningAct : `Explore ${loc}`, desc: tags(`${loc} · ${budgetTier.label}`), group: "Everyone", color: T.blue });
-          if (isPacked && hasKids && kidPool.length > 0) {
-            items.push({ time: fmtTime(exploreHour), title: kidPool[0], desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+        // Afternoon activities based on remaining time + pace
+        if (!isRelaxed && remainingHours >= 2) {
+          const exploreHr = Math.min(arrivalHour + 1, 18);
+          const idx = nextActIdx(loc, "m");
+          const act = pickAct(locPools.morning, idx, steepTest) || `Explore ${loc}`;
+          items.push({ time: fmtTime(exploreHr), title: act, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
+          if (hasKids) {
+            const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+            items.push({ time: fmtTime(exploreHr), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
           }
-          if (isPacked) {
-            const lunchHr = Math.min(exploreHour + 2, 14);
-            const lunchDesc2 = wantsPubs ? `${budgetTier.label} pub · ${budgetTier.price}` : `${budgetTier.label} restaurant · ${budgetTier.price}`;
-            items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodLabel}`, desc: `${lunchDesc2}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+          if (isPacked && remainingHours >= 4) {
+            const lunchHr = Math.min(exploreHr + 2, 15);
+            items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodLabel}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+            if (remainingHours >= 6) {
+              const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Stroll around ${loc}`;
+              items.push({ time: fmtTime(Math.min(lunchHr + 2, 17)), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
+            }
           }
+        } else if (isRelaxed && remainingHours >= 3) {
+          items.push({ time: fmtTime(Math.min(arrivalHour + 1, 18)), title: `Gentle stroll around ${loc}`, desc: tags(`Take it easy after the journey`), group: "Everyone", color: T.blue });
         }
 
-        const dinnerHour = Math.max(arrivalHour + 3, 18);
-        const dinnerDesc = `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`;
-        items.push({ time: fmtTime(Math.min(dinnerHour, 20)), title: dinnerStyles[0], desc: `${dinnerDesc}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+        const dinnerHr = Math.max(arrivalHour + 2, 18);
+        items.push({ time: fmtTime(Math.min(dinnerHr, 20)), title: buildDinnerTitle(loc, 0), desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
 
       } else if (isLast && numDays > 1) {
-        // Last day: Departure
-        items.push({ time: fmtTime(8), title: "Breakfast", desc: `${stayName}`, group: "Everyone", color: T.coral });
-        items.push({ time: fmtTime(9, 30), title: "Check out & pack", desc: `${stayName} · Bags ready`, group: "Everyone", color: T.t3 });
-        const lastAct = morningPool[(d - 1) % morningPool.length] || "Last look around";
-        if (wantsAvoidSteep && /hik|trail|climb|trek/.test(lastAct.toLowerCase())) {
-          items.push({ time: fmtTime(10), title: `Farewell stroll in ${loc}`, desc: tags(`${loc} · Easy walk`), group: "Everyone", color: T.blue });
-        } else {
-          items.push({ time: fmtTime(10), title: lastAct, desc: tags(`${loc} · Final morning`), group: "Everyone", color: T.blue });
+        // ── Last day: Departure ──
+        // For base camp: depart from base location, not the last day-trip place
+        const dayInfo = dayMap[d];
+        const departureLoc = dayInfo.isBaseCamp ? dayInfo.baseLoc : loc;
+        const departureStay = dayInfo.isBaseCamp ? dayInfo.baseStayName : stayName;
+        const returnHrs = estimateTravelHours(departureLoc, trip.startLocation || "");
+        const rLabel = returnHrs >= 1 ? `~${Math.round(returnHrs * 10) / 10} hrs` : `~${Math.round(returnHrs * 60)} min`;
+        items.push({ time: fmtTime(8), title: "Breakfast", desc: departureStay, group: "Everyone", color: T.coral });
+        items.push({ time: fmtTime(9, 30), title: "Check out & pack", desc: `${departureStay} · Bags ready`, group: "Everyone", color: T.t3 });
+        const lastAct = pickAct(locPools.morning, nextActIdx(departureLoc, "m"), steepTest) || `Farewell stroll in ${departureLoc}`;
+        items.push({ time: fmtTime(10), title: lastAct, desc: tags(`${departureLoc} · Final morning`), group: "Everyone", color: T.blue });
+        if (hasKids) {
+          const kidAct = pickAct(kidPool, nextActIdx(departureLoc, "k"), null);
+          if (kidAct) items.push({ time: fmtTime(10), title: kidAct, desc: tags(`${departureLoc} · Last day fun`), group: "Kids", color: T.pink });
         }
-        items.push({ time: fmtTime(12), title: "Lunch & depart", desc: `${foodLabel} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home`, group: "Everyone", color: T.coral });
+        items.push({ time: fmtTime(12), title: "Lunch & depart", desc: `${foodLabel} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home (${rLabel})`, group: "Everyone", color: T.coral });
         if (trip.startLocation) {
-          items.push({ time: fmtTime(14), title: `${travelMode} home`, desc: `Return to ${trip.startLocation}${isEV ? " · Plan charging stop en route" : ""}`, group: "Everyone", color: T.a });
+          items.push({ time: fmtTime(14), title: `🚗 ${travelMode} home`, desc: `${departureLoc} → ${trip.startLocation} · ${rLabel}${isEV ? " · Plan charging stop" : ""}`, group: "Everyone", color: T.a });
           if (isEV) {
-            items.push({ time: fmtTime(15, 30), title: `⚡ EV Charging Stop`, desc: `Services en route to ${trip.startLocation} · ~30 min`, group: "Everyone", color: T.amber });
+            items.push({ time: fmtTime(14 + Math.floor(returnHrs / 2)), title: `⚡ Charge & Lunch Stop`, desc: `Service station en route · ~30 min rapid charge · Grab a meal while charging`, group: "Everyone", color: T.amber, evSearch: { from: departureLoc, to: trip.startLocation } });
           }
+          const arriveHomeHr = Math.min(14 + Math.ceil(returnHrs) + (isEV ? 1 : 0), 23);
+          items.push({ time: fmtTime(arriveHomeHr), title: `🏠 Arrive home`, desc: `Back in ${trip.startLocation} · Trip complete! Unpack & rest`, group: "Everyone", color: "#1B8F6A" });
         }
 
       } else {
-        // Full middle day
-        const prevLoc = places[(d - 2) % places.length];
-        const isTransitDay = prevLoc !== loc;
-        items.push({ time: fmtTime(8), title: "Breakfast", desc: `${isTransitDay ? `Check out · ${stayNames[Math.min(d - 2, stayNames.length - 1)] || stayNames[0]}` : stayName}`, group: "Everyone", color: T.coral });
-        // Travel to next location if places change
-        if (isTransitDay) {
-          items.push({ time: fmtTime(9, 30), title: `${travelMode} to ${loc}`, desc: `${prevLoc} → ${loc}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
-          if (isEV) {
-            items.push({ time: fmtTime(10, 30), title: `⚡ EV Charging Stop`, desc: `En route to ${loc} · ~30 min`, group: "Everyone", color: T.amber });
+        // ── Middle day: base camp day trip, transit, or full exploration ──
+        const dayInfo = dayMap[d];
+
+        if (dayInfo.isDayTrip && dayInfo.baseLoc) {
+          // ── BASE CAMP DAY TRIP ──
+          // Drive from base → visit place → drive back to base
+          const legHrs = estimateTravelHours(dayInfo.baseLoc, loc);
+          const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
+          const departHr = startHour;
+
+          items.push({ time: fmtTime(departHr), title: "Breakfast", desc: dayInfo.baseStayName, group: "Everyone", color: T.coral });
+          items.push({ time: fmtTime(departHr + 1), title: `🚗 Day trip to ${loc}`, desc: `${dayInfo.baseLoc} → ${loc} · ${legLabel}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
+
+          if (isEV && legHrs >= 1.5) {
+            const evHr = departHr + 1 + Math.floor(legHrs / 2);
+            items.push({ time: fmtTime(evHr), title: `⚡ Charge & Coffee Stop`, desc: `En route to ${loc} · ~30 min rapid charge`, group: "Everyone", color: T.amber, evSearch: { from: dayInfo.baseLoc, to: loc } });
           }
-          items.push({ time: fmtTime(isEV ? 11 : 10, 30), title: `Arrive ${loc}`, desc: `Check in at ${stayName}`, group: "Everyone", color: T.a });
-        }
-        const morningHour = isTransitDay ? (isEV ? 12 : 11) : 10;
-        let morningAct = morningPool[(d - 1) % morningPool.length] || "Explore";
-        if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
-        if (hasKids && kidPool.length > 0) {
-          items.push({ time: fmtTime(morningHour), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Adults", color: T.blue });
-          items.push({ time: fmtTime(morningHour), title: kidPool[(d - 1) % kidPool.length], desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+
+          const arriveHr = Math.min(Math.floor(departHr + 1 + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0)), 13);
+          items.push({ time: fmtTime(arriveHr), title: `Arrive ${loc}`, desc: `Day trip — exploring ${loc}`, group: "Everyone", color: T.a });
+
+          // Activities at the day trip destination
+          const mIdx = nextActIdx(loc, "m");
+          const morningAct = pickAct(locPools.morning, mIdx, steepTest) || `Explore ${loc}`;
+          items.push({ time: fmtTime(Math.min(arriveHr + 0.5, 12)), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
+          if (hasKids) {
+            const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+            items.push({ time: fmtTime(Math.min(arriveHr + 0.5, 12)), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          }
+
+          items.push({ time: fmtTime(13), title: `Lunch in ${loc}`, desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+
+          const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Afternoon in ${loc}`;
+          items.push({ time: fmtTime(14, 30), title: pmAct, desc: tags(`${loc} · Afternoon`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
+          if (hasKids) {
+            const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
+            items.push({ time: fmtTime(14, 30), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
+          }
+
+          // Return to base
+          const returnDepartHr = 16;
+          items.push({ time: fmtTime(returnDepartHr), title: `🚗 Return to ${dayInfo.baseLoc}`, desc: `${loc} → ${dayInfo.baseLoc} · ${legLabel}`, group: "Everyone", color: T.a });
+          if (isEV && legHrs >= 1.5) {
+            items.push({ time: fmtTime(returnDepartHr + Math.floor(legHrs / 2)), title: `⚡ Charge & Refresh`, desc: `En route back · ~30 min rapid charge`, group: "Everyone", color: T.amber, evSearch: { from: loc, to: dayInfo.baseLoc } });
+          }
+          const returnArriveHr = Math.min(Math.floor(returnDepartHr + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0)), 20);
+          items.push({ time: fmtTime(returnArriveHr), title: `Back at ${dayInfo.baseStayName}`, desc: `Freshen up · Relax`, group: "Everyone", color: T.t3 });
+
+        } else if (isTransit) {
+          // ── Transit day: move to new location + explore afternoon ──
+          const legHrs = estimateTravelHours(prevPlace, loc);
+          const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
+          const prevStay = dayMap[d - 1]?.stayName || "accommodation";
+          items.push({ time: fmtTime(8), title: "Breakfast & check out", desc: `${prevStay} · Pack up & say goodbye to ${prevPlace}`, group: "Everyone", color: T.coral });
+          items.push({ time: fmtTime(9, 30), title: `${travelMode} to ${loc}`, desc: `${prevPlace} → ${loc} · ${legLabel}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
+          if (isEV && legHrs >= 2) {
+            const evHr = Math.min(9 + Math.floor(legHrs / 2), 13);
+            items.push({ time: fmtTime(evHr, 30), title: `⚡ Charge & Coffee Stop`, desc: `Service station en route to ${loc} · ~30 min rapid charge · Stretch & refresh`, group: "Everyone", color: T.amber, evSearch: { from: prevPlace, to: loc } });
+          }
+          const arriveHr = Math.min(Math.floor(9.5 + legHrs + (isEV && legHrs >= 2 ? 0.5 : 0)), 16);
+          items.push({ time: fmtTime(arriveHr), title: `Arrive ${loc}`, desc: `Check in at ${stayName} · Settle in`, group: "Everyone", color: T.a });
+
+          // Afternoon in new location
+          const freeHr = Math.min(arriveHr + 1, 15);
+          const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Explore ${loc}`;
+          items.push({ time: fmtTime(freeHr), title: pmAct, desc: tags(`${loc} · First impressions`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
+          if (hasKids) {
+            const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+            items.push({ time: fmtTime(freeHr), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          }
         } else {
-          items.push({ time: fmtTime(morningHour), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Everyone", color: T.blue });
+          // ── Full day in same location ──
+          items.push({ time: fmtTime(8), title: "Breakfast", desc: stayName, group: "Everyone", color: T.coral });
+          const mIdx = nextActIdx(loc, "m");
+          const morningAct = pickAct(locPools.morning, mIdx, steepTest) || `Explore ${loc}`;
+          if (hasKids) {
+            items.push({ time: fmtTime(10), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Adults", color: T.blue });
+            const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+            items.push({ time: fmtTime(10), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          } else {
+            items.push({ time: fmtTime(10), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Everyone", color: T.blue });
+          }
+          items.push({ time: fmtTime(12, 30), title: `Lunch — ${foodLabel}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+          const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || "Afternoon activity";
+          if (hasKids) {
+            items.push({ time: fmtTime(14, 30), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Adults", color: T.blue });
+            const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
+            items.push({ time: fmtTime(14, 30), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
+          } else {
+            items.push({ time: fmtTime(14, 30), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
+          }
+          items.push({ time: fmtTime(17), title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
         }
-        const lunchDesc = wantsPubs ? `${budgetTier.label} pub · ${budgetTier.price}` : `${budgetTier.label} restaurant · ${budgetTier.price}`;
-        items.push({ time: fmtTime(12, 30), title: `Lunch — ${foodLabel}`, desc: `${lunchDesc}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
-        let afternoonAct = afternoonPool[(d - 1) % afternoonPool.length] || "Afternoon activity";
-        if (wantsAvoidSteep && /hik|trail|climb|trek/.test(afternoonAct.toLowerCase())) afternoonAct = "Scenic drive & viewpoints";
-        if (hasKids && kidPool.length > 1) {
-          items.push({ time: fmtTime(14, 30), title: afternoonAct, desc: tags(`${loc} · Afternoon`), group: "Adults", color: T.blue });
-          items.push({ time: fmtTime(14, 30), title: kidPool[d % kidPool.length] || "Free play", desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
-        } else {
-          items.push({ time: fmtTime(14, 30), title: afternoonAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
-        }
-        items.push({ time: fmtTime(17), title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
-        const dinnerDesc2 = `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`;
-        items.push({ time: fmtTime(19), title: dinnerStyles[(d - 1) % dinnerStyles.length], desc: `${dinnerDesc2}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+
+        items.push({ time: fmtTime(19), title: buildDinnerTitle(loc, d - 1), desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
       }
 
       days[d] = items;
@@ -1161,10 +2028,50 @@ export default function WanderlyApp() {
     return days;
   };
 
-  const generateAndSetTimeline = (id) => {
+  const generateAndSetTimeline = async (id) => {
+    const trip = createdTrips.find(t => t.id === id);
+    if (!trip) return;
+    const timeline = generateMultiDayTimeline(trip);
+
+    // Enrich EV charging stops with real locations from Places API
+    const evItems = [];
+    Object.entries(timeline).forEach(([day, items]) => {
+      items.forEach((item, idx) => {
+        if (item.evSearch) evItems.push({ day: parseInt(day), idx, from: item.evSearch.from, to: item.evSearch.to });
+      });
+    });
+
+    if (evItems.length > 0) {
+      try {
+        const enriched = await Promise.all(evItems.map(async (ev) => {
+          const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
+          const res = await fetch("/api/places", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),
+          });
+          const data = await res.json();
+          if (res.ok && data.places?.length > 0) {
+            const station = data.places[0];
+            return { ...ev, station };
+          }
+          return ev;
+        }));
+
+        enriched.forEach(ev => {
+          if (ev.station) {
+            const s = ev.station;
+            const rating = s.rating ? ` · ${s.rating}★` : "";
+            timeline[ev.day][ev.idx].title = `⚡ ${s.name}`;
+            timeline[ev.day][ev.idx].desc = `${s.address} · Rapid charge ~30 min · Grab food & coffee while charging${rating}`;
+          }
+        });
+      } catch (e) { /* Places API unavailable — keep generic descriptions */ }
+    }
+
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== id) return t;
-      return { ...t, timeline: generateMultiDayTimeline(t) };
+      return { ...t, timeline };
     }));
     showToast("Itinerary generated!");
   };
@@ -1195,6 +2102,35 @@ export default function WanderlyApp() {
     return sorted;
   };
 
+  // Build the FULL route from stays (includes locations not in trip.places)
+  // Returns ordered unique locations derived from stays sorted by check-in
+  const getFullRouteFromStays = (trip) => {
+    const stays = trip?.stays || [];
+    if (stays.length === 0) return trip?.places || [];
+    // Sort stays by check-in date
+    const sorted = [...stays].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+    if (sorted.length === 0) return trip?.places || [];
+    // Extract unique locations in order
+    const seen = new Set();
+    const route = [];
+    sorted.forEach(s => {
+      const loc = s.location;
+      const key = loc.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        route.push(loc);
+      }
+    });
+    // Also include any trip.places not covered by stays (append at end)
+    (trip?.places || []).forEach(p => {
+      if (!seen.has(p.toLowerCase())) {
+        seen.add(p.toLowerCase());
+        route.push(p);
+      }
+    });
+    return route;
+  };
+
   const makeTripLive = (id) => {
     const trip = createdTrips.find(t => t.id === id);
     const isEV = trip?.travel?.some(m => /ev/i.test(m));
@@ -1204,7 +2140,7 @@ export default function WanderlyApp() {
     const autoStops = [];
     if (places.length > 0 && startLoc) {
       if (isEV) {
-        autoStops.push({ type: "ev_charge", label: `EV charging stop`, desc: `Halfway between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: true });
+        autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: true });
       } else {
         autoStops.push({ type: "rest", label: "Rest & coffee stop", desc: `Between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: false });
       }
@@ -1212,7 +2148,7 @@ export default function WanderlyApp() {
     // If multi-place trip, suggest stops between places
     for (let i = 0; i < places.length - 1; i++) {
       if (isEV) {
-        autoStops.push({ type: "ev_charge", label: `EV charge between destinations`, desc: `${places[i]} → ${places[i + 1]}`, time: "En route", enabled: true, combineMeal: true });
+        autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${places[i]} and ${places[i + 1]}`, time: "En route", enabled: true, combineMeal: true });
       }
     }
     setPendingActivationTripId(id);
@@ -1220,30 +2156,67 @@ export default function WanderlyApp() {
     setShowActivationModal(true);
   };
 
-  const confirmActivation = () => {
+  const confirmActivation = async () => {
     const id = pendingActivationTripId;
     if (!id) return;
-    let activatedTrip = null;
+    const trip = createdTrips.find(t => t.id === id);
+    if (!trip) return;
+
+    updateTripStatusInDB(trip.dbId || trip.id, 'live');
+    const updated = { ...trip, status: "live", activationPrefs: { ...activationPrefs } };
+    updated.timeline = generateMultiDayTimeline(updated);
+
+    // Enrich EV charging stops with real locations
+    const evItems = [];
+    Object.entries(updated.timeline).forEach(([day, items]) => {
+      items.forEach((item, idx) => {
+        if (item.evSearch) evItems.push({ day: parseInt(day), idx, from: item.evSearch.from, to: item.evSearch.to });
+      });
+    });
+    if (evItems.length > 0) {
+      try {
+        const enriched = await Promise.all(evItems.map(async (ev) => {
+          const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
+          const res = await fetch("/api/places", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),
+          });
+          const data = await res.json();
+          if (res.ok && data.places?.length > 0) return { ...ev, station: data.places[0] };
+          return ev;
+        }));
+        enriched.forEach(ev => {
+          if (ev.station) {
+            const s = ev.station;
+            const rating = s.rating ? ` · ${s.rating}★` : "";
+            updated.timeline[ev.day][ev.idx].title = `⚡ ${s.name}`;
+            updated.timeline[ev.day][ev.idx].desc = `${s.address} · Rapid charge ~30 min · Grab food & coffee while charging${rating}`;
+          }
+        });
+      } catch (e) { /* fallback to generic */ }
+    }
+
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== id) return { ...t, status: t.status === "live" ? "new" : t.status };
-      updateTripStatusInDB(t.dbId || t.id, 'live');
-      const updated = { ...t, status: "live", activationPrefs: { ...activationPrefs } };
-      updated.timeline = generateMultiDayTimeline(updated);
-      activatedTrip = updated;
       return updated;
     }));
     setShowActivationModal(false);
     setPendingActivationTripId(null);
     setSelectedDay(1);
     setTripDetailTab("itinerary");
-    // Navigate to trip detail if activated from home page
-    if (activatedTrip) {
-      setSelectedCreatedTrip(activatedTrip);
-      setEditingTimelineIdx(null);
-      setTripChatMessages([]);
-      setTripChatInput("");
-      navigate("createdTrip");
-    }
+    // Navigate to trip detail
+    setSelectedCreatedTrip(updated);
+    setEditingTimelineIdx(null);
+    setTripChatMessages([]);
+    setTripChatInput("");
+    loadTripMessages(updated.dbId);
+    loadExpenses(updated.dbId);
+    navigate("createdTrip");
+    // Chat nudge — delayed so the user sees the itinerary first
+    setTimeout(() => {
+      showToast("Want to refine this itinerary? Switch to the Chat tab and tell me what to change!");
+    }, 1500);
   };
 
   const viewCreatedTrip = (trip) => {
@@ -1253,6 +2226,8 @@ export default function WanderlyApp() {
     setTripChatInput("");
     setTripDetailTab("itinerary");
     setSelectedDay(1);
+    loadTripMessages(trip.dbId);
+    loadExpenses(trip.dbId);
     navigate("createdTrip");
   };
 
@@ -1266,10 +2241,27 @@ export default function WanderlyApp() {
   };
 
   const deleteTimelineItem = (tripId, idx) => {
+    const trip = createdTrips.find(t => t.id === tripId);
+    const item = trip?.timeline?.[selectedDay]?.[idx];
+    if (!window.confirm(`Remove "${item?.title || "this item"}" from Day ${selectedDay}?`)) return;
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
       const tl = t.timeline || {};
       return { ...t, timeline: { ...tl, [selectedDay]: (tl[selectedDay] || []).filter((_, i) => i !== idx) } };
+    }));
+    setEditingTimelineIdx(null);
+    showToast("Item removed");
+  };
+
+  const moveTimelineItem = (tripId, idx, direction) => {
+    setCreatedTrips(prev => prev.map(t => {
+      if (t.id !== tripId) return t;
+      const tl = t.timeline || {};
+      const items = [...(tl[selectedDay] || [])];
+      const newIdx = idx + direction;
+      if (newIdx < 0 || newIdx >= items.length) return t;
+      [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+      return { ...t, timeline: { ...tl, [selectedDay]: items } };
     }));
     setEditingTimelineIdx(null);
   };
@@ -1302,14 +2294,33 @@ export default function WanderlyApp() {
     return Object.keys(trip.timeline).length > 0 && Object.values(trip.timeline).some(d => d.length > 0);
   };
 
-  const handleTripChat = (tripId) => {
+  const handleTripChat = async (tripId) => {
     const msg = tripChatInput.trim();
     if (!msg) return;
     setTripChatMessages(prev => [...prev, { role: "user", text: msg }]);
     setTripChatInput("");
+    setTripChatTyping(true);
     const trip = createdTrips.find(t => t.id === tripId);
+    saveChatMessage(trip?.dbId, 'user', msg, user?.user_metadata?.full_name || user?.email || 'You');
     const loc = trip?.places?.join(", ") || "your destination";
-    const firstLoc = trip?.places?.[0] || "your destination";
+    // Determine current location based on selected day + stays (not always first place)
+    const currentDayLoc = (() => {
+      const stays = trip?.stays || [];
+      if (stays.length > 0 && trip?.rawStart) {
+        const sorted = [...stays].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+        const tripStart = new Date(trip.rawStart + "T12:00:00");
+        const dayDateStr = new Date(tripStart.getTime() + (selectedDay - 1) * 86400000).toISOString().split("T")[0];
+        let matched = sorted.find(s => s.checkIn <= dayDateStr && s.checkOut > dayDateStr);
+        if (!matched) matched = sorted.find(s => s.checkIn === dayDateStr);
+        if (!matched && selectedDay === 1) matched = sorted[0];
+        if (matched?.location) return matched.location;
+      }
+      // Fallback: cycle through places by day
+      const places = trip?.places || [];
+      if (places.length > 0) return places[(selectedDay - 1) % places.length];
+      return "your destination";
+    })();
+    const firstLoc = currentDayLoc;
     const budget = trip?.budget || "";
     const summary = trip?.summary || buildTripSummary(trip || {});
     const instructions = trip?.prefs?.instructions || "";
@@ -1323,30 +2334,298 @@ export default function WanderlyApp() {
     const wantsAccessible = /accessible|wheelchair|mobility/.test(ctxLower);
     const wantsPubs = /pub|pubs|tavern/.test(ctxLower);
 
-    const contextLine = `📋 **Your trip:** ${summary}\n\n`;
+    // Keep context line short — don't dump full summary into every message
+    const placesStr = trip?.places?.join(", ") || "your trip";
+    const contextLine = "";
+    const lower = msg.toLowerCase();
 
-    setTimeout(() => {
+    // ── EV charger queries — always use current GPS location + Places API ──
+    if (/ev|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
+      setTripChatMessages(prev => [...prev, { role: "ai", text: "📍 Finding EV chargers near you..." }]);
+      const handleEvResults = async (lat, lng, locLabel) => {
+        try {
+          // If we have GPS coords, use nearby search (location + type, no query)
+          // If no GPS, use text search with location name in query (no type filter)
+          const body = lat && lng
+            ? { location: { lat, lng }, type: "electric_vehicle_charging_station", radius: 15000 }
+            : { query: `EV charging stations near ${firstLoc}`, radius: 15000 };
+          const res = await fetch("/api/places", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (res.ok && data.places?.length > 0) {
+            const chargers = data.places.slice(0, 5);
+            const list = chargers.map((p, i) => {
+              const stars = p.rating ? ` · ${p.rating}★` : "";
+              const status = p.openNow === true ? " · Open now" : p.openNow === false ? " · Closed" : "";
+              const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
+              return `${i + 1}. **${p.name}**${stars}${status}\n   ${p.address}\n   [Navigate in Maps](${mapLink})`;
+            }).join("\n\n");
+            return `⚡ **EV Chargers near ${locLabel}:**\n\n${list}\n\n💡 **Tips:**\n• Check connector type (CCS/CHAdeMO/Type 2) before heading there\n• Rapid chargers (50kW+) get you to 80% in ~30 min\n• Use Zap-Map app for real-time availability`;
+          }
+        } catch (e) { /* fallback below */ }
+        return `⚡ I couldn't find chargers via search. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time EV charger availability near ${locLabel}.`;
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const reply = await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location");
+            setTripChatTyping(false);
+            setTripChatMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.findLastIndex(m => m.text === "📍 Finding EV chargers near you...");
+              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+              else updated.push({ role: "ai", text: reply });
+              return updated;
+            });
+          },
+          async () => {
+            // Location denied — search near trip destination instead
+            const reply = await handleEvResults(null, null, firstLoc);
+            setTripChatTyping(false);
+            setTripChatMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.findLastIndex(m => m.text === "📍 Finding EV chargers near you...");
+              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+              else updated.push({ role: "ai", text: reply });
+              return updated;
+            });
+          },
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
+      } else {
+        const reply = await handleEvResults(null, null, firstLoc);
+        setTripChatTyping(false);
+        setTripChatMessages(prev => {
+          const updated = [...prev];
+          const idx = updated.findLastIndex(m => m.text === "📍 Finding EV chargers near you...");
+          if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+          else updated.push({ role: "ai", text: reply });
+          return updated;
+        });
+      }
+      return; // Handled — don't fall through to Claude API
+    }
+
+    // ── "Nearby" queries (restaurants, food, cafes, activities, petrol) — use GPS + Places API ──
+    const isNearbyQuery = /nearby|nearest|near me|near here|around me|close by|closest/i.test(lower);
+    const isPlaceQuery = /restaurant|food|eat|dining|cafe|coffee|pub|bar|pizza|burger|takeaway|lunch|dinner|breakfast|brunch|supermarket|petrol|fuel|pharmacy|hospital|atm/i.test(lower);
+    if (isNearbyQuery || (isPlaceQuery && isNearbyQuery)) {
+      // Determine search type from the query
+      const searchType = /cafe|coffee/i.test(lower) ? "cafe"
+        : /pub|bar/i.test(lower) ? "bar"
+        : /supermarket|grocery/i.test(lower) ? "supermarket"
+        : /petrol|fuel|gas station/i.test(lower) ? "gas_station"
+        : /pharmacy|chemist/i.test(lower) ? "pharmacy"
+        : /hospital|a&e|emergency/i.test(lower) ? "hospital"
+        : /atm|cash/i.test(lower) ? "atm"
+        : "restaurant";
+      const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType + "s";
+      const searchIcon = /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : "🍽️";
+
+      setTripChatMessages(prev => [...prev, { role: "ai", text: `📍 Finding ${searchLabel} near you...` }]);
+
+      const handleNearbyResults = async (lat, lng, locLabel) => {
+        try {
+          const body = lat && lng
+            ? { location: { lat, lng }, type: searchType, radius: 5000 }
+            : { query: `${searchType} near ${firstLoc}`, radius: 5000 };
+          const res = await fetch("/api/places", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (res.ok && data.places?.length > 0) {
+            const results = data.places.slice(0, 6);
+            const list = results.map((p, i) => {
+              const stars = p.rating ? ` · ${p.rating}★` : "";
+              const price = p.priceLevel || "";
+              const status = p.openNow === true ? " · **Open now**" : p.openNow === false ? " · Closed" : "";
+              const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
+              return `${i + 1}. **${p.name}** ${price}${stars}${status}\n   ${p.address}\n   [Navigate in Maps](${mapLink})`;
+            }).join("\n\n");
+            return `${searchIcon} **${searchLabel.charAt(0).toUpperCase() + searchLabel.slice(1)} near ${locLabel}:**\n\n${list}\n\n💡 *Say "Add [name] to Day ${selectedDay}" to include in your itinerary*`;
+          }
+        } catch (e) { /* fallback below */ }
+        return `${searchIcon} Couldn't find ${searchLabel} via search. Try [Google Maps](https://www.google.com/maps/search/${encodeURIComponent(searchType + " near me")}) for real-time results near you.`;
+      };
+
+      const updateNearbyChat = (reply) => {
+        setTripChatTyping(false);
+        setTripChatMessages(prev => {
+          const updated = [...prev];
+          const idx = updated.findLastIndex(m => m.text.includes(`Finding ${searchLabel} near you`));
+          if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+          else updated.push({ role: "ai", text: reply });
+          return updated;
+        });
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => updateNearbyChat(await handleNearbyResults(pos.coords.latitude, pos.coords.longitude, "your location")),
+          async () => updateNearbyChat(await handleNearbyResults(null, null, firstLoc)),
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
+      } else {
+        handleNearbyResults(null, null, firstLoc).then(updateNearbyChat);
+      }
+      return;
+    }
+
+    // Try Claude API first for richer, context-aware responses
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: msg,
+          tripContext: {
+            tripName: trip?.name,
+            dates: trip?.start && trip?.end ? `${trip.start} – ${trip.end}` : null,
+            places: trip?.places,
+            travelMode: trip?.travel?.join(", "),
+            travellers: trip?.travellers,
+            stays: trip?.stays,
+            prefs: trip?.prefs,
+            budget,
+            currentLocation: firstLoc,
+            currentDay: selectedDay,
+          },
+          chatHistory: tripChatMessages.slice(-8),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.reply) {
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: data.reply }]);
+        saveChatMessage(trip?.dbId, 'ai', data.reply);
+        return;
+      }
+    } catch (e) { /* API unavailable — fall back to local */ }
+
+    // Local fallback
+    setTimeout(async () => {
       let reply = "";
       const lower = msg.toLowerCase();
-      if (lower.includes("restaurant") || lower.includes("food") || lower.includes("eat") || lower.includes("lunch") || lower.includes("dinner")) {
+      if (lower.includes("restaurant") || lower.includes("food") || lower.includes("eat") || lower.includes("lunch") || lower.includes("dinner") || lower.includes("nearby")) {
+        // Use Places API for real restaurant search — based on current day location
         const extras = [];
         if (wantsDog) extras.push("🐕 dog-friendly");
         if (wantsAccessible) extras.push("♿ accessible");
         if (hasKids) extras.push("👧 kids' menus");
-        const filterStr = extras.length > 0 ? `\n\nFiltering for: ${extras.join(", ")}` : "";
-        reply = `${contextLine}For ${budgetLabel} dining in ${firstLoc} (${foodPref}):${filterStr}\n\n🍽️ I'd suggest ${budgetLabel} ${wantsPubs ? "pubs & gastropubs" : "restaurants"} with ${foodPref} options.${hasKids ? `\n👧 With ${kidNames}, look for family-friendly spots.` : ""}\n\nTap ✏️ on any meal to update.`;
+        const filterStr = extras.length > 0 ? `\nFiltering for: ${extras.join(", ")}` : "";
+        const searchQuery = `${budgetLabel} ${foodPref} restaurants ${hasKids ? "family friendly" : ""} in ${firstLoc}`;
+
+        // Try GPS location first for "nearby" queries, then fall back to day's location
+        const doPlacesSearch = async (gpsLat, gpsLng) => {
+          const body = { query: searchQuery, type: "restaurant" };
+          if (gpsLat && gpsLng) { body.location = { lat: gpsLat, lng: gpsLng }; body.radius = 5000; }
+          const placesRes = await fetch("/api/places", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          return placesRes;
+        };
+
+        // Try Places API — with GPS if available, else by current day location name
+        try {
+          let placesRes;
+          if (lower.includes("nearby") && navigator.geolocation) {
+            // Attempt GPS first
+            try {
+              const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
+              placesRes = await doPlacesSearch(pos.coords.latitude, pos.coords.longitude);
+            } catch (gpsErr) {
+              placesRes = await doPlacesSearch(null, null);
+            }
+          } else {
+            placesRes = await doPlacesSearch(null, null);
+          }
+          const placesData = await placesRes.json();
+          if (placesRes.ok && placesData.places?.length > 0) {
+            const top5 = placesData.places.slice(0, 5);
+            const placesList = top5.map((p, i) => {
+              const stars = p.rating ? `${p.rating}★` : "";
+              const price = p.priceLevel || "";
+              const status = p.openNow === true ? "Open now" : p.openNow === false ? "Closed" : "";
+              const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
+              return `${i + 1}. **${p.name}** ${stars} ${price}\n   ${p.address}${status ? ` · ${status}` : ""}\n   [View on Maps](${mapLink})`;
+            }).join("\n\n");
+
+            reply = `🍽️ **Top restaurants near ${firstLoc}** (Day ${selectedDay}, ${foodPref}):${filterStr}\n\n${placesList}\n\n💡 Say **"Add [name] to Day ${selectedDay}"** to plug it into your itinerary!`;
+            setTripChatTyping(false);
+            setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+            return;
+          }
+        } catch (e) { /* Places API unavailable — use geolocation fallback */ }
+
+        // Geolocation fallback
+        if (lower.includes("nearby") && navigator.geolocation) {
+          setTripChatMessages(prev => [...prev, { role: "ai", text: "📍 Finding your location..." }]);
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const { latitude, longitude } = pos.coords;
+              const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}/@${latitude},${longitude},15z`;
+              const locReply = `📍 Found your location!\n\n🍽️ Searching for ${budgetLabel} restaurants (${foodPref}) near you:${filterStr}\n\n🔗 [Open in Google Maps](${mapsUrl})\n\nWant me to add a dinner slot to your itinerary?`;
+              setTripChatMessages(prev => {
+                const updated = [...prev];
+                const locIdx = updated.findLastIndex(m => m.text === "📍 Finding your location...");
+                if (locIdx >= 0) updated[locIdx] = { role: "ai", text: locReply };
+                else updated.push({ role: "ai", text: locReply });
+                return updated;
+              });
+            },
+            () => {
+              const fallbackReply = `🍽️ Showing suggestions for **${firstLoc}**:\n${filterStr}\n\nI'd suggest ${budgetLabel} ${wantsPubs ? "pubs & gastropubs" : "restaurants"} with ${foodPref} options.${hasKids ? `\n👧 Look for family-friendly spots with kids' menus.` : ""}\n\nTap ✏️ on any meal to update.`;
+              setTripChatMessages(prev => {
+                const updated = [...prev];
+                const locIdx = updated.findLastIndex(m => m.text === "📍 Finding your location...");
+                if (locIdx >= 0) updated[locIdx] = { role: "ai", text: fallbackReply };
+                else updated.push({ role: "ai", text: fallbackReply });
+                return updated;
+              });
+            },
+            { enableHighAccuracy: false, timeout: 8000 }
+          );
+          return;
+        }
+
+        reply = `For ${budgetLabel} dining in ${firstLoc} (${foodPref}):${filterStr}\n\n🍽️ I'd suggest ${budgetLabel} ${wantsPubs ? "pubs & gastropubs" : "restaurants"} with ${foodPref} options.${hasKids ? `\n👧 With ${kidNames}, look for family-friendly spots.` : ""}\n\nTap ✏️ on any meal to update.`;
       } else if (lower.includes("earlier") || lower.includes("later") || lower.includes("time") || lower.includes("move")) {
         reply = `${contextLine}Tap ✏️ on any timeline item to adjust times.`;
         if (hasKids) {
           const youngest = Math.min(...allKids.map(k => parseInt(k.age) || 10));
           reply += youngest <= 7 ? `\n\n💡 With young kids (${kidNames}), I'd recommend:\n• Dinner by 5:30 PM\n• Rest breaks every 2 hours\n• Late starts if mornings are tough` : `\n\n💡 With ${kidNames}, earlier dinner (6 PM) works well.`;
         }
-      } else if (lower.includes("add") || lower.includes("include") || lower.includes("more")) {
-        addTimelineItem(tripId);
-        reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
-        if (hasKids) reply += `\n\n👧 Tip: Split adult/kid activities — ${kidNames} might enjoy something different!`;
-        if (wantsDog) reply += `\n🐕 Remember: check venue is dog-friendly before booking.`;
-        reply += `\n\nTap ✏️ to customise.`;
+      } else if (lower.includes("add") || lower.includes("include") || lower.includes("plug")) {
+        // Check if user wants to add a specific item (e.g., "add Oink to day 2")
+        const dayMatch = lower.match(/day\s*(\d+)/);
+        const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
+        // Extract what to add — text after "add"/"include"/"plug"
+        const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
+        const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
+        if (itemTitle && itemTitle.length > 2) {
+          // Add a specific named item to the specified day
+          const newItem = { time: "12:00 PM", title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
+          setCreatedTrips(prev => prev.map(t => {
+            if (t.id !== tripId) return t;
+            const tl = t.timeline || {};
+            return { ...t, timeline: { ...tl, [targetDay]: [...(tl[targetDay] || []), newItem] } };
+          }));
+          reply = `✅ Added **${itemTitle}** to **Day ${targetDay}** in ${firstLoc}. Switch to the Itinerary tab to see it — tap ✏️ to adjust the time.`;
+        } else {
+          addTimelineItem(tripId);
+          reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
+          if (hasKids) reply += `\n\n👧 Tip: Split adult/kid activities — ${kidNames} might enjoy something different!`;
+          if (wantsDog) reply += `\n🐕 Remember: check venue is dog-friendly before booking.`;
+          reply += `\n\nTap ✏️ to customise.`;
+        }
       } else if (lower.includes("remove") || lower.includes("delete") || lower.includes("cancel")) {
         reply = `Tap ✏️ on any item, then 🗑️ to remove it. Which activity would you like to remove?`;
       } else if (lower.includes("budget") || lower.includes("cost") || lower.includes("spend") || lower.includes("price")) {
@@ -1359,8 +2638,10 @@ export default function WanderlyApp() {
       } else {
         reply = `${contextLine}I'm using all of the above to personalise your ${firstLoc} trip. Ask me about:\n• 🍽️ Restaurants & food\n• ⏰ Timing adjustments\n• 🎯 Activities to add\n• 💰 Budget & costs\n• 🔄 Regenerate itinerary`;
       }
+      setTripChatTyping(false);
       setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
-    }, 800);
+      saveChatMessage(trip?.dbId, 'ai', reply);
+    }, Math.min(2500, Math.max(800, 1200)));
   };
 
   const navigate = useCallback((s) => setScreen(s), []);
@@ -1469,7 +2750,7 @@ export default function WanderlyApp() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "16px 20px 12px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: T.t1 }}>Wanderly</h1>
+          <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: T.t1 }}>Trip With Me</h1>
           <span style={{ fontSize: 11, color: T.t3, fontWeight: 500, letterSpacing: 0.5 }}>TRAVEL CONCIERGE</span>
         </div>
         <button style={{ ...css.btn, ...css.btnP, ...css.btnSm }} onClick={() => { resetWizard(); navigate("create"); }}>+ New trip</button>
@@ -1546,7 +2827,7 @@ export default function WanderlyApp() {
             <span style={{ fontSize: 20 }}>🤖</span>
             <div>
               <p style={{ fontSize: 13, fontWeight: 500, color: T.ad }}>Powered by intelligent routing</p>
-              <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>Wanderly automatically connects to 18 travel services — maps, weather, bookings, EV chargers, and more — based on your trip needs.</p>
+              <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>Trip With Me automatically connects to 18 travel services — maps, weather, bookings, EV chargers, and more — based on your trip needs.</p>
             </div>
           </div>
         </div>
@@ -1583,7 +2864,27 @@ export default function WanderlyApp() {
       </div>
       <div style={{ display: "flex", gap: 8, padding: "16px 24px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
         {wizStep > 0 && <button className="w-btn" style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
-        <button className="w-btn w-btnP" style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => wizStep < 4 ? setWizStep(wizStep + 1) : createTrip()}>
+        <button className="w-btn w-btnP" style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => {
+          // Date validation on step 0
+          if (wizStep === 0) {
+            if (wizTrip.start && wizTrip.end) {
+              if (wizTrip.end < wizTrip.start) { alert("End date must be after start date."); return; }
+              const days = Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1;
+              if (days > 30) { alert(`Trip is ${days} days — max 30 days supported. Please adjust dates.`); return; }
+            }
+            if (wizTrip.start && wizTrip.start < new Date().toISOString().split("T")[0]) {
+              // Allow past dates but warn
+            }
+          }
+          // Stay date validation on step 2
+          if (wizStep === 2 && wizStays.length > 0) {
+            for (const s of wizStays) {
+              if (s.checkIn && s.checkOut && s.checkOut <= s.checkIn) { alert(`"${s.name}" — check-out must be after check-in.`); return; }
+              if (wizTrip.start && s.checkIn && s.checkIn < wizTrip.start) { alert(`"${s.name}" check-in (${s.checkIn}) is before trip start.`); return; }
+            }
+          }
+          wizStep < 4 ? setWizStep(wizStep + 1) : createTrip();
+        }}>
           {wizStep < 4 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
         </button>
       </div>
@@ -1818,148 +3119,208 @@ export default function WanderlyApp() {
     );
   };
 
-  // ─── Wizard Step: Stays (location-aware, sorted by rating) ───
+  // ─── Wizard Step: Stays (Places API search + manual entry) ───
+  const [stayPlacesResults, setStayPlacesResults] = useState([]);
+  const [staySearching, setStaySearching] = useState(false);
+  const staySearchTimeout = React.useRef(null);
+
+  const searchAccommodations = async (query) => {
+    if (!query.trim()) { setStayPlacesResults([]); return; }
+    setStaySearching(true);
+    try {
+      const locationName = wizTrip.places.length > 0 ? wizTrip.places[0] : "";
+      const searchQuery = locationName ? `${query} near ${locationName}` : query;
+      const res = await fetch("/api/places", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: searchQuery, type: "lodging" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStayPlacesResults((data.places || data.results || []).slice(0, 6));
+      }
+    } catch { /* ignore */ }
+    setStaySearching(false);
+  };
+
+  const handleStaySearchChange = (val) => {
+    setStaySearch(val);
+    clearTimeout(staySearchTimeout.current);
+    if (val.trim().length >= 3) {
+      staySearchTimeout.current = setTimeout(() => searchAccommodations(val), 500);
+    } else {
+      setStayPlacesResults([]);
+    }
+  };
+
   const renderWizStays = () => {
-    const localAccom = generateLocalAccommodations(wizTrip.places);
     const locationName = wizTrip.places.length > 0 ? wizTrip.places.join(", ") : "";
 
-    const filteredAccom = staySearch.trim()
-      ? localAccom.filter(a => a.name.toLowerCase().includes(staySearch.toLowerCase()) || a.type.toLowerCase().includes(staySearch.toLowerCase()) || a.tags.some(t => t.toLowerCase().includes(staySearch.toLowerCase())))
-      : localAccom.slice(0, 6);
-
     const addStay = (accom) => {
-      setWizStays(prev => [...prev, { ...accom, checkIn: wizTrip.start || "", checkOut: wizTrip.end || "" }]);
+      const lastStay = wizStays.length > 0 ? wizStays[wizStays.length - 1] : null;
+      const defaultCheckIn = (lastStay?.checkOut) || wizTrip.start || "";
+      let defaultCheckOut = "";
+      if (defaultCheckIn) {
+        try {
+          const d = new Date(defaultCheckIn + "T12:00:00");
+          d.setDate(d.getDate() + 1);
+          defaultCheckOut = d.toISOString().split("T")[0];
+        } catch { defaultCheckOut = ""; }
+      }
+      setWizStays(prev => [...prev, { ...accom, checkIn: defaultCheckIn, checkOut: defaultCheckOut, bookingRef: "", cost: "", confirmationLink: "" }]);
       setStaySearch("");
       setStaySearchOpen(false);
+      setStayPlacesResults([]);
     };
 
     const removeStay = (idx) => setWizStays(prev => prev.filter((_, i) => i !== idx));
 
-    const updateStayDate = (idx, field, val) => {
+    const updateStayField = (idx, field, val) => {
       setWizStays(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
-    };
-
-    const openLiveSearch = () => {
-      const query = staySearch.trim() || (locationName ? `hotels near ${locationName}` : "hotels");
-      window.open(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(query)}`, "_blank");
-    };
-
-    const openGoogleSearch = () => {
-      const query = staySearch.trim() || (locationName ? `accommodation near ${locationName}` : "accommodation");
-      window.open(`https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`, "_blank");
     };
 
     return (
       <>
-        {wizStays.length === 0 && !staySearchOpen && (
-          <div style={{ textAlign: "center", padding: "20px 10px", color: T.t3, fontSize: 13 }} onClick={() => setStaySearchOpen(true)}>
-            <p style={{ marginBottom: 4 }}>No accommodations added yet.</p>
-            <p style={{ fontSize: 12 }}>{wizTrip.places.length > 0
-              ? `Showing suggestions near ${locationName}. Search or browse live options.`
-              : "Add locations in Step 1 to get localised suggestions."}</p>
-          </div>
-        )}
-        {wizStays.length === 0 && !staySearchOpen && filteredAccom.length > 0 && (
-          <div style={{ ...css.card, padding: 12 }}>
-            <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Suggested accommodations:</p>
-            {filteredAccom.map((a, i) => (
-              <div key={i} onClick={() => addStay(a)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `.5px solid ${T.border}`, marginBottom: 6, background: T.s, transition: "background .15s" }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: T.purpleL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🏨</div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500 }}>{a.name}</p>
-                  <p style={{ fontSize: 11, color: T.t3 }}>{a.type} · {a.tags.slice(0, 2).join(" · ")} {a.price && `· ${a.price}`} · ★{a.rating}</p>
-                </div>
-                <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>+ Add</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Added stays */}
         {wizStays.map((s, i) => (
           <div key={i} style={css.card}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <div style={{ flex: 1 }}>
                 <h4 style={{ fontSize: 14, fontWeight: 500 }}>{s.name}</h4>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {s.rating && <span style={{ fontSize: 11, color: T.amber }}>{"★".repeat(Math.floor(s.rating))} {s.rating}</span>}
-                  {s.location && <span style={{ fontSize: 10, color: T.t3 }}>· {s.location}</span>}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {s.rating && <span style={{ fontSize: 11, color: T.amber }}>{"★"} {s.rating}</span>}
+                  {s.address && <span style={{ fontSize: 10, color: T.t3 }}>· {s.address.length > 40 ? s.address.slice(0, 40) + "..." : s.address}</span>}
+                  {!s.address && s.location && <span style={{ fontSize: 10, color: T.t3 }}>· {s.location}</span>}
                 </div>
               </div>
               <button style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.red }} onClick={() => removeStay(i)}>Remove</button>
             </div>
+            {/* Dates */}
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: 10, color: T.t3, marginBottom: 3 }}>Check-in</label>
                 <input type="date" value={s.checkIn} min={wizTrip.start || undefined} max={wizTrip.end || undefined}
-                  onChange={e => updateStayDate(i, "checkIn", e.target.value)}
+                  onChange={e => updateStayField(i, "checkIn", e.target.value)}
                   onClick={e => e.target.showPicker?.()}
                   style={{ width: "100%", padding: "8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", cursor: "pointer", minHeight: 40, colorScheme: "light" }} />
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: 10, color: T.t3, marginBottom: 3 }}>Check-out</label>
                 <input type="date" value={s.checkOut} min={s.checkIn || wizTrip.start || undefined} max={wizTrip.end || undefined}
-                  onChange={e => updateStayDate(i, "checkOut", e.target.value)}
+                  onChange={e => updateStayField(i, "checkOut", e.target.value)}
                   onClick={e => e.target.showPicker?.()}
                   style={{ width: "100%", padding: "8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", cursor: "pointer", minHeight: 40, colorScheme: "light" }} />
               </div>
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <Tag bg={T.purpleL} color={T.purple}>{s.type}</Tag>
-              {s.tags.map(t => <Tag key={t} bg={T.purpleL} color={T.purple}>{t}</Tag>)}
-              {s.price && <Tag bg={T.amberL} color={T.amber}>{s.price}</Tag>}
+            {/* Extra fields */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 10, color: T.t3, marginBottom: 3 }}>Total cost (£)</label>
+                <input type="text" inputMode="decimal" value={s.cost || ""} placeholder="0.00"
+                  onChange={e => updateStayField(i, "cost", e.target.value.replace(/[^0-9.]/g, ''))}
+                  style={{ width: "100%", padding: "8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", minHeight: 40 }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 10, color: T.t3, marginBottom: 3 }}>Booking ref</label>
+                <input type="text" value={s.bookingRef || ""} placeholder="e.g. BK-123456"
+                  onChange={e => updateStayField(i, "bookingRef", e.target.value)}
+                  style={{ width: "100%", padding: "8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", minHeight: 40 }} />
+              </div>
             </div>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 10, color: T.t3, marginBottom: 3 }}>Confirmation link (optional)</label>
+              <input type="url" value={s.confirmationLink || ""} placeholder="https://booking.com/..."
+                onChange={e => updateStayField(i, "confirmationLink", e.target.value)}
+                style={{ width: "100%", padding: "8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", minHeight: 40 }} />
+            </div>
+            {s.type && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <Tag bg={T.purpleL} color={T.purple}>{s.type}</Tag>
+                {s.cost && parseFloat(s.cost) > 0 && <Tag bg={T.al} color={T.ad}>{"£"}{parseFloat(s.cost).toFixed(2)}</Tag>}
+                {s.bookingRef && <Tag bg={T.blueL} color={T.blue}>Ref: {s.bookingRef}</Tag>}
+              </div>
+            )}
           </div>
         ))}
 
+        {/* Search / Add section */}
         {staySearchOpen ? (
           <div style={{ ...css.card, padding: 12 }}>
-            <input value={staySearch} onChange={e => setStaySearch(e.target.value)} autoFocus
+            <input value={staySearch} onChange={e => handleStaySearchChange(e.target.value)} autoFocus
               style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none", marginBottom: 8 }}
-              placeholder={locationName ? `Search stays near ${locationName}...` : "Search hotels, cottages, B&Bs..."} />
-            {wizTrip.places.length === 0 && !staySearch.trim() && (
-              <div style={{ padding: "8px 10px", background: T.amberL, borderRadius: T.rs, fontSize: 12, color: T.amber, marginBottom: 8 }}>
-                Add locations in Step 1 to get localised suggestions.
-              </div>
+              placeholder={locationName ? `Search hotels near ${locationName}...` : "Search hotels, B&Bs, cottages..."} />
+
+            {staySearching && (
+              <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: 8 }}>Searching...</p>
             )}
-            {filteredAccom.length === 0 && staySearch.trim() && (
-              <div style={{ padding: 8 }}>
-                <p style={{ fontSize: 12, color: T.t3, marginBottom: 8, textAlign: "center" }}>No local matches for "{staySearch}".</p>
-                <div onClick={() => addStay({ name: staySearch.trim(), type: "Custom", tags: ["User added"], rating: null, price: null })}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `1.5px solid ${T.a}`, marginBottom: 8, background: T.al, transition: "background .15s" }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: T.a, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0, color: "#fff" }}>+</div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 500 }}>Add "{staySearch.trim()}"</p>
-                    <p style={{ fontSize: 11, color: T.t3 }}>Add as custom accommodation</p>
-                  </div>
-                  <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>+ Add</span>
+
+            {/* Places API results */}
+            {stayPlacesResults.map((place, i) => (
+              <div key={i} onClick={() => addStay({
+                name: place.name,
+                type: "Hotel",
+                tags: [place.rating ? `★ ${place.rating}` : null, place.priceLevel ? "£".repeat(place.priceLevel) : null].filter(Boolean),
+                rating: place.rating || null,
+                price: place.priceLevel ? "£".repeat(place.priceLevel) : null,
+                address: place.address || "",
+                location: place.address ? place.address.split(",").slice(-2).join(",").trim() : "",
+                placeId: place.placeId,
+              })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `.5px solid ${T.border}`, marginBottom: 6, background: T.s, transition: "background .15s" }}>
+                {place.photo ? (
+                  <img src={place.photo} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 40, height: 40, borderRadius: 8, background: T.purpleL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🏨</div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{place.name}</p>
+                  <p style={{ fontSize: 11, color: T.t3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {place.rating && `★ ${place.rating}`}{place.address && ` · ${place.address.length > 35 ? place.address.slice(0, 35) + "..." : place.address}`}
+                  </p>
                 </div>
-                <button onClick={() => {
-                  const q = locationName ? `${staySearch.trim()} near ${locationName}` : staySearch.trim();
-                  window.open(`https://www.google.com/search?q=${encodeURIComponent(q + " accommodation")}`, "_blank");
-                }} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, margin: "0 auto", display: "block" }}>🔍 Search Google for "{staySearch.trim()}"</button>
-              </div>
-            )}
-            {filteredAccom.map((a, i) => (
-              <div key={i} onClick={() => addStay(a)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `.5px solid ${T.border}`, marginBottom: 6, background: T.s, transition: "background .15s" }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: T.purpleL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🏨</div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500 }}>{a.name}</p>
-                  <p style={{ fontSize: 11, color: T.t3 }}>{a.type} · {a.tags.slice(0, 2).join(" · ")} {a.price && `· ${a.price}`} · ★{a.rating}</p>
-                </div>
-                <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>+ Add</span>
+                <span style={{ fontSize: 11, color: T.a, fontWeight: 500, flexShrink: 0 }}>+ Add</span>
               </div>
             ))}
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              <button onClick={openLiveSearch} style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
-                {staySearch.trim() ? `Booking.com: "${staySearch.trim()}"` : locationName ? `Booking.com: ${locationName}` : "Search Booking.com"}
+
+            {/* Custom add option */}
+            {staySearch.trim().length >= 2 && (
+              <div onClick={() => addStay({ name: staySearch.trim(), type: "Custom", tags: [], rating: null, price: null, address: "", location: "" })}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `1.5px dashed ${T.a}`, marginBottom: 8, background: T.al, transition: "background .15s" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 8, background: T.a, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0, color: "#fff" }}>+</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500 }}>Add "{staySearch.trim()}" manually</p>
+                  <p style={{ fontSize: 11, color: T.t3 }}>Enter your own booking details</p>
+                </div>
+              </div>
+            )}
+
+            {/* External search links */}
+            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+              <button onClick={() => {
+                const q = staySearch.trim() || (locationName ? `hotels near ${locationName}` : "hotels");
+                window.open(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(q)}`, "_blank");
+              }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
+                Search Booking.com
               </button>
-              <button onClick={openGoogleSearch} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
-                {staySearch.trim() ? `Google: "${staySearch.trim()}"` : locationName ? `Google: ${locationName}` : "Google Hotels"}
+              <button onClick={() => {
+                const q = staySearch.trim() || (locationName ? `accommodation near ${locationName}` : "accommodation");
+                window.open(`https://www.google.com/travel/hotels?q=${encodeURIComponent(q)}`, "_blank");
+              }} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
+                Google Hotels
               </button>
             </div>
-            <button onClick={() => { setStaySearchOpen(false); setStaySearch(""); }} style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 6 }}>Cancel</button>
+            <button onClick={() => { setStaySearchOpen(false); setStaySearch(""); setStayPlacesResults([]); }}
+              style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "center", marginTop: 6, fontSize: 11 }}>Cancel</button>
           </div>
         ) : (
-          <button onClick={() => setStaySearchOpen(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, border: `1.5px dashed ${T.border}`, borderRadius: T.r, color: T.t3, fontSize: 13, cursor: "pointer", background: "none", width: "100%", fontFamily: T.font }}>+ Add accommodation</button>
+          <div>
+            <button onClick={() => setStaySearchOpen(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: 12, border: `1.5px dashed ${T.border}`, borderRadius: T.r, color: T.t3, fontSize: 13, cursor: "pointer", background: "none", width: "100%", fontFamily: T.font }}>+ Add accommodation</button>
+            {wizStays.length === 0 && (
+              <p style={{ textAlign: "center", padding: "8px 10px", color: T.t3, fontSize: 12, marginTop: 4 }}>
+                Search for real hotels or add your own booking details.
+                {locationName && ` We'll search near ${locationName}.`}
+              </p>
+            )}
+          </div>
         )}
 
         {!wizTrip.start && !wizTrip.end && wizStays.length > 0 && (
@@ -1979,6 +3340,9 @@ export default function WanderlyApp() {
     italy: { food: ["Pizza", "Gelato", "Pasta making", "Espresso culture", "Truffle hunting", "Aperitivo"], activities: ["Colosseum visit", "Gondola ride", "Vineyard tour", "Vespa rental", "Art renaissance tour", "Cooking class"] },
     thailand: { food: ["Pad Thai", "Tom Yum", "Street food tour", "Mango sticky rice", "Night market food"], activities: ["Temple tour", "Thai massage", "Island hopping", "Night market", "Elephant sanctuary", "Muay Thai"] },
     usa: { food: ["Burgers", "BBQ", "Food truck tour", "Brunch culture", "Craft beer", "Diner breakfast"], activities: ["Road trip stops", "National parks", "Broadway show", "Sports game", "Shopping district", "Rooftop bars"] },
+    uk: { food: ["Fish & chips", "Sunday roast", "Cream tea", "Curry house", "Gastropub grub", "Full English", "Pie & mash", "Local ale"], activities: ["Castle visit", "Coastal walk", "Market town stroll", "Afternoon tea", "Heritage site", "Country pub"] },
+    scotland: { food: ["Haggis", "Scottish salmon", "Whisky tasting", "Shortbread", "Cullen skink", "Cranachan", "Scotch pie"], activities: ["Castle tour", "Whisky distillery", "Highland walk", "Loch cruise", "Old Town walk", "Ceilidh night"] },
+    england: { food: ["Fish & chips", "Sunday roast", "Cream tea", "Curry house", "Gastropub grub", "Full English", "Pie & mash"], activities: ["Castle visit", "Coastal walk", "Market town stroll", "Afternoon tea", "Country house visit", "Canal walk"] },
   };
 
   const renderWizPrefs = () => {
@@ -2034,8 +3398,36 @@ export default function WanderlyApp() {
   const renderWizReview = () => {
     // Build auto-summary from all wizard data
     const parts = [];
-    const numDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end) - new Date(wizTrip.start)) / 86400000) + 1) : null;
-    if (numDays && wizTrip.places.length > 0) parts.push(`${numDays}-day trip to ${wizTrip.places.join(", ")}`);
+    const fmtDateShort = (d) => { try { return new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch { return d; } };
+    // Smart numDays: prefer stay date span if available (protects against user date entry errors)
+    let numDays = null;
+    let effectiveStart = wizTrip.start;
+    let effectiveEnd = wizTrip.end;
+    if (wizStays.length > 0) {
+      const checkIns = wizStays.map(s => s.checkIn).filter(Boolean).sort();
+      const checkOuts = wizStays.map(s => s.checkOut).filter(Boolean).sort();
+      if (checkIns.length > 0 && checkOuts.length > 0) {
+        const stayStart = checkIns[0];
+        const stayEnd = checkOuts[checkOuts.length - 1];
+        const stayDays = Math.max(1, Math.round((new Date(stayEnd + "T12:00:00") - new Date(stayStart + "T12:00:00")) / 86400000) + 1);
+        const rawDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1) : null;
+        // If stay span is much shorter than entered dates, user likely has a date entry error — use stays
+        if (rawDays && stayDays < rawDays && stayDays <= 30) {
+          numDays = stayDays;
+          effectiveStart = stayStart;
+          effectiveEnd = stayEnd;
+        } else {
+          numDays = rawDays;
+        }
+      }
+    }
+    if (!numDays && wizTrip.start && wizTrip.end) {
+      numDays = Math.max(1, Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1);
+    }
+    if (numDays && wizTrip.places.length > 0) {
+      const dateRange = effectiveStart && effectiveEnd ? ` (${fmtDateShort(effectiveStart)} – ${fmtDateShort(effectiveEnd)})` : "";
+      parts.push(`${numDays}-day trip to ${wizTrip.places.join(", ")}${dateRange}`);
+    }
     if (wizTrip.travel.size > 0) parts.push(`travelling by ${[...wizTrip.travel].join(" + ").toLowerCase()}`);
     if (wizTrip.startLocation) parts.push(`starting from ${wizTrip.startLocation}`);
     const na = wizTravellers.adults.length, nok = wizTravellers.olderKids.length, nyk = wizTravellers.youngerKids.length;
@@ -2049,7 +3441,7 @@ export default function WanderlyApp() {
     if (wizPrefs.adultActs.size > 0) parts.push(`adult activities: ${[...wizPrefs.adultActs].join(", ")}`);
     if (wizPrefs.olderActs.size > 0) parts.push(`older kids activities: ${[...wizPrefs.olderActs].join(", ")}`);
     if (wizPrefs.youngerActs.size > 0) parts.push(`younger kids activities: ${[...wizPrefs.youngerActs].join(", ")}`);
-    if (wizStays.length > 0) parts.push(`staying at ${wizStays.map(s => s.name || s).join(", ")}`);
+    if (wizStays.length > 0) parts.push(`staying at ${wizStays.map(s => `${s.name}${s.location ? ` (${s.location})` : ""}`).join(", ")}`);
     if (nok + nyk > 0) {
       const ages = [...wizTravellers.olderKids, ...wizTravellers.youngerKids].map(k => parseInt(k.age) || 0);
       const youngest = Math.min(...ages);
@@ -2084,14 +3476,50 @@ export default function WanderlyApp() {
         {/* Quick glance at what's included */}
         <div style={{ background: T.s2, borderRadius: T.rs, padding: 12 }}>
           <p style={{ fontSize: 10, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Included in this trip</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {wizTrip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
-            {[...wizTrip.travel].map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}
-            {wizTrip.budget && <Tag bg={T.greenL} color={T.green}>{wizTrip.budget}</Tag>}
-            {[...wizPrefs.food].map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}
-            {[...wizPrefs.adultActs].map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}
-            {wizStays.map((s, i) => <Tag key={i} bg={T.amberL} color={T.amber}>{s.name}</Tag>)}
-          </div>
+
+          {/* Places */}
+          {wizTrip.places.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ fontSize: 9, fontWeight: 600, color: T.t3, marginBottom: 4, textTransform: "uppercase", letterSpacing: .3 }}>Places</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {wizTrip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
+              </div>
+            </div>
+          )}
+
+          {/* Stays */}
+          {wizStays.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ fontSize: 9, fontWeight: 600, color: T.t3, marginBottom: 4, textTransform: "uppercase", letterSpacing: .3 }}>Stays</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {wizStays.map((s, i) => <Tag key={i} bg={T.amberL} color={T.amber}>{s.name}{s.location ? ` · ${s.location}` : ""}</Tag>)}
+              </div>
+            </div>
+          )}
+
+          {/* Travel & Budget */}
+          {(wizTrip.travel.size > 0 || wizTrip.budget) && (
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ fontSize: 9, fontWeight: 600, color: T.t3, marginBottom: 4, textTransform: "uppercase", letterSpacing: .3 }}>Travel & Budget</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {[...wizTrip.travel].map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}
+                {wizTrip.budget && <Tag bg={T.greenL} color={T.green}>{wizTrip.budget}</Tag>}
+              </div>
+            </div>
+          )}
+
+          {/* Preferences — food, activities, kids */}
+          {(wizPrefs.food.size > 0 || wizPrefs.adultActs.size > 0 || wizPrefs.olderActs.size > 0 || wizPrefs.youngerActs.size > 0) && (
+            <div>
+              <p style={{ fontSize: 9, fontWeight: 600, color: T.t3, marginBottom: 4, textTransform: "uppercase", letterSpacing: .3 }}>Preferences</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {[...wizPrefs.food].map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}
+                {[...wizPrefs.adultActs].map(a => <Tag key={`aa-${a}`} bg={T.blueL} color={T.blue}>{a}</Tag>)}
+                {[...wizPrefs.olderActs].map(a => <Tag key={`oa-${a}`} bg={T.pinkL || "#fce4ec"} color={T.pink || "#e91e63"}>{a} (8-14)</Tag>)}
+                {[...wizPrefs.youngerActs].map(a => <Tag key={`ya-${a}`} bg={T.pinkL || "#fce4ec"} color={T.pink || "#e91e63"}>{a} (3-7)</Tag>)}
+              </div>
+            </div>
+          )}
         </div>
       </>
     );
@@ -2135,19 +3563,11 @@ export default function WanderlyApp() {
           </div>
 
           {/* Map */}
-          <div style={{ height: 160, background: T.s2, borderRadius: T.r, marginBottom: 12, position: "relative", overflow: "hidden", border: `.5px solid ${T.border}` }}>
-            <div style={{ width: "100%", height: "100%", background: "linear-gradient(170deg, #D4E8D0, #E2EDDA 40%, #D8E4CF 70%, #C9DBC3)" }}>
-              <svg style={{ position: "absolute", width: "100%", height: "100%" }} viewBox="0 0 400 160">
-                <path d="M60,130 Q100,100 140,85 Q180,70 220,55 Q270,40 320,30" fill="none" stroke={T.a} strokeWidth="2.5" strokeDasharray="6 4" opacity=".5" />
-              </svg>
-              {[["W", 50, 120, T.a], ["A", 130, 76, T.blue], ["G", 210, 48, T.purple], ["K", 310, 24, T.coral]].map(([l, x, y, c]) => (
-                <div key={l} style={{ position: "absolute", left: x, top: y, ...css.avatar(c, 26), border: "2px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.15)", zIndex: 2 }}>{l}</div>
-              ))}
-              <div style={{ position: "absolute", left: 170, top: 90, ...css.avatar(T.amber, 20), fontSize: 10, border: "2px solid #fff" }}>⚡</div>
-            </div>
-            <div onClick={() => window.open(`https://www.google.com/maps/search/${day.location}+Lake+District`, "_blank")} style={{ position: "absolute", bottom: 8, right: 8, ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.9)", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>
-              Open map ↗
-            </div>
+          <div style={{ marginBottom: 12 }}>
+            <TripMap
+              places={[TRIP.startLocation, ...TRIP.places]}
+              height={160}
+            />
           </div>
 
           {/* Actions */}
@@ -2556,15 +3976,48 @@ export default function WanderlyApp() {
       return `I'm not sure about that specific request yet, but I'm getting smarter! Here's what I can help with right now:\n\n🍽️ **Restaurants** — 'find restaurants' or 'dinner options'\n⚡ **EV charging** — 'nearest chargers'\n🎯 **Activities** — 'things to do' or 'kids activities'\n🌦️ **Weather** — 'weather forecast'\n📊 **Polls** — 'create a poll'\n💰 **Budget** — 'trip cost' or 'budget'\n🚗 **Transport** — 'parking' or 'directions'\n\nTry asking about any of these!`;
     };
 
-    const sendMessage = (text) => {
+    const sendMessage = async (text) => {
       const msg = text || chatInput;
       if (!msg.trim()) return;
       setChatInput("");
       setChatMessages(prev => [...prev, { role: "user", text: msg }]);
+      setChatTyping(true);
+
+      // Try Claude API first, fall back to local responses
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: msg.trim(),
+            tripContext: {
+              tripName: TRIP.name,
+              dates: `${TRIP.start} – ${TRIP.end} ${TRIP.year}`,
+              places: TRIP.places,
+              travelMode: TRIP.travelMode,
+              travellers: TRIP.travellers,
+              stays: TRIP.stays,
+              currentDay: selectedDay,
+              currentLocation: DAYS[selectedDay - 1]?.location,
+            },
+            chatHistory: chatMessages.slice(-8),
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.reply) {
+          setChatTyping(false);
+          setChatMessages(prev => [...prev, { role: "ai", text: data.reply }]);
+          return;
+        }
+      } catch (e) { /* API unavailable — fall back to local */ }
+
+      // Local fallback
+      const response = findResponse(msg.trim());
+      const delay = Math.min(2500, Math.max(800, response.length * 6));
       setTimeout(() => {
-        const response = findResponse(msg.trim());
+        setChatTyping(false);
         setChatMessages(prev => [...prev, { role: "ai", text: response }]);
-      }, 800);
+      }, delay);
     };
 
     // Day-aware quick action chips — adapt to conversation flow
@@ -2610,15 +4063,25 @@ export default function WanderlyApp() {
         <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: 20 }}>
           {chatMessages.map((m, i) => (
             <div key={i} style={{ marginBottom: 12, maxWidth: "85%", ...(m.role === "user" ? { marginLeft: "auto" } : {}) }}>
-              {m.role === "ai" && <div style={{ fontSize: 11, color: T.t3, marginBottom: 3 }}>Wanderly</div>}
+              {m.role === "ai" && <div style={{ fontSize: 11, color: T.t3, marginBottom: 3 }}>Trip With Me</div>}
               <div style={{
                 padding: "10px 14px", fontSize: 14, lineHeight: 1.5,
                 ...(m.role === "user"
                   ? { background: T.a, color: "#fff", borderRadius: "16px 16px 4px 16px" }
                   : { background: T.s, border: `.5px solid ${T.border}`, borderRadius: "16px 16px 16px 4px" }),
-              }} dangerouslySetInnerHTML={{ __html: m.text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>") }} />
+              }} dangerouslySetInnerHTML={{ __html: renderChatHtml(m.text) }} />
             </div>
           ))}
+          {chatTyping && (
+            <div style={{ marginBottom: 12, maxWidth: "85%" }}>
+              <div style={{ fontSize: 11, color: T.t3, marginBottom: 3 }}>Trip With Me</div>
+              <div style={{ padding: "12px 18px", background: T.s, border: `.5px solid ${T.border}`, borderRadius: "16px 16px 16px 4px", display: "flex", gap: 4, alignItems: "center" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0s" }} />
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0.2s" }} />
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0.4s" }} />
+              </div>
+            </div>
+          )}
         </div>
         <div style={{ padding: "0 24px" }}>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "8px 0" }}>
@@ -2631,8 +4094,8 @@ export default function WanderlyApp() {
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMessage()}
               style={{ flex: 1, padding: "12px 16px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 14, background: T.s2, outline: "none", minHeight: 48 }}
-              placeholder="Ask anything about your trip..." />
-            <button className="w-btnP" onClick={() => sendMessage()} style={{ width: 48, height: 48, borderRadius: "50%", background: T.a, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s", flexShrink: 0 }}>
+              placeholder="Ask anything about your trip..." aria-label="Chat message input" />
+            <button className="w-btnP" onClick={() => sendMessage()} aria-label="Send message" style={{ width: 48, height: 48, borderRadius: "50%", background: T.a, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s", flexShrink: 0 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
             </button>
           </div>
@@ -2643,14 +4106,66 @@ export default function WanderlyApp() {
   };
 
   // ─── Screen: Polls ───
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [newPollQuestion, setNewPollQuestion] = useState("");
+  const [newPollOptions, setNewPollOptions] = useState(["", ""]);
+
+  const createNewPoll = () => {
+    if (!newPollQuestion.trim()) { alert("Enter a question"); return; }
+    const validOpts = newPollOptions.filter(o => o.trim());
+    if (validOpts.length < 2) { alert("Add at least 2 options"); return; }
+    const newPoll = {
+      id: Date.now(),
+      q: newPollQuestion.trim(),
+      status: "active",
+      ends: "Tomorrow 9 PM",
+      by: "You",
+      votes: 0,
+      options: validOpts.map(text => ({ text: text.trim(), pct: 0, voters: [], voted: false })),
+    };
+    setPollData(prev => [newPoll, ...prev]);
+    setNewPollQuestion("");
+    setNewPollOptions(["", ""]);
+    setShowPollCreator(false);
+    showToast("Poll created!");
+  };
+
   const renderVoteScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Group polls</h2>
-        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => alert("Create a new poll for your travel group!")}>+ New</button>
+        <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => setShowPollCreator(true)}>+ New</button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        {showPollCreator && (
+          <div style={{ ...css.card, marginBottom: 16, border: `1px solid ${T.a}` }}>
+            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: T.ad }}>New poll</p>
+            <input value={newPollQuestion} onChange={e => setNewPollQuestion(e.target.value)}
+              placeholder="What's the question?"
+              style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, marginBottom: 10, outline: "none" }} />
+            {newPollOptions.map((opt, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                <input value={opt} onChange={e => setNewPollOptions(prev => prev.map((o, j) => j === i ? e.target.value : o))}
+                  placeholder={`Option ${i + 1}`}
+                  style={{ flex: 1, padding: "8px 10px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, outline: "none" }} />
+                {newPollOptions.length > 2 && (
+                  <button onClick={() => setNewPollOptions(prev => prev.filter((_, j) => j !== i))}
+                    style={{ ...css.btn, ...css.btnSm, padding: "4px 10px", color: T.red, fontSize: 14, minHeight: 36 }}>×</button>
+                )}
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              {newPollOptions.length < 5 && (
+                <button onClick={() => setNewPollOptions(prev => [...prev, ""])}
+                  style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>+ Add option</button>
+              )}
+              <button onClick={createNewPoll} style={{ ...css.btn, ...css.btnSm, ...css.btnP, flex: 1, justifyContent: "center", fontSize: 11 }}>Create poll</button>
+              <button onClick={() => { setShowPollCreator(false); setNewPollQuestion(""); setNewPollOptions(["", ""]); }}
+                style={{ ...css.btn, ...css.btnSm, flex: 0, justifyContent: "center", fontSize: 11, color: T.t3 }}>Cancel</button>
+            </div>
+          </div>
+        )}
         {pollData.map(poll => (
           <div key={poll.id} style={{ ...css.card, opacity: poll.status === "closed" ? 0.6 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -2676,8 +4191,25 @@ export default function WanderlyApp() {
                 <span style={{ position: "relative", zIndex: 1, fontSize: 12, fontWeight: 500, color: T.a, minWidth: 28, textAlign: "right" }}>{opt.pct}%</span>
               </div>
             ))}
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11, color: T.t3 }}>
-              <span>{poll.votes} votes · by {poll.by}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, fontSize: 11, color: T.t3 }}>
+              <span>{poll.options.reduce((s, o) => s + (o.voters?.length || 0), 0)} votes · by {poll.by}</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {poll.status === "active" && (
+                  <button onClick={(e) => { e.stopPropagation(); setPollData(prev => prev.map(p => p.id === poll.id ? { ...p, status: "closed" } : p)); showToast("Poll closed"); }}
+                    style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", color: T.red, borderColor: T.red }}>Close poll</button>
+                )}
+                {poll.status === "closed" && (() => {
+                  const winner = [...poll.options].sort((a, b) => (b.voters?.length || 0) - (a.voters?.length || 0))[0];
+                  const topCount = winner?.voters?.length || 0;
+                  const isTie = poll.options.filter(o => (o.voters?.length || 0) === topCount).length > 1;
+                  return topCount > 0 && !isTie ? (
+                    <button onClick={(e) => { e.stopPropagation(); addTimelineItem(selectedCreatedTrip?.id || createdTrips[0]?.id); showToast(`Added "${winner.text}" to itinerary`); }}
+                      style={{ ...css.btn, ...css.btnSm, ...css.btnP, fontSize: 10, padding: "3px 8px" }}>+ Add winner to itinerary</button>
+                  ) : topCount > 0 && isTie ? (
+                    <Tag bg={T.amberL} color={T.amber}>Tie — revote needed</Tag>
+                  ) : null;
+                })()}
+              </div>
             </div>
           </div>
         ))}
@@ -2698,7 +4230,11 @@ export default function WanderlyApp() {
     const likedCount = uploadedPhotos.filter(p => p.liked).length;
     const daysWithPhotos = new Set(uploadedPhotos.filter(p => p.day !== "Untagged").map(p => p.day)).size;
     const untaggedPhotos = uploadedPhotos.filter(p => p.day === "Untagged");
-    const dayGroups = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5"];
+    const tripForPhotos = selectedCreatedTrip || createdTrips[0];
+    const photoDayCount = tripForPhotos?.start && tripForPhotos?.end
+      ? Math.max(1, Math.ceil((new Date(tripForPhotos.end) - new Date(tripForPhotos.start)) / 86400000) + 1)
+      : 5;
+    const dayGroups = Array.from({ length: Math.min(photoDayCount, 30) }, (_, i) => `Day ${i + 1}`);
     const taggedByDay = {};
     dayGroups.forEach(d => { taggedByDay[d] = uploadedPhotos.filter(p => p.day === d); });
 
@@ -2717,7 +4253,7 @@ export default function WanderlyApp() {
 
     return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <input type="file" accept="image/*" multiple ref={photoInputRef} style={{ display: "none" }} onChange={handlePhotoUpload} />
+      <input type="file" accept="image/*" multiple ref={photoInputRef} style={{ display: "none" }} onChange={handlePhotoUpload} aria-label="Upload photos" />
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Memories</h2>
@@ -2819,7 +4355,10 @@ export default function WanderlyApp() {
         </div>
 
         <div style={{ ...css.card, textAlign: "center", padding: 20 }}>
-          <p style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>AI video settings</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <p style={{ fontSize: 14, fontWeight: 500 }}>AI video settings</p>
+            <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, background: T.amberL, color: T.amber, fontWeight: 600 }}>Coming soon</span>
+          </div>
           <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Customise your highlight reel</p>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
             {["Music overlay", "AI narration", "Date stamps", "Slow-mo", "Boomerangs"].map((o) => (
@@ -2844,8 +4383,8 @@ export default function WanderlyApp() {
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <p style={{ fontSize: 14, color: T.t2, marginBottom: 14 }}>Invite friends via link. They'll see timeline, chat, polls, and memories.</p>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: T.s2, borderRadius: T.rs, fontSize: 13, color: T.t2, marginBottom: 16 }}>
-          <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>wanderly.app/trip/easter-ld-2026</code>
-          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { navigator.clipboard?.writeText("https://wanderly.app/trip/easter-ld-2026"); alert("Link copied!"); }}>Copy</button>
+          <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>tripwithme.app/trip/easter-ld-2026</code>
+          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { navigator.clipboard?.writeText("https://tripwithme.app/trip/easter-ld-2026"); alert("Link copied!"); }}>Copy</button>
         </div>
         {[["You", T.a, "Lead traveller", "Admin"], ["James M. + Ella (8)", T.coral, "Joined 2 days ago"], ["Sarah P. + Max (12)", T.blue, "Joined yesterday"], ["Raj K.", T.amber, "Joined yesterday"]].map(([name, color, sub, badge], i) => (
           <div key={i} style={{ ...css.card, display: "flex", alignItems: "center", gap: 12 }}>
@@ -2863,29 +4402,46 @@ export default function WanderlyApp() {
   );
 
   // ─── Screen: Explore ───
-  const renderExploreScreen = () => (
+  const renderExploreScreen = () => {
+    // Dynamic location: use current day's location from demo or created trip
+    const currentLoc = DAYS[selectedDay - 1]?.location || "Ambleside";
+    const locActs = getLocationActivities(currentLoc);
+    // Build dynamic explore items from location data
+    const exploreItems = [];
+    if (locActs) {
+      if (locActs.dinner?.[0]) exploreItems.push({ title: locActs.dinner[0].split(" at ").pop() || locActs.dinner[0], sub: `Restaurant · ${currentLoc}`, tags: [["Dining", T.coralL, T.coral]], icon: "🍽️", bg: T.coralL });
+      if (locActs.kids?.[0]) exploreItems.push({ title: locActs.kids[0], sub: `Family activity · ${currentLoc}`, tags: [["Kids", T.pinkL, T.pink]], icon: "🎢", bg: T.pinkL });
+      exploreItems.push({ title: `EV Chargers near ${currentLoc}`, sub: "Open Charge Map", tags: [["EV charging", T.al, T.ad]], icon: "⚡", bg: T.al });
+      if (locActs.morning?.[0]) exploreItems.push({ title: locActs.morning[0], sub: `Activity · ${currentLoc}`, tags: [["Explore", T.blueL, T.blue]], icon: "🥾", bg: T.blueL });
+      if (locActs.afternoon?.[0]) exploreItems.push({ title: locActs.afternoon[0], sub: `Afternoon · ${currentLoc}`, tags: [["Sightseeing", T.purpleL, T.purple]], icon: "📸", bg: T.purpleL });
+    } else {
+      exploreItems.push(
+        { title: `Restaurants in ${currentLoc}`, sub: "Find dining nearby", tags: [["Dining", T.coralL, T.coral]], icon: "🍽️", bg: T.coralL },
+        { title: `Things to do in ${currentLoc}`, sub: "Activities & attractions", tags: [["Explore", T.blueL, T.blue]], icon: "🎯", bg: T.blueL },
+        { title: `EV Chargers near ${currentLoc}`, sub: "Open Charge Map", tags: [["EV charging", T.al, T.ad]], icon: "⚡", bg: T.al },
+        { title: `Walks near ${currentLoc}`, sub: "Trails & hikes", tags: [["Outdoors", T.purpleL, T.purple]], icon: "🥾", bg: T.purpleL },
+      );
+    }
+    const mapIcons = [["🍽️", "28%", "30%", T.coral], ["🎢", "68%", "22%", T.pink], ["⚡", "75%", "58%", T.a], ["🥾", "18%", "60%", T.purple]];
+    if (exploreItems.length > 4) mapIcons.push(["📸", "45%", "70%", T.blue]);
+    return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Explore nearby</h2>
-        <span style={{ fontSize: 12, color: T.t3 }}>Ambleside</span>
+        <span style={{ fontSize: 12, color: T.t3 }}>{currentLoc}</span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <div style={{ height: 160, background: T.s2, borderRadius: T.r, marginBottom: 12, position: "relative", overflow: "hidden", border: `.5px solid ${T.border}` }}>
           <div style={{ width: "100%", height: "100%", background: "linear-gradient(170deg, #D4E8D0, #E2EDDA 40%, #C9DBC3)" }}>
             <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", ...css.avatar(T.blue, 28), border: "2px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.15)" }}>You</div>
-            {[["🍽️", "28%", "30%", T.coral], ["🎢", "68%", "22%", T.pink], ["⚡", "75%", "58%", T.a], ["⛰️", "18%", "60%", T.purple]].map(([icon, l, t, c], i) => (
+            {mapIcons.map(([icon, l, t, c], i) => (
               <div key={i} style={{ position: "absolute", left: l, top: t, ...css.avatar(c, 22), fontSize: 11, border: "2px solid #fff" }}>{icon}</div>
             ))}
           </div>
         </div>
-        {[
-          { title: "The Drunken Duck", sub: "4.8★ · 12 min drive", tags: [["Steaks", T.coralL, T.coral], ["Kids free", T.coralL, T.coral]], icon: "🍽️", bg: T.coralL },
-          { title: "Brockhole Adventure", sub: "4.8★ · 8 min drive", tags: [["Ages 3-14", T.pinkL, T.pink], ["Free", T.pinkL, T.pink]], icon: "🎢", bg: T.pinkL },
-          { title: "Rydal Road Charger", sub: "50kW · 2 available · 3 min", tags: [["EV charging", T.al, T.ad]], icon: "⚡", bg: T.al },
-          { title: "Stock Ghyll Force", sub: "4.9★ · 5 min walk", tags: [["Waterfall", T.blueL, T.blue], ["Light hike", T.blueL, T.blue]], icon: "⛰️", bg: T.blueL },
-        ].map((p, i) => (
-          <div key={i} onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(p.title)}+Lake+District`, "_blank")} style={{ ...css.card, display: "flex", gap: 12, cursor: "pointer" }}>
+        {exploreItems.map((p, i) => (
+          <div key={i} onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(p.title)}+${encodeURIComponent(currentLoc)}`, "_blank")} style={{ ...css.card, display: "flex", gap: 12, cursor: "pointer" }}>
             <div style={{ width: 52, height: 52, borderRadius: T.rs, background: p.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{p.icon}</div>
             <div>
               <h4 style={{ fontSize: 14, fontWeight: 500 }}>{p.title}</h4>
@@ -2897,7 +4453,8 @@ export default function WanderlyApp() {
       </div>
       <TabBar active="explore" onNav={navigate} />
     </div>
-  );
+    );
+  };
 
   // ─── Screen: Settings ───
   const renderSettingsScreen = () => (
@@ -2936,7 +4493,10 @@ export default function WanderlyApp() {
           ))}
         </div>
         <div style={css.sectionTitle}>Connectors &amp; integrations</div>
-        <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Wanderly uses intelligent routing to connect the right services automatically. Toggle individual connectors on/off.</p>
+        <div style={{ background: T.amberL, padding: "8px 12px", borderRadius: T.rs, marginBottom: 8 }}>
+          <p style={{ fontSize: 11, color: T.amber, fontWeight: 500 }}>🔌 Coming soon — connector integrations will power live data from these services. Toggles saved for when ready.</p>
+        </div>
+        <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Trip With Me uses intelligent routing to connect the right services automatically. Toggle individual connectors on/off.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
           {Object.entries(CONNECTORS).map(([key, c]) => (
             <div key={key} onClick={() => setSettingsToggles(prev => ({ ...prev, [key]: !prev[key] }))}
@@ -2948,6 +4508,9 @@ export default function WanderlyApp() {
           ))}
         </div>
         <div style={css.sectionTitle}>Notifications</div>
+        <div style={{ background: T.blueL, padding: "8px 12px", borderRadius: T.rs, marginBottom: 8 }}>
+          <p style={{ fontSize: 11, color: T.blue, fontWeight: 500 }}>📱 Coming soon — push notifications require the mobile app. Preferences saved for launch.</p>
+        </div>
         {[["Booking confirmations","n_booking"], ["EV charger alerts","n_ev"], ["Traffic & closures","n_traffic"], ["Daily video generation","n_video"], ["Poll reminders","n_poll"], ["Checkout reminders","n_checkout"]].map(([n, nk]) => (
           <div key={nk} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `.5px solid ${T.border}` }}>
             <span style={{ fontSize: 14 }}>{n}</span>
@@ -2967,7 +4530,21 @@ export default function WanderlyApp() {
     if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
     const isLive = trip.status === "live";
     const totalTravellers = trip.travellers.adults.length + trip.travellers.olderKids.length + trip.travellers.youngerKids.length;
-    const numDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd) - new Date(trip.rawStart)) / 86400000) + 1) : 1;
+    // Smart numDays: prefer stay date span if stays indicate shorter trip
+    let numDays = 1;
+    const tripStays = trip.stays || [];
+    if (tripStays.length > 0) {
+      const cis = tripStays.map(s => s.checkIn).filter(Boolean).sort();
+      const cos = tripStays.map(s => s.checkOut).filter(Boolean).sort();
+      if (cis.length > 0 && cos.length > 0) {
+        const sd = Math.max(1, Math.round((new Date(cos[cos.length - 1] + "T12:00:00") - new Date(cis[0] + "T12:00:00")) / 86400000) + 1);
+        const rd = trip.rawStart && trip.rawEnd ? Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1) : null;
+        numDays = (rd && sd < rd && sd <= 30) ? sd : (rd || sd);
+      }
+    }
+    if (numDays <= 1 && trip.rawStart && trip.rawEnd) {
+      numDays = Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1);
+    }
     const dayItems = getDayItems(trip.timeline, selectedDay);
     const tripHasTimeline = hasTimeline(trip);
     const tripStart = trip.rawStart ? new Date(trip.rawStart) : null;
@@ -3014,7 +4591,7 @@ export default function WanderlyApp() {
             <div style={{ ...css.card, background: T.al, borderColor: T.a, marginBottom: 16, textAlign: "center", padding: "24px 16px" }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🚀</div>
               <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: T.ad }}>Ready to go live?</h3>
-              <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Wanderly will ask a few questions, then generate your day-by-day itinerary.</p>
+              <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Trip With Me will ask a few questions, then generate your day-by-day itinerary.</p>
               <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, justifyContent: "center", width: "100%", padding: "12px 16px", fontSize: 14 }}>🚀 Activate trip</button>
             </div>
 
@@ -3039,6 +4616,7 @@ export default function WanderlyApp() {
             <div style={{ display: "flex", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
               <button className="w-tab" style={tripTabStyle("itinerary")} onClick={() => setTripDetailTab("itinerary")}>Itinerary</button>
               <button className="w-tab" style={tripTabStyle("chat")} onClick={() => setTripDetailTab("chat")}>Chat</button>
+              <button className="w-tab" style={tripTabStyle("expenses")} onClick={() => setTripDetailTab("expenses")}>Expenses</button>
               <button className="w-tab" style={tripTabStyle("info")} onClick={() => setTripDetailTab("info")}>Info</button>
             </div>
 
@@ -3076,13 +4654,66 @@ export default function WanderlyApp() {
                       })}
                     </div>
 
+                    {/* Embedded Map */}
+                    {showMap && trip.places?.length > 0 && (
+                      <div style={{ padding: "10px 20px 0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: 0.5 }}>🗺️ Route Map</p>
+                          <button onClick={() => setShowMap(false)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, opacity: 0.5, padding: "3px 8px" }}>Hide</button>
+                        </div>
+                        <TripMap
+                          places={(() => {
+                            const route = getFullRouteFromStays(trip);
+                            const stops = trip.startLocation ? [trip.startLocation, ...route] : route;
+                            // Add return leg: append startLocation at end for full loop
+                            if (trip.startLocation && stops.length > 1 && stops[stops.length - 1].toLowerCase() !== trip.startLocation.toLowerCase()) {
+                              stops.push(trip.startLocation);
+                            }
+                            return stops;
+                          })()}
+                          height={180}
+                          onDirectionsLoaded={setTripDirections}
+                          travelMode={trip.travel?.[0] || trip.travel?.values?.().next?.().value || ""}
+                        />
+                        {tripDirections && (
+                          <div style={{ display: "flex", gap: 12, justifyContent: "center", padding: "8px 0 4px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 11, color: T.t2 }}>{(() => { const m = (trip.travel?.[0] || "").toLowerCase(); if (/train|transit/.test(m)) return "🚂"; if (/walk/.test(m)) return "🚶"; if (/bicy|bike/.test(m)) return "🚴"; if (/flight|fly/.test(m)) return "✈️"; if (/ev/i.test(m)) return "⚡🚗"; return "🚗"; })()} <b>{tripDirections.totalDistance}</b></span>
+                            <span style={{ fontSize: 11, color: T.t2 }}>⏱️ <b>{tripDirections.totalDuration}</b></span>
+                            {tripDirections.legs?.length > 1 && <span style={{ fontSize: 11, color: T.t3 }}>{tripDirections.legs.length} legs</span>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!showMap && trip.places?.length > 0 && (
+                      <div style={{ padding: "4px 20px" }}>
+                        <button onClick={() => setShowMap(true)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.a }}>🗺️ Show map</button>
+                      </div>
+                    )}
+
+                    {/* Chat nudge banner */}
+                    <div onClick={() => setTripDetailTab("chat")} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 20px", background: `${T.a}10`, borderBottom: `.5px solid ${T.border}`, cursor: "pointer" }}>
+                      <span style={{ fontSize: 14 }}>💬</span>
+                      <p style={{ fontSize: 11, color: T.a, fontWeight: 500, margin: 0 }}>Not quite right? Switch to <b>Chat</b> to refine this itinerary with AI</p>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: T.a }}>→</span>
+                    </div>
+
                     {/* Timeline items for selected day */}
                     <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                         <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>
                           Day {selectedDay}
                           {(() => { const dd = tripStart ? new Date(tripStart.getTime() + (selectedDay - 1) * 86400000) : null; return dd ? ` — ${dd.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}` : ""; })()}
-                          {(() => { const loc = trip.places[(selectedDay - 1) % trip.places.length]; return loc ? ` · ${loc}` : ""; })()}
+                          {(() => {
+                            // Derive location from stay check-in dates for this day
+                            const dayDateStr = tripStart ? new Date(tripStart.getTime() + (selectedDay - 1) * 86400000).toISOString().split("T")[0] : null;
+                            if (dayDateStr && trip.stays?.length > 0) {
+                              const sorted = [...trip.stays].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+                              const match = sorted.find(s => s.checkIn <= dayDateStr && s.checkOut > dayDateStr) || sorted.find(s => s.checkIn === dayDateStr) || sorted[0];
+                              return match?.location ? ` · ${match.location}` : "";
+                            }
+                            const loc = trip.places?.[(selectedDay - 1) % (trip.places?.length || 1)];
+                            return loc ? ` · ${loc}` : "";
+                          })()}
                         </p>
                         <button onClick={() => addTimelineItem(trip.id)} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a }}>+ Add</button>
                       </div>
@@ -3111,8 +4742,12 @@ export default function WanderlyApp() {
                                 </div>
                                 <input value={item.desc} onChange={e => updateTimelineItem(trip.id, i, "desc", e.target.value)}
                                   style={{ width: "100%", padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none", marginBottom: 6 }} placeholder="Description" />
-                                <div style={{ display: "flex", gap: 6 }}>
+                                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                                   <button onClick={() => setEditingTimelineIdx(null)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 10 }}>Done</button>
+                                  <button onClick={() => moveTimelineItem(trip.id, i, -1)} disabled={i === 0}
+                                    style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "4px 8px", opacity: i === 0 ? 0.3 : 1 }} aria-label="Move up">▲</button>
+                                  <button onClick={() => moveTimelineItem(trip.id, i, 1)} disabled={i === dayItems.length - 1}
+                                    style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "4px 8px", opacity: i === dayItems.length - 1 ? 0.3 : 1 }} aria-label="Move down">▼</button>
                                   <button onClick={() => deleteTimelineItem(trip.id, i)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.red }}>Delete</button>
                                 </div>
                               </div>
@@ -3124,7 +4759,7 @@ export default function WanderlyApp() {
                                   <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
                                   <Tag bg={item.group === "Adults" ? T.blueL : item.group === "Kids" ? T.pinkL : item.group === "Note" ? T.amberL : T.al} color={item.group === "Adults" ? T.blue : item.group === "Kids" ? T.pink : item.group === "Note" ? T.amber : T.ad}>{item.group}</Tag>
                                 </div>
-                                <button onClick={() => setEditingTimelineIdx(i)} style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 40, minHeight: 40, opacity: 0.5, justifyContent: "center" }}>✏️</button>
+                                <button onClick={() => setEditingTimelineIdx(i)} aria-label={`Edit ${item.title}`} style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 40, minHeight: 40, opacity: 0.5, justifyContent: "center" }}>✏️</button>
                               </div>
                             )}
                           </div>
@@ -3163,10 +4798,10 @@ export default function WanderlyApp() {
                   {tripChatMessages.length === 0 && (
                     <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
                       <div style={{ fontSize: 28, marginBottom: 8 }}>💬</div>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>Chat with Wanderly AI</p>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>Chat with AI</p>
                       <p style={{ fontSize: 12, lineHeight: 1.5 }}>Ask about restaurants, adjust times, add activities, get budget tips — anything about your trip.</p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 16 }}>
-                        {["Find restaurants nearby", "Suggest kid-friendly activities", "What's the budget looking like?", "Regenerate itinerary"].map(q => (
+                        {[`Find restaurants in ${trip.places?.[(selectedDay - 1) % (trip.places?.length || 1)] || "this area"}`, "Suggest kid-friendly activities", "What's the budget looking like?", "Regenerate itinerary"].map(q => (
                           <button key={q} onClick={() => { setTripChatInput(q); }} className="w-btn"
                             style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, background: T.al, borderColor: T.a }}>
                             {q}
@@ -3175,27 +4810,334 @@ export default function WanderlyApp() {
                       </div>
                     </div>
                   )}
-                  {tripChatMessages.map((msg, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
+                  {tripChatMessages.map((msg, i) => {
+                    // Extract actionable items from AI messages (lines starting with "- **Name**" or "1. **Name**")
+                    const actionItems = msg.role === "ai" ? (msg.text.match(/(?:^|\n)\s*(?:\d+\.\s*|\-\s*)\*\*([^*]+)\*\*/g) || []).map(m => {
+                      const match = m.match(/\*\*([^*]+)\*\*/);
+                      return match ? match[1].trim() : null;
+                    }).filter(Boolean).slice(0, 6) : [];
+
+                    return (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
                       <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 16, fontSize: 13, lineHeight: 1.5,
-                        background: msg.role === "user" ? T.a : T.s2, color: msg.role === "user" ? "#fff" : T.t1, whiteSpace: "pre-line",
-                        borderBottomRightRadius: msg.role === "user" ? 4 : 16, borderBottomLeftRadius: msg.role === "user" ? 16 : 4 }}>
-                        {msg.text}
+                        background: msg.role === "user" ? T.a : T.s2, color: msg.role === "user" ? "#fff" : T.t1,
+                        borderBottomRightRadius: msg.role === "user" ? 4 : 16, borderBottomLeftRadius: msg.role === "user" ? 16 : 4,
+                        wordBreak: "break-word", overflowWrap: "break-word" }}
+                        dangerouslySetInnerHTML={{ __html: renderChatHtml(msg.text, msg.role === "user" ? "#fff" : T.a) }} />
+                      {/* Action buttons for AI suggestions */}
+                      {actionItems.length > 0 && (
+                        <div style={{ maxWidth: "85%", display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                          {actionItems.map((item, j) => (
+                            <button key={j} onClick={() => {
+                              const curLoc = trip.places?.[(selectedDay - 1) % (trip.places?.length || 1)] || "your destination";
+                              const newItem = { time: "12:00 PM", title: item, desc: `${curLoc} \u00B7 Added from chat`, group: "Everyone", color: T.blue };
+                              setCreatedTrips(prev => prev.map(t => {
+                                if (t.id !== trip.id) return t;
+                                const tl = t.timeline || {};
+                                return { ...t, timeline: { ...tl, [selectedDay]: [...(tl[selectedDay] || []), newItem] } };
+                              }));
+                              showToast(`Added "${item}" to Day ${selectedDay}`);
+                            }}
+                              className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 8px", borderRadius: 12,
+                                color: T.a, background: T.al, borderColor: T.a }}>
+                              + Day {selectedDay}: {item.length > 20 ? item.slice(0, 20) + "\u2026" : item}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
+                  {tripChatTyping && (
+                    <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 8 }}>
+                      <div style={{ padding: "12px 18px", background: T.s2, borderRadius: "16px 16px 16px 4px", display: "flex", gap: 4, alignItems: "center" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0s" }} />
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0.2s" }} />
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0.4s" }} />
                       </div>
                     </div>
-                  ))}
+                  )}
+                  <div ref={tripChatEndRef} />
                 </div>
                 <div style={{ padding: "12px 20px", borderTop: `.5px solid ${T.border}`, background: T.s }}>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input value={tripChatInput} onChange={e => setTripChatInput(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
                       style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 13, background: "#fff", outline: "none" }}
-                      placeholder="Ask about your trip..." />
-                    <button onClick={() => handleTripChat(trip.id)} style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 12 }}>Send</button>
+                      placeholder="Ask about your trip..." aria-label="Trip chat input" />
+                    <button onClick={() => handleTripChat(trip.id)} aria-label="Send trip message" style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 12 }}>Send</button>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* ── EXPENSES TAB ── */}
+            {tripDetailTab === "expenses" && (() => {
+              const adults = (trip.travellers?.adults || []).map(a => a.name).filter(Boolean);
+              const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+              const catBreakdown = getCategoryBreakdown(expenses);
+              const settlements = calculateSettlement(expenses);
+
+              const openAddExpense = (existingExpense) => {
+                if (existingExpense) {
+                  setEditingExpense(existingExpense);
+                  setExpenseDesc(existingExpense.description);
+                  setExpenseAmount(String(existingExpense.amount));
+                  setExpenseCategory(existingExpense.category);
+                  setExpensePaidBy(existingExpense.paid_by);
+                  setExpenseSplitMethod(existingExpense.split_method || 'equal');
+                  setExpenseParticipants((existingExpense.splits || []).map(s => s.participant_name));
+                  const customs = {};
+                  (existingExpense.splits || []).forEach(s => {
+                    customs[s.participant_name] = existingExpense.split_method === 'percentage' ? (s.share_percentage || 0) : s.share_amount;
+                  });
+                  setExpenseCustomSplits(customs);
+                } else {
+                  resetExpenseForm();
+                  setExpensePaidBy(adults[0] || '');
+                  setExpenseParticipants([...adults]);
+                }
+                setShowAddExpense(true);
+              };
+
+              return (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                {/* Add Expense Modal */}
+                {showAddExpense && (
+                  <div style={{ position: "absolute", inset: 0, zIndex: 100, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+                    onClick={(e) => { if (e.target === e.currentTarget) resetExpenseForm(); }}>
+                    <div style={{ background: T.bg, borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto", padding: "20px 20px 30px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                        <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{editingExpense ? "Edit Expense" : "Add Expense"}</h3>
+                        <button onClick={resetExpenseForm} style={{ ...css.btn, ...css.btnSm, fontSize: 18, padding: "2px 8px" }}>&times;</button>
+                      </div>
+
+                      {/* Description */}
+                      <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>What was it for?</label>
+                      <input value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} placeholder="e.g. Dinner at The Harbour"
+                        style={{ width: "100%", padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, marginTop: 4, marginBottom: 12, outline: "none", boxSizing: "border-box" }} />
+
+                      {/* Amount */}
+                      <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Amount</label>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, marginBottom: 12 }}>
+                        <span style={{ fontSize: 18, fontWeight: 600, color: T.t2 }}>{"£"}</span>
+                        <input value={expenseAmount} onChange={e => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" type="text" inputMode="decimal"
+                          style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 16, fontWeight: 600, outline: "none" }} />
+                      </div>
+
+                      {/* Category */}
+                      <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Category</label>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, marginBottom: 12 }}>
+                        {EXPENSE_CATEGORIES.map(cat => (
+                          <button key={cat.key} onClick={() => setExpenseCategory(cat.key)}
+                            style={{ ...css.btn, ...css.btnSm, fontSize: 11, padding: "6px 10px", borderRadius: 20,
+                              background: expenseCategory === cat.key ? cat.color : T.s2,
+                              color: expenseCategory === cat.key ? "#fff" : T.t2,
+                              borderColor: expenseCategory === cat.key ? cat.color : T.border }}>
+                            {cat.icon} {cat.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Paid by */}
+                      <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Paid by</label>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, marginBottom: 12 }}>
+                        {adults.map(name => (
+                          <button key={name} onClick={() => setExpensePaidBy(name)}
+                            style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "6px 12px", borderRadius: 20,
+                              background: expensePaidBy === name ? T.a : T.s2,
+                              color: expensePaidBy === name ? "#fff" : T.t2,
+                              borderColor: expensePaidBy === name ? T.ad : T.border }}>
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Split between (participant selection) */}
+                      <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Split between</label>
+                      <p style={{ fontSize: 10, color: T.t3, margin: "2px 0 6px" }}>Tap to add/remove people from this expense</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                        {adults.map(name => {
+                          const isIn = expenseParticipants.includes(name);
+                          return (
+                            <button key={name} onClick={() => {
+                              setExpenseParticipants(prev => isIn ? prev.filter(n => n !== name) : [...prev, name]);
+                            }}
+                              style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "6px 12px", borderRadius: 20,
+                                background: isIn ? T.blueL : T.s2, color: isIn ? T.blue : T.t3,
+                                borderColor: isIn ? T.blue : T.border, fontWeight: isIn ? 600 : 400 }}>
+                              {isIn ? "\u2713 " : ""}{name}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Split method */}
+                      <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Split method</label>
+                      <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
+                        {[{ key: 'equal', label: 'Equal' }, { key: 'percentage', label: 'By %' }, { key: 'custom', label: 'Custom' }].map(m => (
+                          <button key={m.key} onClick={() => setExpenseSplitMethod(m.key)}
+                            style={{ ...css.btn, ...css.btnSm, flex: 1, fontSize: 12, padding: "8px 0", borderRadius: T.rs,
+                              background: expenseSplitMethod === m.key ? T.a : T.s2,
+                              color: expenseSplitMethod === m.key ? "#fff" : T.t2,
+                              borderColor: expenseSplitMethod === m.key ? T.ad : T.border, fontWeight: 500 }}>
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Equal split preview */}
+                      {expenseSplitMethod === 'equal' && expenseParticipants.length > 0 && parseFloat(expenseAmount) > 0 && (
+                        <div style={{ background: T.s2, borderRadius: T.rs, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.t2 }}>
+                          {"£"}{(parseFloat(expenseAmount) / expenseParticipants.length).toFixed(2)} each ({expenseParticipants.length} {expenseParticipants.length === 1 ? "person" : "people"})
+                        </div>
+                      )}
+
+                      {/* Percentage inputs */}
+                      {expenseSplitMethod === 'percentage' && expenseParticipants.length > 0 && (
+                        <div style={{ background: T.s2, borderRadius: T.rs, padding: 12, marginBottom: 12 }}>
+                          {expenseParticipants.map(name => (
+                            <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                              <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{name}</span>
+                              <input value={expenseCustomSplits[name] || ''} onChange={e => setExpenseCustomSplits(prev => ({ ...prev, [name]: e.target.value }))}
+                                placeholder="0" type="text" inputMode="decimal" style={{ width: 60, padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontSize: 13, fontWeight: 600, textAlign: "right", outline: "none" }} />
+                              <span style={{ fontSize: 12, color: T.t3 }}>%</span>
+                            </div>
+                          ))}
+                          <div style={{ fontSize: 11, color: expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0) === 100 ? T.green : T.red, marginTop: 4, fontWeight: 600 }}>
+                            Total: {expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0).toFixed(0)}%
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Custom amount inputs */}
+                      {expenseSplitMethod === 'custom' && expenseParticipants.length > 0 && (
+                        <div style={{ background: T.s2, borderRadius: T.rs, padding: 12, marginBottom: 12 }}>
+                          {expenseParticipants.map(name => (
+                            <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                              <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{name}</span>
+                              <span style={{ fontSize: 12, color: T.t3 }}>{"£"}</span>
+                              <input value={expenseCustomSplits[name] || ''} onChange={e => setExpenseCustomSplits(prev => ({ ...prev, [name]: e.target.value }))}
+                                placeholder="0.00" type="text" inputMode="decimal" style={{ width: 70, padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontSize: 13, fontWeight: 600, textAlign: "right", outline: "none" }} />
+                            </div>
+                          ))}
+                          {parseFloat(expenseAmount) > 0 && (
+                            <div style={{ fontSize: 11, color: Math.abs(expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0) - parseFloat(expenseAmount)) < 0.02 ? T.green : T.red, marginTop: 4, fontWeight: 600 }}>
+                              Total: {"£"}{expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0).toFixed(2)} / {"£"}{parseFloat(expenseAmount).toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Save button */}
+                      <button onClick={() => saveExpense(trip)} style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 0", borderRadius: T.rs, fontSize: 14, fontWeight: 600 }}>
+                        {editingExpense ? "Update Expense" : "Add Expense"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Expenses content */}
+                <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+                  {/* Summary header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div>
+                      <p style={{ fontSize: 22, fontWeight: 700, fontFamily: T.fontD, color: T.t1 }}>{"£"}{totalSpent.toFixed(2)}</p>
+                      <p style={{ fontSize: 11, color: T.t3 }}>total spent{expenses.length > 0 ? ` \u00B7 ${expenses.length} expense${expenses.length !== 1 ? "s" : ""}` : ""}</p>
+                    </div>
+                    <button onClick={() => openAddExpense()} style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 12, fontWeight: 600 }}>
+                      + Add
+                    </button>
+                  </div>
+
+                  {/* Category breakdown bar */}
+                  {catBreakdown.length > 0 && (
+                    <div className="w-card" style={{ ...css.card, marginBottom: 16, padding: 14 }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Spending Breakdown</p>
+                      <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", marginBottom: 10 }}>
+                        {catBreakdown.map(s => (
+                          <div key={s.key} style={{ width: `${s.percentage}%`, background: s.color, minWidth: s.percentage > 0 ? 3 : 0 }} title={`${s.label}: \u00A3${s.amount.toFixed(2)}`} />
+                        ))}
+                      </div>
+                      {catBreakdown.map(s => (
+                        <div key={s.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 12 }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.t2 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+                            {s.icon} {s.label}
+                          </span>
+                          <span style={{ fontWeight: 600, color: T.t1 }}>{"£"}{s.amount.toFixed(2)} <span style={{ fontWeight: 400, color: T.t3 }}>({s.percentage.toFixed(0)}%)</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Settlement summary */}
+                  {expenses.length > 0 && (
+                    <div className="w-card" style={{ ...css.card, marginBottom: 16, padding: 14, borderColor: settlements.length > 0 ? T.amber : T.green }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                        onClick={() => setShowSettlement(!showSettlement)}>
+                        <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>
+                          {settlements.length > 0 ? "\uD83D\uDCB8 Who Owes Whom" : "\u2705 All Settled Up"}
+                        </p>
+                        <span style={{ fontSize: 12, color: T.t3 }}>{showSettlement ? "\u25B2" : "\u25BC"}</span>
+                      </div>
+                      {showSettlement && settlements.length > 0 && (
+                        <div style={{ marginTop: 10 }}>
+                          {settlements.map((s, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: i < settlements.length - 1 ? `.5px solid ${T.border}` : "none" }}>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: T.coral }}>{s.from}</span>
+                              <span style={{ fontSize: 11, color: T.t3 }}>{"→"} pays</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: T.green }}>{s.to}</span>
+                              <span style={{ marginLeft: "auto", fontSize: 14, fontWeight: 700, color: T.t1 }}>{"£"}{s.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {showSettlement && settlements.length === 0 && (
+                        <p style={{ fontSize: 12, color: T.t3, marginTop: 8 }}>Everyone is square! No payments needed.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Expense list */}
+                  {expenses.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
+                      <div style={{ fontSize: 36, marginBottom: 8 }}>{"💷"}</div>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>No expenses yet</p>
+                      <p style={{ fontSize: 12, lineHeight: 1.5 }}>Tap <b>+ Add</b> to log group expenses and track who owes what.</p>
+                    </div>
+                  )}
+                  {expenses.map((exp, i) => {
+                    const cat = getCatInfo(exp.category);
+                    const splitNames = (exp.splits || []).map(s => s.participant_name).join(", ");
+                    return (
+                      <div key={exp.id || i} className="w-card" style={{ ...css.card, marginBottom: 8, padding: "12px 14px", cursor: "pointer" }}
+                        onClick={() => openAddExpense(exp)}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: cat.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                            {cat.icon}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: T.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{exp.description}</p>
+                            <p style={{ fontSize: 11, color: T.t3 }}>Paid by <b>{exp.paid_by}</b> {"·"} {exp.split_method} split {"·"} {(exp.splits || []).length} people</p>
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <p style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>{"£"}{exp.amount.toFixed(2)}</p>
+                            <p style={{ fontSize: 10, color: T.t3 }}>{cat.label}</p>
+                          </div>
+                        </div>
+                        {/* Delete button */}
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                          <button onClick={(e) => { e.stopPropagation(); deleteExpense(exp.id, trip.dbId || trip.id); }}
+                            style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.red, padding: "3px 10px" }}>Remove</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              );
+            })()}
 
             {/* ── INFO TAB ── */}
             {tripDetailTab === "info" && (
@@ -3300,7 +5242,14 @@ export default function WanderlyApp() {
                 {isJoined ? (
                   <Tag bg={T.al} color={T.ad}>Joined ✓</Tag>
                 ) : (
-                  <button onClick={() => setJoinedSlot(realIdx)} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>Join</button>
+                  <button onClick={async () => {
+                    setJoinedSlot(realIdx);
+                    // Persist join to Supabase
+                    if (a.dbId && user && user.id !== 'demo') {
+                      const ok = await joinTripAsTraveller(trip.dbId || trip.id, a.dbId, user.user_metadata?.full_name || user.email || slotName);
+                      if (!ok) showToast("Failed to sync join — try again", "error");
+                    }
+                  }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>Join</button>
                 )}
               </div>
             );
@@ -3313,6 +5262,17 @@ export default function WanderlyApp() {
             <div style={{ ...css.card, background: T.al, borderColor: T.a, textAlign: "center", marginTop: 12, padding: 16 }}>
               <p style={{ fontSize: 14, fontWeight: 500, color: T.ad }}>Welcome to {trip.name}!</p>
               <p style={{ fontSize: 12, color: T.t2, marginTop: 4 }}>You have joined this trip successfully. The organiser will be notified.</p>
+              <button onClick={() => {
+                // Add trip to createdTrips if not already there, then navigate
+                if (!createdTrips.find(t => t.id === trip.id)) {
+                  setCreatedTrips(prev => [...prev, { ...trip, isJoined: true }]);
+                }
+                setSelectedCreatedTrip(trip);
+                setJoinedSlot(null);
+                navigate("createdTrip");
+              }} style={{ ...css.btn, ...css.btnP, width: "100%", marginTop: 12, padding: "10px 16px", justifyContent: "center", fontSize: 13, fontWeight: 500, gap: 6 }}>
+                📋 View full itinerary
+              </button>
             </div>
           )}
         </div>
@@ -3324,7 +5284,7 @@ export default function WanderlyApp() {
   const renderAuthScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <h1 style={{ fontFamily: T.fontD, fontSize: 32, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Wanderly</h1>
+        <h1 style={{ fontFamily: T.fontD, fontSize: 32, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Trip With Me</h1>
         <p style={{ fontSize: 13, color: T.t2, marginBottom: 30 }}>Your travel concierge</p>
 
         <div style={{ width: "100%", maxWidth: 340 }}>
@@ -3373,7 +5333,7 @@ export default function WanderlyApp() {
 
           {/* Skip login for demo */}
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: `.5px solid ${T.border}`, textAlign: "center" }}>
-            <button onClick={() => { setUser({ id: 'demo', email: 'demo@wanderly.app' }); setAuthLoading(false); }}
+            <button onClick={() => { setUser({ id: 'demo', email: 'demo@tripwithme.app' }); setAuthLoading(false); }}
               style={{ ...css.btn, fontSize: 12, color: T.t3, cursor: "pointer", margin: "0 auto" }}>
               Skip — explore as guest
             </button>
@@ -3384,15 +5344,15 @@ export default function WanderlyApp() {
   );
 
   // ─── Render ───
-  const phoneStyle = { maxWidth: 430, margin: "0 auto", height: 900, background: T.bg, borderRadius: 22, border: `.5px solid ${T.border}`, overflow: "hidden", fontFamily: T.font, color: T.t1, boxShadow: "0 8px 40px rgba(0,0,0,0.08)" };
+  const phoneStyle = { maxWidth: 600, width: "100%", margin: "0 auto", minHeight: "100dvh", height: "100dvh", background: T.bg, overflow: "hidden", fontFamily: T.font, color: T.t1 };
 
   if (authLoading) {
     return (
       <div className="w-app" style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important}}`}</style>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
-            <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Wanderly</h1>
+            <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Trip With Me</h1>
             <p style={{ fontSize: 12, color: T.t2, marginTop: 4 }}>Loading...</p>
           </div>
         </div>
@@ -3403,7 +5363,7 @@ export default function WanderlyApp() {
   if (!user) {
     return (
       <div className="w-app" style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important}}`}</style>
         <div style={{ height: "100%" }}>
           {renderAuthScreen()}
         </div>
@@ -3413,7 +5373,7 @@ export default function WanderlyApp() {
 
   return (
     <div className="w-app" style={phoneStyle}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important}}`}</style>
       <div style={{ height: "100%" }}>
         {screen === "home" && renderHomeScreen()}
         {screen === "create" && renderCreateScreen()}
@@ -3605,13 +5565,13 @@ export default function WanderlyApp() {
         <div style={{ position: "fixed", inset: 0, zIndex: 9997, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: T.s, borderRadius: T.r, padding: 28, maxWidth: 340, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>{"🌍"}</div>
-            <h2 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginBottom: 8 }}>Welcome to Wanderly</h2>
+            <h2 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginBottom: 8 }}>Welcome to Trip With Me</h2>
             <p style={{ fontSize: 13, color: T.t2, marginBottom: 20, lineHeight: 1.5 }}>Your AI travel concierge. Plan trips, invite friends, and create memories together.</p>
-            <button onClick={() => { setShowWelcome(false); localStorage.setItem('wanderly_welcomed', 'true'); setScreen("create"); setWizStep(0); resetWizard(); }}
+            <button onClick={() => { setShowWelcome(false); localStorage.setItem('twm_welcomed', 'true'); setScreen("create"); setWizStep(0); resetWizard(); }}
               style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 14, fontWeight: 500, marginBottom: 10 }}>
               Create my first trip
             </button>
-            <button onClick={() => { setShowWelcome(false); localStorage.setItem('wanderly_welcomed', 'true'); setShowDemo(true); setDemoSlide(0); }}
+            <button onClick={() => { setShowWelcome(false); localStorage.setItem('twm_welcomed', 'true'); setShowDemo(true); setDemoSlide(0); }}
               style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: T.t2 }}>
               Explore the demo first
             </button>
@@ -3969,7 +5929,7 @@ export default function WanderlyApp() {
                 <div style={{ fontSize: 56, marginBottom: 16, ...popIn(2) }}>🌍</div>
                 <h2 style={{ fontFamily: T.fontD, fontSize: 26, color: "#fff", marginBottom: 8, ...slideUp(5) }}>Your adventure awaits</h2>
                 <p style={{ fontSize: 13, color: "rgba(255,255,255,.5)", lineHeight: 1.6, marginBottom: 24, ...slideUp(8) }}>
-                  Wanderly connects maps, weather, bookings, EV chargers, and AI — so you can focus on making memories.
+                  Trip With Me connects maps, weather, bookings, EV chargers, and AI — so you can focus on making memories.
                 </p>
                 {show(14) && (
                   <button onClick={e => { e.stopPropagation(); setShowDemo(false); setScreen("create"); setWizStep(0); resetWizard(); }}
@@ -3978,10 +5938,10 @@ export default function WanderlyApp() {
                   </button>
                 )}
                 {show(18) && (
-                  <button onClick={e => { e.stopPropagation(); setShowDemo(false); }}
-                    style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: "rgba(255,255,255,.5)", border: "1px solid rgba(255,255,255,.15)", ...slideUp(18) }}>
-                    Explore the demo trip
-                  </button>
+                  <p onClick={e => { e.stopPropagation(); setShowDemo(false); }}
+                    style={{ fontSize: 12, color: "rgba(255,255,255,.4)", cursor: "pointer", marginTop: 4, ...slideUp(18) }}>
+                    or explore the demo trip →
+                  </p>
                 )}
               </div>
             );
@@ -4092,11 +6052,13 @@ export default function WanderlyApp() {
                     style={{ width: "100%", padding: "8px 12px", borderRadius: T.rs, border: `.5px solid rgba(255,255,255,0.2)`, background: "rgba(255,255,255,0.15)", color: "#fff", fontFamily: T.font, fontSize: 13, outline: "none" }}
                   >
                     <option value="Untagged" style={{ color: "#000" }}>Untagged</option>
-                    <option value="Day 1" style={{ color: "#000" }}>Day 1</option>
-                    <option value="Day 2" style={{ color: "#000" }}>Day 2</option>
-                    <option value="Day 3" style={{ color: "#000" }}>Day 3</option>
-                    <option value="Day 4" style={{ color: "#000" }}>Day 4</option>
-                    <option value="Day 5" style={{ color: "#000" }}>Day 5</option>
+                    {(() => {
+                      const tp = selectedCreatedTrip || createdTrips[0];
+                      const dc = tp?.start && tp?.end ? Math.max(1, Math.ceil((new Date(tp.end) - new Date(tp.start)) / 86400000) + 1) : 5;
+                      return Array.from({ length: Math.min(dc, 30) }, (_, i) => (
+                        <option key={i} value={`Day ${i + 1}`} style={{ color: "#000" }}>Day {i + 1}</option>
+                      ));
+                    })()}
                   </select>
                 </div>
                 <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
