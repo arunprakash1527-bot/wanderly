@@ -809,6 +809,7 @@ export default function TripWithMeApp() {
   const [reelPlaying, setReelPlaying] = useState(false);
   const [reelIndex, setReelIndex] = useState(0);
   const [reelPaused, setReelPaused] = useState(false);
+  const [reelStyle, setReelStyle] = useState("cinematic"); // "cinematic" | "slideshow" | "energetic"
   const [tripDirections, setTripDirections] = useState(null);
   const [showMap, setShowMap] = useState(true);
 
@@ -1035,6 +1036,31 @@ export default function TripWithMeApp() {
     } catch (e) { setExpenses([]); }
   };
 
+  const loadTripPhotos = async (tripId) => {
+    if (!tripId) return;
+    try {
+      const { data } = await supabase.from('trip_photos').select('*').eq('trip_id', tripId).order('sort_order', { ascending: true });
+      if (data && data.length > 0) {
+        setUploadedPhotos(data.map(p => ({
+          id: p.id, url: p.file_url, name: p.file_name, day: p.day_tag || "Untagged",
+          liked: p.liked || false, caption: p.caption || "", sortOrder: p.sort_order || 0,
+          filePath: p.file_path, uploadDate: new Date(p.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        })));
+      }
+    } catch (e) { /* table may not exist */ }
+  };
+
+  const updatePhotoInSupabase = async (photoId, updates) => {
+    try { await supabase.from('trip_photos').update(updates).eq('id', photoId); } catch (e) { /* ignore */ }
+  };
+
+  const deletePhotoFromSupabase = async (photo) => {
+    try {
+      if (photo.filePath) await supabase.storage.from('trip-photos').remove([photo.filePath]);
+      await supabase.from('trip_photos').delete().eq('id', photo.id);
+    } catch (e) { /* ignore */ }
+  };
+
   const resetExpenseForm = () => {
     setExpenseDesc(''); setExpenseAmount(''); setExpenseCategory('food');
     setExpensePaidBy(''); setExpenseSplitMethod('equal'); setExpenseParticipants([]);
@@ -1147,6 +1173,8 @@ export default function TripWithMeApp() {
   // Trip Reel auto-advance timer
   useEffect(() => {
     if (reelPlaying && !reelPaused && uploadedPhotos.length > 0) {
+      const baseDuration = reelStyle === "energetic" ? 2000 : reelStyle === "slideshow" ? 3000 : 4000;
+      const reelDuration = videoSettings.has("Slow-mo") ? baseDuration * 1.5 : baseDuration;
       reelTimerRef.current = setInterval(() => {
         setReelIndex(prev => {
           if (prev >= uploadedPhotos.length - 1) {
@@ -1155,10 +1183,10 @@ export default function TripWithMeApp() {
           }
           return prev + 1;
         });
-      }, 4000);
+      }, reelDuration);
     }
     return () => { if (reelTimerRef.current) clearInterval(reelTimerRef.current); };
-  }, [reelPlaying, reelPaused, uploadedPhotos.length]);
+  }, [reelPlaying, reelPaused, uploadedPhotos.length, reelStyle, videoSettings]);
 
   // Demo animation tick — drives all animations
   useEffect(() => {
@@ -2223,6 +2251,7 @@ export default function TripWithMeApp() {
     setTripChatInput("");
     loadTripMessages(updated.dbId);
     loadExpenses(updated.dbId);
+    loadTripPhotos(updated.dbId);
     navigate("createdTrip");
     // Chat nudge — delayed so the user sees the itinerary first
     setTimeout(() => {
@@ -2239,6 +2268,7 @@ export default function TripWithMeApp() {
     setSelectedDay(1);
     loadTripMessages(trip.dbId);
     loadExpenses(trip.dbId);
+    loadTripPhotos(trip.dbId);
     navigate("createdTrip");
   };
 
@@ -4347,10 +4377,46 @@ export default function TripWithMeApp() {
   );
 
   // ─── Screen: Memories ───
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files || []);
-    const newPhotos = files.map(f => ({ id: Date.now() + "_" + Math.random().toString(36).slice(2, 8), url: URL.createObjectURL(f), name: f.name, day: "Untagged", liked: false, caption: "", uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }));
-    setUploadedPhotos(prev => [...prev, ...newPhotos]);
+    const trip = selectedCreatedTrip || createdTrips[0];
+    const tripId = trip?.dbId || trip?.id || 'default';
+
+    for (const f of files) {
+      const uniqueId = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+      const filePath = `${tripId}/${uniqueId}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      let url = URL.createObjectURL(f);
+      let storedInSupabase = false;
+
+      try {
+        const { data, error } = await supabase.storage.from('trip-photos').upload(filePath, f, { cacheControl: '3600', upsert: false });
+        if (!error && data) {
+          const { data: urlData } = supabase.storage.from('trip-photos').getPublicUrl(filePath);
+          if (urlData?.publicUrl) {
+            url = urlData.publicUrl;
+            storedInSupabase = true;
+          }
+        }
+      } catch (err) { /* Storage not set up — use local URL */ }
+
+      const newPhoto = {
+        id: uniqueId, url, name: f.name, day: "Untagged", liked: false, caption: "",
+        uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        sortOrder: uploadedPhotos.length, filePath: storedInSupabase ? filePath : null,
+      };
+
+      setUploadedPhotos(prev => [...prev, newPhoto]);
+
+      // Save metadata to Supabase
+      if (storedInSupabase && user) {
+        try {
+          await supabase.from('trip_photos').insert({
+            trip_id: tripId, user_id: user.id, file_url: url, file_path: filePath,
+            file_name: f.name, day_tag: 'Untagged', liked: false, caption: '', sort_order: uploadedPhotos.length,
+          });
+        } catch (err) { /* table may not exist yet */ }
+      }
+    }
     e.target.value = "";
   };
   const renderMemoriesScreen = () => {
@@ -4367,11 +4433,17 @@ export default function TripWithMeApp() {
     dayGroups.forEach(d => { taggedByDay[d] = uploadedPhotos.filter(p => p.day === d); });
 
     const renderPhotoThumb = (p, idx) => (
-      <div key={idx} style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative", border: p.liked ? `2px solid ${T.red}` : "none" }} onClick={() => setViewingPhoto(p)}>
-        <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        <span style={{ position: "absolute", bottom: 2, left: 4, color: "#fff", fontSize: 9, fontWeight: 500, textShadow: "0 1px 3px rgba(0,0,0,.6)" }}>{p.name.length > 12 ? p.name.slice(0, 12) + "..." : p.name}</span>
-        <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, liked: !ph.liked } : ph)); }} style={{ position: "absolute", top: 4, left: 4, fontSize: 14, cursor: "pointer", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}>{p.liked ? "\u2764\uFE0F" : "\uD83E\uDD0D"}</span>
-        <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.filter(ph => ph.id !== p.id)); }} style={{ position: "absolute", top: 2, right: 4, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,.6)", lineHeight: 1 }}>&times;</span>
+      <div key={idx} style={{ position: "relative" }}>
+        <div style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative", border: p.liked ? `2px solid ${T.red}` : "none" }} onClick={() => setViewingPhoto(p)}>
+          <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <span onClick={(e) => { e.stopPropagation(); const updated = uploadedPhotos.map(ph => ph.id === p.id ? { ...ph, liked: !ph.liked } : ph); setUploadedPhotos(updated); updatePhotoInSupabase(p.id, { liked: !p.liked }); }} style={{ position: "absolute", top: 4, left: 4, fontSize: 14, cursor: "pointer", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}>{p.liked ? "\u2764\uFE0F" : "\uD83E\uDD0D"}</span>
+          <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.filter(ph => ph.id !== p.id)); deletePhotoFromSupabase(p); }} style={{ position: "absolute", top: 2, right: 4, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,.6)", lineHeight: 1 }}>&times;</span>
+        </div>
+        <select value={p.day} onChange={(e) => { const newDay = e.target.value; setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, day: newDay } : ph)); updatePhotoInSupabase(p.id, { day_tag: newDay }); }}
+          style={{ width: "100%", padding: "3px 4px", fontSize: 10, border: `.5px solid ${T.border}`, borderRadius: 4, background: T.s2, color: T.t2, marginTop: 3, fontFamily: T.font, cursor: "pointer" }}>
+          <option value="Untagged">Untagged</option>
+          {dayGroups.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
       </div>
     );
 
@@ -4482,16 +4554,41 @@ export default function TripWithMeApp() {
           </div>
         </div>
 
-        <div style={{ ...css.card, textAlign: "center", padding: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <p style={{ fontSize: 14, fontWeight: 500 }}>AI video settings</p>
-            <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, background: T.amberL, color: T.amber, fontWeight: 600 }}>Coming soon</span>
+        {/* Reel style selector */}
+        {totalPhotos > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Reel Style</p>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[
+                { id: "cinematic", label: "\uD83C\uDFAC Cinematic", desc: "Slow Ken Burns" },
+                { id: "slideshow", label: "\uD83D\uDCF7 Slideshow", desc: "Clean fades" },
+                { id: "energetic", label: "\u26A1 Energetic", desc: "Fast & dynamic" },
+              ].map(s => (
+                <button key={s.id} onClick={() => setReelStyle(s.id)}
+                  style={{ flex: 1, padding: "10px 8px", borderRadius: T.rs, border: `.5px solid ${reelStyle === s.id ? T.a : T.border}`,
+                    background: reelStyle === s.id ? T.al : T.s2, cursor: "pointer", textAlign: "center" }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: reelStyle === s.id ? T.ad : T.t1 }}>{s.label}</p>
+                  <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{s.desc}</p>
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 10, color: T.t3, marginTop: 6 }}>Photos play in upload order. Drag to reorder coming soon.</p>
           </div>
+        )}
+
+        <div style={{ ...css.card, padding: 20 }}>
+          <p style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Video settings</p>
           <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>Customise your highlight reel</p>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-            {["Music overlay", "AI narration", "Date stamps", "Slow-mo", "Boomerangs"].map((o) => (
-              <span key={o} onClick={() => setVideoSettings(prev => { const next = new Set(prev); if (next.has(o)) next.delete(o); else next.add(o); return next; })} style={{ ...css.chip, ...(videoSettings.has(o) ? css.chipActive : {}), cursor: "pointer" }}>{o}</span>
-            ))}
+            {["Music overlay", "AI narration", "Date stamps", "Slow-mo", "Boomerangs"].map((o) => {
+              const comingSoon = ["Music overlay", "AI narration", "Boomerangs"].includes(o);
+              return (
+                <span key={o} onClick={() => setVideoSettings(prev => { const next = new Set(prev); if (next.has(o)) next.delete(o); else next.add(o); return next; })} style={{ ...css.chip, ...(videoSettings.has(o) ? css.chipActive : {}), cursor: "pointer", position: "relative" }}>
+                  {o}
+                  {comingSoon && <span style={{ fontSize: 7, color: T.amber, marginLeft: 3 }}>soon</span>}
+                </span>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -5489,10 +5586,17 @@ export default function TripWithMeApp() {
               const likedCount = uploadedPhotos.filter(p => p.liked).length;
 
               const renderThumb = (p, idx) => (
-                <div key={idx} style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative", border: p.liked ? `2px solid ${T.red}` : "none" }} onClick={() => setViewingPhoto(p)}>
-                  <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, liked: !ph.liked } : ph)); }} style={{ position: "absolute", top: 4, left: 4, fontSize: 14, cursor: "pointer", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}>{p.liked ? "\u2764\uFE0F" : "\uD83E\uDD0D"}</span>
-                  <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.filter(ph => ph.id !== p.id)); }} style={{ position: "absolute", top: 2, right: 4, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,.6)", lineHeight: 1 }}>&times;</span>
+                <div key={idx} style={{ position: "relative" }}>
+                  <div style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative", border: p.liked ? `2px solid ${T.red}` : "none" }} onClick={() => setViewingPhoto(p)}>
+                    <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <span onClick={(e) => { e.stopPropagation(); const updated = uploadedPhotos.map(ph => ph.id === p.id ? { ...ph, liked: !ph.liked } : ph); setUploadedPhotos(updated); updatePhotoInSupabase(p.id, { liked: !p.liked }); }} style={{ position: "absolute", top: 4, left: 4, fontSize: 14, cursor: "pointer", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}>{p.liked ? "\u2764\uFE0F" : "\uD83E\uDD0D"}</span>
+                    <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.filter(ph => ph.id !== p.id)); deletePhotoFromSupabase(p); }} style={{ position: "absolute", top: 2, right: 4, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,.6)", lineHeight: 1 }}>&times;</span>
+                  </div>
+                  <select value={p.day} onChange={(e) => { const newDay = e.target.value; setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, day: newDay } : ph)); updatePhotoInSupabase(p.id, { day_tag: newDay }); }}
+                    style={{ width: "100%", padding: "3px 4px", fontSize: 10, border: `.5px solid ${T.border}`, borderRadius: 4, background: T.s2, color: T.t2, marginTop: 3, fontFamily: T.font, cursor: "pointer" }}>
+                    <option value="Untagged">Untagged</option>
+                    {dayGroups.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
                 </div>
               );
               const uploadBox = () => (
@@ -5524,6 +5628,28 @@ export default function TripWithMeApp() {
                         <p style={{ fontSize: 11, opacity: .7 }}>{totalPhotos} photos · Auto-generated</p>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Reel style selector */}
+                {totalPhotos > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Reel Style</p>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[
+                        { id: "cinematic", label: "\uD83C\uDFAC Cinematic", desc: "Slow Ken Burns" },
+                        { id: "slideshow", label: "\uD83D\uDCF7 Slideshow", desc: "Clean fades" },
+                        { id: "energetic", label: "\u26A1 Energetic", desc: "Fast & dynamic" },
+                      ].map(s => (
+                        <button key={s.id} onClick={() => setReelStyle(s.id)}
+                          style={{ flex: 1, padding: "10px 8px", borderRadius: T.rs, border: `.5px solid ${reelStyle === s.id ? T.a : T.border}`,
+                            background: reelStyle === s.id ? T.al : T.s2, cursor: "pointer", textAlign: "center" }}>
+                          <p style={{ fontSize: 13, fontWeight: 500, color: reelStyle === s.id ? T.ad : T.t1 }}>{s.label}</p>
+                          <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{s.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 10, color: T.t3, marginTop: 6 }}>Photos play in upload order. Drag to reorder coming soon.</p>
                   </div>
                 )}
 
@@ -5775,7 +5901,7 @@ export default function TripWithMeApp() {
   if (authLoading) {
     return (
       <div className="w-app" style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes reelEnergetic{0%{transform:scale(1) rotate(0deg);opacity:0}10%{opacity:1}100%{transform:scale(1.15) rotate(1.5deg);opacity:1}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Trip With Me</h1>
@@ -5789,7 +5915,7 @@ export default function TripWithMeApp() {
   if (!user) {
     return (
       <div className="w-app" style={phoneStyle}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes reelEnergetic{0%{transform:scale(1) rotate(0deg);opacity:0}10%{opacity:1}100%{transform:scale(1.15) rotate(1.5deg);opacity:1}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
         <div style={{ height: "100%" }}>
           {renderAuthScreen()}
         </div>
@@ -5799,7 +5925,7 @@ export default function TripWithMeApp() {
 
   return (
     <div className="w-app" style={phoneStyle}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes reelEnergetic{0%{transform:scale(1) rotate(0deg);opacity:0}10%{opacity:1}100%{transform:scale(1.15) rotate(1.5deg);opacity:1}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
       <div style={{ height: "100%" }}>
         {screen === "home" && renderHomeScreen()}
         {screen === "create" && renderCreateScreen()}
@@ -5907,10 +6033,23 @@ export default function TripWithMeApp() {
       {/* Trip Reel Overlay */}
       {reelPlaying && uploadedPhotos.length > 0 && (() => {
         const photo = uploadedPhotos[reelIndex] || uploadedPhotos[0];
-        const kbAnimations = ["kb1", "kb2", "kb3", "kb4"];
-        const kbOrigins = ["top left", "center", "bottom right", "top right"];
-        const kbAnim = kbAnimations[reelIndex % 4];
-        const kbOrigin = kbOrigins[reelIndex % 4];
+        // Animation based on reel style
+        const baseDur = reelStyle === "energetic" ? 2 : reelStyle === "slideshow" ? 3 : 4;
+        const reelDuration = videoSettings.has("Slow-mo") ? baseDur * 1.5 : baseDur;
+        let photoAnimation, photoTransformOrigin;
+        if (reelStyle === "cinematic") {
+          const kbAnimations = ["kb1", "kb2", "kb3", "kb4"];
+          const kbOrigins = ["top left", "center", "bottom right", "top right"];
+          photoAnimation = `${kbAnimations[reelIndex % 4]} ${reelDuration}s ease-in-out forwards`;
+          photoTransformOrigin = kbOrigins[reelIndex % 4];
+        } else if (reelStyle === "slideshow") {
+          photoAnimation = `reelFadeIn 0.8s ease-in`;
+          photoTransformOrigin = "center";
+        } else {
+          // energetic — quick zoom with slight rotation
+          photoAnimation = `reelEnergetic ${reelDuration}s ease-out forwards`;
+          photoTransformOrigin = reelIndex % 2 === 0 ? "center left" : "center right";
+        }
         const likedCount = uploadedPhotos.filter(p => p.liked).length;
         return (
           <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "#000", display: "flex", flexDirection: "column", fontFamily: T.font }}>
@@ -5923,7 +6062,7 @@ export default function TripWithMeApp() {
                     borderRadius: 2,
                     background: "#fff",
                     width: i < reelIndex ? "100%" : i === reelIndex ? "0%" : "0%",
-                    ...(i === reelIndex && !reelPaused ? { animation: "reelProgress 4s linear forwards" } : {}),
+                    ...(i === reelIndex && !reelPaused ? { animation: `reelProgress ${reelDuration}s linear forwards` } : {}),
                     ...(i === reelIndex && reelPaused ? { width: "50%" } : {}),
                   }} />
                 </div>
@@ -5931,7 +6070,7 @@ export default function TripWithMeApp() {
             </div>
             {/* Close button */}
             <button onClick={() => setReelPlaying(false)} style={{ position: "absolute", top: 10, right: 12, background: "none", border: "none", color: "#fff", fontSize: 28, cursor: "pointer", zIndex: 3, lineHeight: 1, padding: 4 }}>&times;</button>
-            {/* Photo with Ken Burns */}
+            {/* Photo with style-based animation */}
             <div key={reelIndex} style={{ flex: 1, overflow: "hidden", position: "relative", animation: "reelFadeIn 0.5s ease-in" }}>
               <img
                 src={photo.url}
@@ -5940,10 +6079,14 @@ export default function TripWithMeApp() {
                   width: "100%",
                   height: "100%",
                   objectFit: "cover",
-                  animation: `${kbAnim} 4s ease-in-out forwards`,
-                  transformOrigin: kbOrigin,
+                  animation: photoAnimation,
+                  transformOrigin: photoTransformOrigin,
                 }}
               />
+              {/* Date stamp overlay */}
+              {videoSettings.has("Date stamps") && photo.uploadDate && (
+                <span style={{ position: "absolute", top: 40, right: 12, color: "rgba(255,255,255,.8)", fontSize: 11, fontWeight: 500, textShadow: "0 1px 3px rgba(0,0,0,.5)", zIndex: 2 }}>{"\uD83D\uDCC5"} {photo.uploadDate}</span>
+              )}
               {/* Pause indicator */}
               {reelPaused && (
                 <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", fontSize: 48, color: "rgba(255,255,255,0.8)", textShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>⏸️</div>
@@ -6464,6 +6607,7 @@ export default function TripWithMeApp() {
                     setUploadedPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, caption: val } : p));
                     setViewingPhoto(prev => ({ ...prev, caption: val }));
                   }}
+                  onBlur={() => { updatePhotoInSupabase(photo.id, { caption: photo.caption || '' }); }}
                   style={{ width: "100%", padding: "8px 12px", borderRadius: T.rs, border: `.5px solid rgba(255,255,255,0.2)`, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: T.font, fontSize: 13, outline: "none", marginBottom: 10 }}
                 />
                 <div style={{ marginBottom: 12 }}>
@@ -6474,6 +6618,7 @@ export default function TripWithMeApp() {
                       const val = e.target.value;
                       setUploadedPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, day: val } : p));
                       setViewingPhoto(prev => ({ ...prev, day: val }));
+                      updatePhotoInSupabase(photo.id, { day_tag: val });
                     }}
                     style={{ width: "100%", padding: "8px 12px", borderRadius: T.rs, border: `.5px solid rgba(255,255,255,0.2)`, background: "rgba(255,255,255,0.15)", color: "#fff", fontFamily: T.font, fontSize: 13, outline: "none" }}
                   >
@@ -6492,6 +6637,7 @@ export default function TripWithMeApp() {
                     onClick={() => {
                       setUploadedPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, liked: !p.liked } : p));
                       setViewingPhoto(prev => ({ ...prev, liked: !prev.liked }));
+                      updatePhotoInSupabase(photo.id, { liked: !photo.liked });
                     }}
                     style={{ ...css.btn, background: photo.liked ? T.redL : "rgba(255,255,255,0.1)", color: photo.liked ? T.red : "#fff", borderColor: photo.liked ? T.red : "rgba(255,255,255,0.2)" }}
                   >
@@ -6499,6 +6645,7 @@ export default function TripWithMeApp() {
                   </button>
                   <button
                     onClick={() => {
+                      deletePhotoFromSupabase(photo);
                       setUploadedPhotos(prev => prev.filter(p => p.id !== photo.id));
                       setViewingPhoto(null);
                     }}
