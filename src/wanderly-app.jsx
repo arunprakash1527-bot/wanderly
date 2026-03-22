@@ -3345,13 +3345,58 @@ export default function TripWithMeApp() {
     england: { food: ["Fish & chips", "Sunday roast", "Cream tea", "Curry house", "Gastropub grub", "Full English", "Pie & mash"], activities: ["Castle visit", "Coastal walk", "Market town stroll", "Afternoon tea", "Country house visit", "Canal walk"] },
   };
 
+  // Places API-powered suggestions for preferences
+  const [placesFood, setPlacesFood] = useState([]);
+  const [placesActivities, setPlacesActivities] = useState([]);
+  const [placesFetched, setPlacesFetched] = useState("");
+
+  const fetchPlacesSuggestions = async (places) => {
+    const key = places.join(",");
+    if (key === placesFetched || places.length === 0) return;
+    setPlacesFetched(key);
+    try {
+      // Fetch restaurants and activities for the first location
+      const loc = places[0];
+      const [foodRes, actRes] = await Promise.all([
+        fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `best restaurants in ${loc}` }) }),
+        fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `things to do in ${loc}` }) }),
+      ]);
+      if (foodRes.ok) {
+        const data = await foodRes.json();
+        const names = (data.places || []).map(p => p.name).filter(Boolean);
+        if (names.length > 0) setPlacesFood(names);
+      }
+      if (actRes.ok) {
+        const data = await actRes.json();
+        const names = (data.places || []).map(p => p.name).filter(Boolean);
+        if (names.length > 0) setPlacesActivities(names);
+      }
+    } catch { /* keep static fallback */ }
+  };
+
+  // Trigger fetch when places change and we reach prefs step
+  React.useEffect(() => {
+    if (wizStep === 3 && wizTrip.places.length > 0) {
+      fetchPlacesSuggestions(wizTrip.places);
+    }
+  }, [wizStep, wizTrip.places.join(",")]);
+
   const renderWizPrefs = () => {
     const region = wizTrip.places.length > 0 ? getRegion(wizTrip.places) : null;
     const regionSugg = region && REGION_SUGGESTIONS[region] ? REGION_SUGGESTIONS[region] : null;
     const regionLabel = region ? region.charAt(0).toUpperCase() + region.slice(1) : "";
-    const allFoodOpts = regionSugg ? [...regionSugg.food, "Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"] : ["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"];
-    const adultActsWithRegion = regionSugg ? [...regionSugg.activities, ...ACTIVITY_SUGGESTIONS.default.adults] : ACTIVITY_SUGGESTIONS.default.adults;
-    const suggestions = { ...ACTIVITY_SUGGESTIONS.default, adults: adultActsWithRegion };
+    const locationName = wizTrip.places.length > 0 ? wizTrip.places[0] : "";
+
+    // Build food options: Places API real restaurants → region suggestions → dietary defaults
+    const dietaryDefaults = ["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"];
+    const regionFoodOpts = regionSugg ? regionSugg.food : [];
+    const allFoodOpts = [...new Set([...placesFood, ...regionFoodOpts, ...dietaryDefaults])];
+
+    // Build activity options: Places API real activities → region suggestions → generic defaults
+    const regionActOpts = regionSugg ? regionSugg.activities : [];
+    const genericActs = ACTIVITY_SUGGESTIONS.default.adults;
+    const allAdultActs = [...new Set([...placesActivities, ...regionActOpts, ...genericActs])];
+    const suggestions = { ...ACTIVITY_SUGGESTIONS.default, adults: allAdultActs };
 
     const togglePref = (key, item) => {
       setWizPrefs(prev => { const s = new Set(prev[key]); s.has(item) ? s.delete(item) : s.add(item); return { ...prev, [key]: s }; });
@@ -3366,17 +3411,25 @@ export default function TripWithMeApp() {
       return search.trim() ? all.filter(o => o.toLowerCase().includes(search.toLowerCase())) : all;
     };
 
-    const renderPrefSection = (label, key, allOpts, searchVal, setSearchVal, placeholder) => (
+    const renderPrefSection = (label, key, allOpts, searchVal, setSearchVal, placeholder, hasPlacesData) => (
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
+        {hasPlacesData && (
+          <p style={{ fontSize: 10, color: T.a, marginBottom: 4 }}>{"📍"} Includes real places near {locationName}</p>
+        )}
         <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
           onKeyDown={e => { if ((e.key === "Enter" || e.key === "Tab") && searchVal.trim()) { e.preventDefault(); addCustomPref(key, searchVal, setSearchVal); } }}
           style={{ width: "100%", padding: "8px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s2, outline: "none", marginBottom: 6 }}
           placeholder={placeholder} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {filterOpts(allOpts, searchVal, wizPrefs[key]).map(o => (
-            <span key={o} onClick={() => togglePref(key, o)} style={{ ...css.chip, ...(wizPrefs[key].has(o) ? css.chipActive : {}) }}>{o}</span>
-          ))}
+          {filterOpts(allOpts, searchVal, wizPrefs[key]).map(o => {
+            const isFromPlaces = key === "food" ? placesFood.includes(o) : key === "adultActs" ? placesActivities.includes(o) : false;
+            return (
+              <span key={o} onClick={() => togglePref(key, o)} style={{ ...css.chip, ...(wizPrefs[key].has(o) ? css.chipActive : {}), ...(isFromPlaces && !wizPrefs[key].has(o) ? { borderColor: T.a + "40", background: T.al + "30" } : {}) }}>
+                {isFromPlaces && "📍 "}{o}
+              </span>
+            );
+          })}
           {searchVal.trim() && !allOpts.includes(searchVal.trim()) && !wizPrefs[key].has(searchVal.trim()) && (
             <span onClick={() => addCustomPref(key, searchVal, setSearchVal)} style={{ ...css.chip, borderStyle: "dashed", color: T.a }}>+ Add "{searchVal.trim()}"</span>
           )}
@@ -3387,10 +3440,10 @@ export default function TripWithMeApp() {
     return (
       <>
         {regionSugg && <p style={{ fontSize: 11, color: T.a, fontWeight: 500, marginBottom: 8 }}>{"🌍"} Showing suggestions popular in {regionLabel}</p>}
-        {renderPrefSection("Food preferences", "food", allFoodOpts, foodSearch, setFoodSearch, "Search or type a food preference...")}
-        {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...")}
-        {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...")}
-        {wizTravellers.youngerKids.length > 0 && renderPrefSection("Activities — Children 3-7", "youngerActs", suggestions.youngerKids, youngerActSearch, setYoungerActSearch, "Search or add a kids activity...")}
+        {renderPrefSection("Food preferences", "food", allFoodOpts, foodSearch, setFoodSearch, "Search or type a food preference...", placesFood.length > 0)}
+        {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...", placesActivities.length > 0)}
+        {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...", false)}
+        {wizTravellers.youngerKids.length > 0 && renderPrefSection("Activities — Children 3-7", "youngerActs", suggestions.youngerKids, youngerActSearch, setYoungerActSearch, "Search or add a kids activity...", false)}
       </>
     );
   };
