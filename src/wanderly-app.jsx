@@ -479,7 +479,7 @@ const EXPENSE_CATEGORIES = [
 const getCatInfo = (key) => EXPENSE_CATEGORIES.find(c => c.key === key) || EXPENSE_CATEGORIES[6];
 
 // ─── Google Maps Integration ───
-const GOOGLE_MAPS_KEY = "AIzaSyDgxJ9_XHRH2bjcddSdT7Yo5em65KcrHf8";
+const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || "";
 let mapsLoaded = false;
 let mapsLoadPromise = null;
 
