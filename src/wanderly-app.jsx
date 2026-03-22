@@ -4750,6 +4750,7 @@ export default function TripWithMeApp() {
               <button className="w-tab" style={tripTabStyle("chat")} onClick={() => setTripDetailTab("chat")}>Chat</button>
               <button className="w-tab" style={tripTabStyle("polls")} onClick={() => setTripDetailTab("polls")}>Polls</button>
               <button className="w-tab" style={tripTabStyle("expenses")} onClick={() => setTripDetailTab("expenses")}>Expenses</button>
+              <button className="w-tab" style={tripTabStyle("memories")} onClick={() => setTripDetailTab("memories")}>Memories</button>
               <button className="w-tab" style={tripTabStyle("info")} onClick={() => setTripDetailTab("info")}>Info</button>
             </div>
 
@@ -5471,6 +5472,95 @@ export default function TripWithMeApp() {
                     );
                   })}
                 </div>
+              </div>
+              );
+            })()}
+
+            {/* ── MEMORIES TAB ── */}
+            {tripDetailTab === "memories" && (() => {
+              const photoDayCount = trip.start && trip.end
+                ? Math.max(1, Math.ceil((new Date(trip.end) - new Date(trip.start)) / 86400000) + 1)
+                : Object.keys(trip.timeline || {}).length || 5;
+              const dayGroups = Array.from({ length: Math.min(photoDayCount, 30) }, (_, i) => `Day ${i + 1}`);
+              const taggedByDay = {};
+              dayGroups.forEach(d => { taggedByDay[d] = uploadedPhotos.filter(p => p.day === d); });
+              const untaggedPhotos = uploadedPhotos.filter(p => p.day === "Untagged");
+              const totalPhotos = uploadedPhotos.length;
+              const likedCount = uploadedPhotos.filter(p => p.liked).length;
+
+              const renderThumb = (p, idx) => (
+                <div key={idx} style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative", border: p.liked ? `2px solid ${T.red}` : "none" }} onClick={() => setViewingPhoto(p)}>
+                  <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, liked: !ph.liked } : ph)); }} style={{ position: "absolute", top: 4, left: 4, fontSize: 14, cursor: "pointer", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}>{p.liked ? "\u2764\uFE0F" : "\uD83E\uDD0D"}</span>
+                  <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.filter(ph => ph.id !== p.id)); }} style={{ position: "absolute", top: 2, right: 4, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,.6)", lineHeight: 1 }}>&times;</span>
+                </div>
+              );
+              const uploadBox = () => (
+                <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
+              );
+
+              return (
+              <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+                <input type="file" accept="image/*" multiple ref={photoInputRef} style={{ display: "none" }} onChange={handlePhotoUpload} />
+                {/* Stats */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <div style={{ display: "flex", gap: 12, fontSize: 12, color: T.t2 }}>
+                    <span>📸 {totalPhotos}</span>
+                    <span>❤️ {likedCount}</span>
+                  </div>
+                  <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => photoInputRef.current?.click()}>+ Upload</button>
+                </div>
+
+                {/* Highlight reel */}
+                {totalPhotos > 0 && (
+                  <div style={{ ...css.card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+                    <div style={{ height: 120, background: `linear-gradient(135deg, ${T.ad}, ${T.a})`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", gap: 12 }}>
+                      <button onClick={() => { setReelIndex(0); setReelPaused(false); setReelPlaying(true); }}
+                        style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,.2)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+                      </button>
+                      <div>
+                        <p style={{ fontSize: 14, fontWeight: 500 }}>Trip Highlight Reel</p>
+                        <p style={{ fontSize: 11, opacity: .7 }}>{totalPhotos} photos · Auto-generated</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Day-grouped photos */}
+                {dayGroups.map(dayLabel => {
+                  const dayPhotos = taggedByDay[dayLabel];
+                  return (
+                    <div key={dayLabel} style={{ marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>{dayLabel}</p>
+                        <span style={{ fontSize: 11, color: T.t3 }}>{dayPhotos.length} photo{dayPhotos.length !== 1 ? "s" : ""}</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                        {dayPhotos.map((p, i) => renderThumb(p, i))}
+                        {uploadBox()}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Untagged */}
+                {untaggedPhotos.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Untagged</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                      {untaggedPhotos.map((p, i) => renderThumb(p, i))}
+                    </div>
+                  </div>
+                )}
+
+                {totalPhotos === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
+                    <div style={{ fontSize: 36, marginBottom: 8 }}>📸</div>
+                    <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>No memories yet</p>
+                    <p style={{ fontSize: 12, lineHeight: 1.5 }}>Upload photos to create your trip highlight reel and organise memories by day.</p>
+                  </div>
+                )}
               </div>
               );
             })()}
