@@ -2272,12 +2272,21 @@ export default function TripWithMeApp() {
   };
 
   const addTimelineItem = (tripId) => {
+    let newIdx = 0;
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
       const tl = t.timeline || {};
+      const existing = tl[selectedDay] || [];
+      newIdx = existing.length;
       const newItem = { time: "12:00 PM", title: "New activity", desc: "Tap to edit details", group: "Everyone", color: T.blue };
-      return { ...t, timeline: { ...tl, [selectedDay]: [...(tl[selectedDay] || []), newItem] } };
+      return { ...t, timeline: { ...tl, [selectedDay]: [...existing, newItem] } };
     }));
+    // Open the new item for editing and scroll to it
+    setEditingTimelineIdx(newIdx);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-timeline-idx="${newIdx}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   };
 
   // Helper: get items for current day from timeline (supports both old array and new day-keyed format)
@@ -4843,7 +4852,7 @@ export default function TripWithMeApp() {
                       )}
 
                       {dayItems.map((item, i) => (
-                        <div key={i} style={{ display: "flex", gap: 12, marginBottom: editingTimelineIdx === i ? 8 : 14 }}>
+                        <div key={i} data-timeline-idx={i} style={{ display: "flex", gap: 12, marginBottom: editingTimelineIdx === i ? 8 : 14 }}>
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14 }}>
                             <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
                             {i < dayItems.length - 1 && <div style={{ width: 1.5, flex: 1, background: T.border, marginTop: 4 }} />}
