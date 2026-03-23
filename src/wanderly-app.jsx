@@ -275,36 +275,50 @@ const LOCATION_VIBES = {
     match: /miami|cancun|phuket|bali|goa|amalfi|brighton|cornwall|devon|dorset|nice|barcelona|malaga|gold coast|byron bay|cape town|zanzibar|maldives|seychelles|mauritius|fiji|bora bora|tahiti|honolulu|san diego|koh samui|krabi|langkawi|dubrovnik|split|crete|mykonos|santorini|sicily|sardinia|majorca|ibiza|madeira|canary islands|azores|jersey|tulum|playa del carmen|cartagena|rio de janeiro|cairns|mirissa|da nang|hoi an|jeju/i,
     food: ["Seafood", "Beach bar bites", "Fresh fish", "Ceviche", "Grilled prawns", "Coconut dishes"],
     activities: ["Surfing", "Snorkelling", "Jet ski", "Beach day", "Boat tour", "Scuba diving", "Kayaking", "Sunset cruise", "Paddleboarding", "Deep-sea fishing", "Beach volleyball"],
+    olderKids: ["Bodyboarding", "Snorkelling tour", "Beach volleyball", "Kayaking", "Paddleboarding", "Sandcastle building", "Rock pooling", "Coasteering"],
+    youngerKids: ["Sandcastle building", "Rock pooling", "Paddling", "Beach treasure hunt", "Shell collecting", "Shallow water splashing", "Crab catching"],
   },
   tropical: {
     match: /bali|phuket|koh samui|krabi|cancun|tulum|maldives|seychelles|mauritius|fiji|bora bora|tahiti|honolulu|goa|kerala|zanzibar|sri lanka|caribbean|jamaica|barbados|bahamas|costa rica|langkawi|ubud|mirissa/i,
     food: ["Tropical fruit", "Smoothie bowls", "Jerk chicken", "Curry", "Fresh juice", "Açaí bowls"],
     activities: ["Jungle trek", "Waterfall hike", "Zip lining", "Wildlife spotting", "Mangrove tour", "Rainforest walk", "Volcano visit"],
+    olderKids: ["Jungle zip line", "Waterfall swimming", "Wildlife safari", "Snorkelling", "Banana boat ride", "Jungle walk", "Turtle spotting"],
+    youngerKids: ["Butterfly garden", "Turtle sanctuary", "Monkey forest visit", "Gentle river float", "Tropical fruit tasting", "Animal feeding"],
   },
   mountain: {
     match: /swiss alps|interlaken|chamonix|banff|whistler|innsbruck|salzburg|zermatt|queenstown|patagonia|cusco|machu picchu|rishikesh|pokhara|kathmandu|snowdonia|peak district|lake district|highlands|fort william|ben nevis|dolomites|colorado|denver|aspen|jackson hole/i,
     food: ["Fondue", "Hot chocolate", "Hearty stews", "Mountain hut dining", "Alpine cheese"],
     activities: ["Hiking", "Skiing", "Snowboarding", "Cable car ride", "Mountain biking", "Rock climbing", "Via ferrata", "Paragliding", "Scenic train ride"],
+    olderKids: ["Easy mountain hike", "Cable car ride", "Mountain biking", "Rock scrambling", "Scenic train ride", "Sledging", "Orienteering"],
+    youngerKids: ["Cable car ride", "Nature trail", "Pebble skimming", "Picnic spot", "Gentle woodland walk", "Stream paddling", "Wildlife spotting"],
   },
   city: {
     match: /new york|london|paris|tokyo|berlin|amsterdam|barcelona|rome|chicago|los angeles|san francisco|singapore|dubai|hong kong|shanghai|beijing|bangkok|seoul|mumbai|delhi|istanbul|moscow|buenos aires|mexico city|toronto|sydney|melbourne|lisbon|madrid|vienna|prague|budapest|warsaw|dublin|brussels|copenhagen|stockholm|seattle|boston|washington dc|portland|austin|nashville|montreal|vancouver|edinburgh|glasgow|manchester|birmingham|leeds|liverpool/i,
     food: ["Street food tour", "Fine dining", "Food market", "Rooftop restaurant", "Brunch spot", "Michelin star experience"],
     activities: ["Walking tour", "Rooftop bar", "Museum hopping", "Street art tour", "Shopping district", "Live music venue", "Theatre show", "Night tour", "Architecture walk"],
+    olderKids: ["Science museum", "Theme park", "Escape room", "Street food tour", "Skateboarding park", "Cinema/IMAX", "Trampoline park", "Laser tag"],
+    youngerKids: ["Children's museum", "City park playground", "Puppet show", "Toy shop visit", "Aquarium", "Zoo", "Carousel ride", "Story time at library"],
   },
   cultural: {
     match: /rome|florence|venice|athens|cairo|luxor|jerusalem|kyoto|nara|agra|varanasi|jaipur|udaipur|petra|marrakech|fez|york|bath|oxford|cambridge|krakow|prague|vienna|budapest|dubrovnik|granada|seville|cusco|angkor|luang prabang|hoi an|st andrews/i,
     food: ["Traditional cuisine", "Cooking class", "Historic cafe", "Local market food"],
     activities: ["Historical sites", "Temple visit", "Art gallery", "Archaeological tour", "Cultural workshop", "Traditional performance", "Heritage walk", "Guided history tour"],
+    olderKids: ["Treasure hunt tour", "Hands-on workshop", "Ancient ruins explorer", "Local craft making", "History scavenger hunt", "Kid-friendly walking tour"],
+    youngerKids: ["Castle exploration", "Dress-up activities", "Story trail", "Drawing workshop", "Puppet theatre", "Simple craft making"],
   },
   island: {
     match: /maldives|seychelles|mauritius|fiji|bora bora|tahiti|bali|sicily|sardinia|majorca|ibiza|crete|mykonos|santorini|jersey|isle of skye|zanzibar|madeira|canary islands|azores|sri lanka|galápagos|koh samui|langkawi|jeju|tasmania|hawaii|honolulu|phuket/i,
     food: ["Island BBQ", "Fresh catch of the day", "Beachside dining"],
     activities: ["Island hopping", "Snorkelling", "Beachcombing", "Whale watching", "Catamaran trip", "Sunset sail"],
+    olderKids: ["Snorkelling", "Glass-bottom boat", "Island bike ride", "Kayaking", "Fish feeding", "Beach Olympics"],
+    youngerKids: ["Glass-bottom boat", "Beach play", "Shell collecting", "Shallow snorkelling", "Sandcastle contest", "Boat ride"],
   },
   adventure: {
     match: /queenstown|banff|whistler|interlaken|cusco|patagonia|galápagos|costa rica|nepal|pokhara|rishikesh|chamonix|zermatt|jackson hole|moab|iceland|reykjavik|new zealand|cairns|bali/i,
     food: ["Energy food", "Trail snacks", "Camp cooking"],
     activities: ["Bungee jumping", "White water rafting", "Skydiving", "Canyoning", "Abseiling", "Mountain biking", "4WD safari", "Glacier walk"],
+    olderKids: ["Junior rafting", "Tree-top adventure", "Zip lining", "Mountain biking (easy trail)", "Rock climbing wall", "Caving", "Junior safari"],
+    youngerKids: ["Nature trail", "Animal spotting", "Easy forest walk", "Canopy walkway", "Petting zoo", "Gentle stream walk"],
   },
 };
 
@@ -3476,15 +3490,15 @@ export default function TripWithMeApp() {
 
   // ─── Wizard Step: Preferences (render function) ───
   const REGION_SUGGESTIONS = {
-    japan: { food: ["Sushi", "Ramen", "Tempura", "Matcha", "Izakaya", "Wagyu beef", "Soba noodles"], activities: ["Temples & shrines", "Onsen bathing", "Cherry blossom viewing", "Anime district", "Tea ceremony", "Bullet train ride", "Sumo wrestling"] },
-    france: { food: ["Croissants", "Coq au vin", "Crêpes", "Cheese tasting", "Wine pairing", "Patisserie tour"], activities: ["Wine region tour", "Art galleries", "River cruise", "Château visit", "Market browsing", "Cooking class"] },
-    spain: { food: ["Tapas", "Paella", "Churros", "Jamón ibérico", "Sangria", "Pintxos"], activities: ["Flamenco show", "Beach day", "Siesta culture", "Gothic Quarter walk", "Football match", "Tapas crawl"] },
-    italy: { food: ["Pizza", "Gelato", "Pasta making", "Espresso culture", "Truffle hunting", "Aperitivo"], activities: ["Colosseum visit", "Gondola ride", "Vineyard tour", "Vespa rental", "Art renaissance tour", "Cooking class"] },
-    thailand: { food: ["Pad Thai", "Tom Yum", "Street food tour", "Mango sticky rice", "Night market food"], activities: ["Temple tour", "Thai massage", "Island hopping", "Night market", "Elephant sanctuary", "Muay Thai"] },
-    usa: { food: ["Burgers", "BBQ", "Food truck tour", "Brunch culture", "Craft beer", "Diner breakfast"], activities: ["Road trip stops", "National parks", "Broadway show", "Sports game", "Shopping district", "Rooftop bars"] },
-    uk: { food: ["Fish & chips", "Sunday roast", "Cream tea", "Curry house", "Gastropub grub", "Full English", "Pie & mash", "Local ale"], activities: ["Castle visit", "Coastal walk", "Market town stroll", "Afternoon tea", "Heritage site", "Country pub"] },
-    scotland: { food: ["Haggis", "Scottish salmon", "Whisky tasting", "Shortbread", "Cullen skink", "Cranachan", "Scotch pie"], activities: ["Castle tour", "Whisky distillery", "Highland walk", "Loch cruise", "Old Town walk", "Ceilidh night"] },
-    england: { food: ["Fish & chips", "Sunday roast", "Cream tea", "Curry house", "Gastropub grub", "Full English", "Pie & mash"], activities: ["Castle visit", "Coastal walk", "Market town stroll", "Afternoon tea", "Country house visit", "Canal walk"] },
+    japan: { food: ["Sushi", "Ramen", "Tempura", "Matcha", "Izakaya", "Wagyu beef", "Soba noodles"], activities: ["Temples & shrines", "Onsen bathing", "Cherry blossom viewing", "Anime district", "Tea ceremony", "Bullet train ride", "Sumo wrestling"], olderKids: ["Anime district", "Robot restaurant", "Arcade games", "Bullet train ride", "Pokémon Center", "Manga museum"], youngerKids: ["Deer park (Nara)", "Train museum", "Ghibli Museum", "Garden walk", "Origami class", "Fish market visit"] },
+    france: { food: ["Croissants", "Coq au vin", "Crêpes", "Cheese tasting", "Wine pairing", "Patisserie tour"], activities: ["Wine region tour", "Art galleries", "River cruise", "Château visit", "Market browsing", "Cooking class"], olderKids: ["Crêpe making class", "Château treasure hunt", "Bike ride along canal", "Catacombs visit", "River cruise"], youngerKids: ["Carousel ride", "Puppet show", "Crêpe tasting", "Park playground", "Pony ride"] },
+    spain: { food: ["Tapas", "Paella", "Churros", "Jamón ibérico", "Sangria", "Pintxos"], activities: ["Flamenco show", "Beach day", "Siesta culture", "Gothic Quarter walk", "Football match", "Tapas crawl"], olderKids: ["Football stadium tour", "Beach watersports", "Flamenco lesson", "Bike tour", "Theme park"], youngerKids: ["Beach play", "Churros tasting", "Park playground", "Aquarium visit", "Carousel ride"] },
+    italy: { food: ["Pizza", "Gelato", "Pasta making", "Espresso culture", "Truffle hunting", "Aperitivo"], activities: ["Colosseum visit", "Gondola ride", "Vineyard tour", "Vespa rental", "Art renaissance tour", "Cooking class"], olderKids: ["Pizza making class", "Gladiator school", "Gelato tour", "Gondola ride", "Pompeii explorer"], youngerKids: ["Gelato tasting", "Gondola ride", "Piazza pigeon feeding", "Mask making", "Park play"] },
+    thailand: { food: ["Pad Thai", "Tom Yum", "Street food tour", "Mango sticky rice", "Night market food"], activities: ["Temple tour", "Thai massage", "Island hopping", "Night market", "Elephant sanctuary", "Muay Thai"], olderKids: ["Elephant sanctuary", "Zip lining", "Night market food tour", "Snorkelling", "Thai cooking class"], youngerKids: ["Elephant feeding", "Beach play", "Night market browsing", "Fruit carving class", "Fish spa"] },
+    usa: { food: ["Burgers", "BBQ", "Food truck tour", "Brunch culture", "Craft beer", "Diner breakfast"], activities: ["Road trip stops", "National parks", "Broadway show", "Sports game", "Shopping district", "Rooftop bars"], olderKids: ["Theme park", "Sports game", "Escape room", "Diner milkshakes", "Skate park", "IMAX movie"], youngerKids: ["Children's museum", "Zoo", "Central Park playground", "Diner visit", "Aquarium", "Carousel"] },
+    uk: { food: ["Fish & chips", "Sunday roast", "Cream tea", "Curry house", "Gastropub grub", "Full English", "Pie & mash", "Local ale"], activities: ["Castle visit", "Coastal walk", "Market town stroll", "Afternoon tea", "Heritage site", "Country pub"], olderKids: ["Castle exploration", "Bike hire", "Lake watersports", "Go Ape adventure", "Steam train ride", "Caving"], youngerKids: ["Farm visit", "Duck feeding", "Puddle jumping", "Cream tea", "Steam train ride", "Playground trail"] },
+    scotland: { food: ["Haggis", "Scottish salmon", "Whisky tasting", "Shortbread", "Cullen skink", "Cranachan", "Scotch pie"], activities: ["Castle tour", "Whisky distillery", "Highland walk", "Loch cruise", "Old Town walk", "Ceilidh night"], olderKids: ["Castle exploration", "Loch boat trip", "Highland games", "Mountain biking", "Ghost tour"], youngerKids: ["Loch boat trip", "Castle visit", "Highland cow spotting", "Nature trail", "Story walk"] },
+    england: { food: ["Fish & chips", "Sunday roast", "Cream tea", "Curry house", "Gastropub grub", "Full English", "Pie & mash"], activities: ["Castle visit", "Coastal walk", "Market town stroll", "Afternoon tea", "Country house visit", "Canal walk"], olderKids: ["Theme park", "Castle tour", "Bike hire", "Rock climbing wall", "Canal boat ride", "Escape room"], youngerKids: ["Farm visit", "Seaside donkey ride", "Playground", "Canal walk", "Cream tea", "Puppet show"] },
   };
 
   // Places API-powered suggestions for preferences
@@ -3544,7 +3558,17 @@ export default function TripWithMeApp() {
     const vibeActOpts = vibes.flatMap(v => LOCATION_VIBES[v]?.activities || []);
     const genericActs = ACTIVITY_SUGGESTIONS.default.adults;
     const allAdultActs = [...new Set([...placesActivities, ...vibeActOpts, ...regionActOpts, ...genericActs])];
-    const suggestions = { ...ACTIVITY_SUGGESTIONS.default, adults: allAdultActs };
+
+    // Build location-aware kids activity options
+    const vibeOlderKids = vibes.flatMap(v => LOCATION_VIBES[v]?.olderKids || []);
+    const regionOlderKids = regionSugg?.olderKids || [];
+    const allOlderKids = [...new Set([...vibeOlderKids, ...regionOlderKids, ...ACTIVITY_SUGGESTIONS.default.olderKids])];
+
+    const vibeYoungerKids = vibes.flatMap(v => LOCATION_VIBES[v]?.youngerKids || []);
+    const regionYoungerKids = regionSugg?.youngerKids || [];
+    const allYoungerKids = [...new Set([...vibeYoungerKids, ...regionYoungerKids, ...ACTIVITY_SUGGESTIONS.default.youngerKids])];
+
+    const suggestions = { ...ACTIVITY_SUGGESTIONS.default, adults: allAdultActs, olderKids: allOlderKids, youngerKids: allYoungerKids };
 
     const togglePref = (key, item) => {
       setWizPrefs(prev => { const s = new Set(prev[key]); s.has(item) ? s.delete(item) : s.add(item); return { ...prev, [key]: s }; });
