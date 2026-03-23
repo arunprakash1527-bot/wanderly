@@ -2250,22 +2250,25 @@ export default function TripWithMeApp() {
 
   const makeTripLive = (id) => {
     const trip = createdTrips.find(t => t.id === id);
-    const isEV = trip?.travel?.some(m => /ev/i.test(m));
+    const isEV = trip?.travel?.some(m => /ev\s*vehicle/i.test(m));
+    const isDriving = isEV || trip?.travel?.some(m => /non-ev\s*vehicle/i.test(m));
     const places = getSmartRouteOrder(trip);
     const startLoc = trip?.startLocation || "";
-    // Build smart stopovers: midpoint charging for EV, scenic break for others
+    // Build smart stopovers only for driving trips (not train/flight/walking/bicycle)
     const autoStops = [];
-    if (places.length > 0 && startLoc) {
+    if (isDriving && places.length > 0 && startLoc) {
       if (isEV) {
         autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: true });
       } else {
         autoStops.push({ type: "rest", label: "Rest & coffee stop", desc: `Between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: false });
       }
     }
-    // If multi-place trip, suggest stops between places
-    for (let i = 0; i < places.length - 1; i++) {
-      if (isEV) {
-        autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${places[i]} and ${places[i + 1]}`, time: "En route", enabled: true, combineMeal: true });
+    // If multi-place driving trip, suggest EV charging stops between places
+    if (isDriving) {
+      for (let i = 0; i < places.length - 1; i++) {
+        if (isEV) {
+          autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${places[i]} and ${places[i + 1]}`, time: "En route", enabled: true, combineMeal: true });
+        }
       }
     }
     setPendingActivationTripId(id);
