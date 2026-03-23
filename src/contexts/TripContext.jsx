@@ -89,7 +89,7 @@ export function TripProvider({ children }) {
       }
     } catch (err) {
       console.error('Error loading trips:', err);
-      showToast("Failed to save — check connection", "error");
+      showToast("Failed to load trips — check connection", "error");
     }
     setSyncing(false);
   }, [user, showToast]);

@@ -17,8 +17,8 @@ export function MemoriesScreen() {
   const daysWithPhotos = new Set(uploadedPhotos.filter(p => p.day !== "Untagged").map(p => p.day)).size;
   const untaggedPhotos = uploadedPhotos.filter(p => p.day === "Untagged");
   const tripForPhotos = selectedCreatedTrip || createdTrips[0];
-  const photoDayCount = tripForPhotos?.start && tripForPhotos?.end
-    ? Math.max(1, Math.ceil((new Date(tripForPhotos.end) - new Date(tripForPhotos.start)) / 86400000) + 1)
+  const photoDayCount = tripForPhotos?.rawStart && tripForPhotos?.rawEnd
+    ? Math.max(1, Math.ceil((new Date(tripForPhotos.rawEnd + "T12:00:00") - new Date(tripForPhotos.rawStart + "T12:00:00")) / 86400000) + 1)
     : 5;
   const dayGroups = Array.from({ length: Math.min(photoDayCount, 30) }, (_, i) => `Day ${i + 1}`);
   const taggedByDay = {};
