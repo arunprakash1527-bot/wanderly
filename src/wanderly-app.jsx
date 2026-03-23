@@ -1097,17 +1097,28 @@ export default function TripWithMeApp() {
         share_amount: parseFloat(expenseCustomSplits[name]) || 0,
       }));
     }
-    try {
-      if (editingExpense) {
-        // Update existing
+    if (editingExpense) {
+      // Update existing — update local state first (optimistic)
+      const updatedExpense = { ...editingExpense, description: expenseDesc.trim(), amount, category: expenseCategory, paid_by: expensePaidBy, split_method: expenseSplitMethod, updated_at: new Date().toISOString(), splits };
+      setExpenses(prev => prev.map(e => e.id === editingExpense.id ? updatedExpense : e));
+      try {
         await supabase.from('expense_splits').delete().eq('expense_id', editingExpense.id);
         await supabase.from('expenses').update({
           description: expenseDesc.trim(), amount, category: expenseCategory,
           paid_by: expensePaidBy, split_method: expenseSplitMethod, updated_at: new Date().toISOString(),
         }).eq('id', editingExpense.id);
         await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: editingExpense.id, ...s })));
-        showToast("Expense updated");
-      } else {
+      } catch (e) { /* local state already updated */ }
+      showToast("Expense updated");
+    } else {
+      // Add new — add to local state first (optimistic), then try Supabase
+      const localExpense = {
+        id: `local_${Date.now()}`, trip_id: tripDbId, description: expenseDesc.trim(), amount, category: expenseCategory,
+        paid_by: expensePaidBy, split_method: expenseSplitMethod, created_at: new Date().toISOString(),
+        created_by: user?.user_metadata?.full_name || user?.email || 'You', splits,
+      };
+      setExpenses(prev => [localExpense, ...prev]);
+      try {
         const { data: exp } = await supabase.from('expenses').insert({
           trip_id: tripDbId, description: expenseDesc.trim(), amount, category: expenseCategory,
           paid_by: expensePaidBy, split_method: expenseSplitMethod,
@@ -1115,14 +1126,13 @@ export default function TripWithMeApp() {
         }).select().single();
         if (exp) {
           await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: exp.id, ...s })));
+          // Replace local placeholder with server data
+          setExpenses(prev => prev.map(e => e.id === localExpense.id ? { ...exp, splits: splits.map(s => ({ expense_id: exp.id, ...s })) } : e));
         }
-        showToast("Expense added");
-      }
-    } catch (e) {
-      showToast("Failed to save expense", "error"); return;
+      } catch (e) { /* local state already has the expense */ }
+      showToast("Expense added");
     }
     resetExpenseForm();
-    loadExpenses(tripDbId);
   };
 
   const deleteExpense = async (expenseId, tripDbId) => {
@@ -1508,16 +1518,12 @@ export default function TripWithMeApp() {
     // Smart dates: if stays exist and their span is shorter than entered dates, use stay dates
     let effectiveStart = wizTrip.start;
     let effectiveEnd = wizTrip.end;
-    if (wizStays.length > 0) {
+    if (wizStays.length > 0 && !wizTrip.start && !wizTrip.end) {
       const cis = wizStays.map(s => s.checkIn).filter(Boolean).sort();
       const cos = wizStays.map(s => s.checkOut).filter(Boolean).sort();
       if (cis.length > 0 && cos.length > 0) {
-        const staySpan = Math.round((new Date(cos[cos.length - 1] + "T12:00:00") - new Date(cis[0] + "T12:00:00")) / 86400000);
-        const enteredSpan = wizTrip.start && wizTrip.end ? Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) : 0;
-        if (enteredSpan > 0 && staySpan < enteredSpan && staySpan <= 30) {
-          effectiveStart = cis[0];
-          effectiveEnd = cos[cos.length - 1];
-        }
+        effectiveStart = cis[0];
+        effectiveEnd = cos[cos.length - 1];
       }
     }
     const tripData = {
@@ -3181,8 +3187,8 @@ export default function TripWithMeApp() {
     const addStay = (accom) => {
       const lastStay = wizStays.length > 0 ? wizStays[wizStays.length - 1] : null;
       const defaultCheckIn = (lastStay?.checkOut) || wizTrip.start || "";
-      let defaultCheckOut = "";
-      if (defaultCheckIn) {
+      let defaultCheckOut = wizTrip.end || "";
+      if (!defaultCheckOut && defaultCheckIn) {
         try {
           const d = new Date(defaultCheckIn + "T12:00:00");
           d.setDate(d.getDate() + 1);
@@ -3478,22 +3484,13 @@ export default function TripWithMeApp() {
     let numDays = null;
     let effectiveStart = wizTrip.start;
     let effectiveEnd = wizTrip.end;
-    if (wizStays.length > 0) {
+    if (wizStays.length > 0 && !wizTrip.start && !wizTrip.end) {
       const checkIns = wizStays.map(s => s.checkIn).filter(Boolean).sort();
       const checkOuts = wizStays.map(s => s.checkOut).filter(Boolean).sort();
       if (checkIns.length > 0 && checkOuts.length > 0) {
-        const stayStart = checkIns[0];
-        const stayEnd = checkOuts[checkOuts.length - 1];
-        const stayDays = Math.max(1, Math.round((new Date(stayEnd + "T12:00:00") - new Date(stayStart + "T12:00:00")) / 86400000) + 1);
-        const rawDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1) : null;
-        // If stay span is much shorter than entered dates, user likely has a date entry error — use stays
-        if (rawDays && stayDays < rawDays && stayDays <= 30) {
-          numDays = stayDays;
-          effectiveStart = stayStart;
-          effectiveEnd = stayEnd;
-        } else {
-          numDays = rawDays;
-        }
+        effectiveStart = checkIns[0];
+        effectiveEnd = checkOuts[checkOuts.length - 1];
+        numDays = Math.max(1, Math.round((new Date(effectiveEnd + "T12:00:00") - new Date(effectiveStart + "T12:00:00")) / 86400000) + 1);
       }
     }
     if (!numDays && wizTrip.start && wizTrip.end) {
@@ -3764,7 +3761,7 @@ export default function TripWithMeApp() {
 
     const aiResponsePatterns = [
       { keywords: ["ev", "charger", "charge", "charging", "electric", "plug"], response: "3 chargers near Ambleside:\n\n1. **Rydal Road** — 50kW CCS, 3 min walk, 2 available\n2. **Tesla Supercharger** — 8 stalls, 8 min drive\n3. **Pod Point, Co-op** — 7kW, 2 min walk\n\nShall I add a charging stop to your itinerary?" },
-      { keywords: ["restaurant", "food", "eating", "dinner", "lunch", "breakfast", "cafe", "dining", "hungry", "meal"], response: "For your group near Ambleside:\n\n**The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n**Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n**The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.\n\nWant me to add any of these to your itinerary?" },
+      { keywords: ["restaurant", "food", "eating", "dinner", "lunch", "breakfast", "cafe", "dining", "hungry", "meal"], response: "For your group near Ambleside:\n\n1. **The Drunken Duck** — 4.8★, 12 min. Steaks + veggie, kids free before 6 PM.\n\n2. **Fellinis** — 4.6★, 3 min walk. Veggie-focused, children's menu.\n\n3. **The Unicorn** — 4.4★, 5 min. Pub grills, playground out back.\n\nWant me to add any of these to your itinerary?" },
       { keywords: ["kid", "kids", "child", "children", "activities", "play", "playground", "fun", "game", "toddler", "family"], response: "**Max (12):**\n- Brockhole Adventure Park — nets, zip wire\n- Climbing Wall — indoor, ages 6+\n\n**Ella (8):**\n- Brockhole soft play — free\n- Trotters Animal Farm — pony rides\n\n**Both:** Easter egg trail at Wray Castle, 4 PM today.\n\nShall I add any to the timeline?" },
       { keywords: ["poll", "vote", "survey", "decide", "choose", "pick", "opinion"], response: "I'll set up a poll! Some options:\n\n1. **Tomorrow's activity** — Hike vs boat vs rest day\n2. **Dinner choice** — Pick from 3 restaurants\n3. **Custom question** — Write your own\n\nWhich one would you like to create?" },
       { keywords: ["weather", "rain", "sun", "forecast", "temperature", "cold", "warm", "wind"], response: "**Ambleside forecast:**\n\n🌤 Today: 12°C, cloudy, wind 8 mph. Dry until 4 PM, light rain 5-7 PM.\n☀️ Tomorrow: 14°C, partly sunny, perfect for outdoor activities.\n🌧 Day after: 10°C, rain expected from noon.\n\nOutdoor morning is best today. Easter trail at 4 PM should still be dry. Spa or climbing wall as rain backup." },
@@ -4842,7 +4839,7 @@ export default function TripWithMeApp() {
         {isLive && (
           <>
             {/* Tab bar */}
-            <div style={{ display: "flex", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
+            <div style={{ display: "flex", background: T.s, borderBottom: `.5px solid ${T.border}`, position: "sticky", top: 0, zIndex: 10 }}>
               <button className="w-tab" style={tripTabStyle("itinerary")} onClick={() => setTripDetailTab("itinerary")}>Itinerary</button>
               <button className="w-tab" style={tripTabStyle("chat")} onClick={() => setTripDetailTab("chat")}>Chat</button>
               <button className="w-tab" style={tripTabStyle("polls")} onClick={() => setTripDetailTab("polls")}>Polls</button>
