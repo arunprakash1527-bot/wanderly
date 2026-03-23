@@ -1,13 +1,16 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "./AuthContext";
+import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
 
 const MemoriesContext = createContext(null);
 
 export function MemoriesProvider({ children }) {
   const { user } = useAuth();
+  const { showToast } = useNavigation();
   const { selectedCreatedTrip, createdTrips, logActivity } = useTrip();
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
   // ─── Memories State ───
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
   const [viewingPhoto, setViewingPhoto] = useState(null);
@@ -72,6 +75,10 @@ export function MemoriesProvider({ children }) {
     const trip = selectedCreatedTrip || createdTrips[0];
     const tripId = trip?.dbId || trip?.id || 'default';
     for (const f of files) {
+      if (f.size > MAX_FILE_SIZE) {
+        showToast(`${f.name} is too large (max 10MB)`, "error");
+        continue;
+      }
       const uniqueId = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
       const filePath = `${tripId}/${uniqueId}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       let url = URL.createObjectURL(f);
@@ -91,7 +98,7 @@ export function MemoriesProvider({ children }) {
     }
     if (files.length > 0 && trip?.id) logActivity(trip.id, "\uD83D\uDCF8", `Added ${files.length} photo${files.length > 1 ? "s" : ""} to memories`, "photo");
     e.target.value = "";
-  }, [selectedCreatedTrip, createdTrips, uploadedPhotos, setUploadedPhotos, user, logActivity]);
+  }, [selectedCreatedTrip, createdTrips, uploadedPhotos, setUploadedPhotos, user, logActivity, showToast, MAX_FILE_SIZE]);
 
   const value = {
     uploadedPhotos, setUploadedPhotos,
