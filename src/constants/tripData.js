@@ -84,16 +84,3 @@ export const POLLS = [
       { text: "Windermere cruise", pct: 20, voters: ["LT"] },
     ]},
 ];
-
-export const MEMORIES = [
-  { day: 2, label: "Day 2 — Ambleside", count: 8, photos: [
-    { label: "Fell view", color: "#5A8C6E" }, { label: "Lake", color: "#5A7EA0" },
-    { label: "Lunch", color: "#A08060" }, { label: "Ella playing", color: "#7EA060" },
-    { label: "Boat trip", color: "#4A8BA0" }, { label: "Ice cream", color: "#A04A8B" },
-    { label: "Pub dinner", color: "#8A7348" }, { label: "Sunset", color: "#486A8A" },
-  ]},
-  { day: 1, label: "Day 1 — Windermere", count: 4, photos: [
-    { label: "Arrival", color: "#48788A" }, { label: "Hotel", color: "#8A4868" },
-    { label: "Garden", color: "#688A48" }, { label: "First walk", color: "#8A7848" },
-  ]},
-];

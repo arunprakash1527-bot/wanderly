@@ -1,5 +1,4 @@
 import { LOCATION_VIBES, TRAVEL_TIMES, LOCATION_ACTIVITIES } from '../constants/locations';
-import { ACCOM_TEMPLATES, REGION_ACCOM_TEMPLATES } from '../constants/accommodations';
 
 export function getLocationVibes(places) {
   const all = places.join(" ").toLowerCase();
@@ -66,25 +65,4 @@ export function getLocationActivities(place) {
     if (key.includes(k) || k.includes(key)) return v;
   }
   return null;
-}
-
-export function generateLocalAccommodations(places) {
-  if (!places || places.length === 0) return [];
-  const region = getRegion(places);
-  const templates = REGION_ACCOM_TEMPLATES[region] || ACCOM_TEMPLATES;
-  const results = [];
-  places.forEach(place => {
-    const placeName = place.trim();
-    templates.forEach(tmpl => {
-      results.push({
-        name: `${placeName} ${tmpl.suffix}`,
-        type: tmpl.type,
-        tags: [...tmpl.baseTags],
-        rating: tmpl.baseRating,
-        price: tmpl.price,
-        location: placeName,
-      });
-    });
-  });
-  return results.sort((a, b) => b.rating - a.rating);
 }

@@ -353,91 +353,6 @@ export function TripProvider({ children }) {
     showToast("Trip removed");
   };
 
-  // ─── Generate Single-Day Timeline ───
-  const generateTimeline = (trip) => {
-    const items = [];
-    const loc = trip.places[0] || "your destination";
-    const stayName = trip.stayNames[0] || "accommodation";
-    const food = trip.prefs.food.length > 0 ? trip.prefs.food : ["Local cuisine"];
-    const foodLabel = food.join(" + ");
-    const travelMode = trip.travel[0] || "Travel";
-    const adultActs = trip.prefs.adultActs || [];
-    const olderActs = trip.prefs.olderActs || [];
-    const youngerActs = trip.prefs.youngerActs || [];
-    const kidActs = [...new Set([...olderActs, ...youngerActs])];
-    const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
-    const hasKids = allKids.length > 0;
-    const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
-    const ctx = (trip.summary || "") + " " + (trip.prefs.instructions || "");
-    const ctxLower = ctx.toLowerCase();
-
-    const wantsDogFriendly = /dog|pet/.test(ctxLower);
-    const wantsAccessible = /accessible|wheelchair|mobility|pushchair|buggy|pram/.test(ctxLower);
-    const wantsLateStart = /late start|sleep in|no rush|relaxed morning/.test(ctxLower);
-    const wantsShortBlocks = /short.*block|short.*activit|restless|young child|toddler/.test(ctxLower);
-    const wantsAvoidSteep = /avoid.*steep|no.*steep|gentle|easy.*walk|flat/.test(ctxLower);
-    const wantsPubs = /pub|pubs|tavern|inn/.test(ctxLower);
-
-    const arriveTime = wantsLateStart ? "11:00 AM" : "9:00 AM";
-    const morningTime = wantsLateStart ? "12:00 PM" : "10:30 AM";
-    const lunchTime = wantsLateStart ? "1:30 PM" : "12:30 PM";
-    const afternoonTime = wantsLateStart ? "3:00 PM" : "2:30 PM";
-    const returnTime = "5:00 PM";
-    const dinnerTime = "7:00 PM";
-
-    const tags = (base) => {
-      const t = [base];
-      if (wantsDogFriendly) t.push("🐕 Dog-friendly");
-      if (wantsAccessible) t.push("♿ Accessible");
-      return t.join(" · ");
-    };
-
-    const arriveDesc = trip.startLocation ? `${travelMode} from ${trip.startLocation} · Check in at ${stayName}` : `${travelMode} · Check in at ${stayName}`;
-    items.push({ time: arriveTime, title: `Arrive ${loc}`, desc: arriveDesc, group: "Everyone", color: T.a });
-
-    let morningAct = adultActs[0] || "Explore the area";
-    if (wantsAvoidSteep && /hik|trail|climb|trek/.test(morningAct.toLowerCase())) morningAct = "Gentle walking tour";
-    const morningDesc = tags(`${loc} · ${budgetTier.label}`);
-    if (hasKids && kidActs.length > 0) {
-      items.push({ time: morningTime, title: morningAct, desc: morningDesc, group: "Adults", color: T.blue });
-      items.push({ time: morningTime, title: kidActs[0], desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
-    } else {
-      items.push({ time: morningTime, title: morningAct, desc: morningDesc, group: "Everyone", color: T.blue });
-    }
-
-    if (wantsShortBlocks && hasKids) {
-      const youngest = allKids.map(k => `${k.name || "child"}`).join(" & ");
-      items.push({ time: wantsLateStart ? "1:00 PM" : "11:45 AM", title: `Rest break`, desc: `Snack stop for ${youngest} · Keep energy up`, group: "Kids", color: T.amber });
-    }
-
-    const lunchDesc = wantsPubs ? `${budgetTier.label} pub · ${budgetTier.price}` : `${budgetTier.label} restaurant · ${budgetTier.price}`;
-    const dietaryTags = [];
-    if (food.some(f => /vegetarian|vegan/i.test(f))) dietaryTags.push("🥬 Veggie options");
-    if (food.some(f => /halal/i.test(f))) dietaryTags.push("Halal");
-    if (food.some(f => /gluten/i.test(f))) dietaryTags.push("GF options");
-    if (hasKids && food.some(f => /kid/i.test(f))) dietaryTags.push("Kids menu");
-    const lunchExtra = dietaryTags.length > 0 ? ` · ${dietaryTags.join(", ")}` : "";
-    items.push({ time: lunchTime, title: `Lunch — ${foodLabel}`, desc: `${lunchDesc}${lunchExtra}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
-
-    let afternoonAdult = adultActs[1] || "Walking tour & sightseeing";
-    if (wantsAvoidSteep && /hik|trail|climb|trek/.test(afternoonAdult.toLowerCase())) afternoonAdult = "Scenic drive & viewpoints";
-    if (hasKids && kidActs.length > 1) {
-      items.push({ time: afternoonTime, title: afternoonAdult, desc: tags(`${loc} · Afternoon`), group: "Adults", color: T.blue });
-      items.push({ time: afternoonTime, title: kidActs[1] || "Playground & free time", desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
-    } else if (hasKids && wantsShortBlocks) {
-      items.push({ time: afternoonTime, title: afternoonAdult, desc: tags(`${loc} · Short session (1hr)`), group: "Everyone", color: T.blue });
-      items.push({ time: "3:30 PM", title: "Free time & play", desc: `Let kids recharge · ${stayName} area`, group: "Everyone", color: T.pink });
-    } else {
-      items.push({ time: afternoonTime, title: afternoonAdult, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
-    }
-
-    items.push({ time: returnTime, title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
-    const dinnerDesc = wantsPubs ? `${foodLabel} · ${budgetTier.label} pub · ${budgetTier.price}` : `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`;
-    items.push({ time: dinnerTime, title: wantsPubs ? "Dinner at local pub" : "Dinner", desc: `${dinnerDesc}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}${lunchExtra}`, group: "Everyone", color: T.coral });
-
-    return items;
-  };
-
   // ─── Generate Multi-Day Timeline ───
   // Returns { 1: [...], 2: [...], ... }
   const generateMultiDayTimeline = (trip) => {
@@ -1221,7 +1136,6 @@ export function TripProvider({ children }) {
     findSmartSlot,
     shareToWhatsApp,
     deleteCreatedTrip,
-    generateTimeline,
     generateMultiDayTimeline,
     generateAndSetTimeline,
     getSmartRouteOrder,

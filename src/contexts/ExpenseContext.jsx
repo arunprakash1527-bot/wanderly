@@ -25,10 +25,6 @@ export function ExpenseProvider({ children }) {
   const [showSettlement, setShowSettlement] = useState(false);
 
   // ─── Expense Functions ───
-  const getExpenseParticipantDefaults = (trip) => {
-    return (trip?.travellers?.adults || []).map(a => a.name).filter(Boolean);
-  };
-
   const loadExpenses = async (tripDbId) => {
     if (!tripDbId) return;
     try {
@@ -176,7 +172,6 @@ export function ExpenseProvider({ children }) {
       calculateSettlement,
       getCategoryBreakdown,
       loadExpenses,
-      getExpenseParticipantDefaults,
     }}>
       {children}
     </ExpenseContext.Provider>
