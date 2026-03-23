@@ -1,64 +1,16 @@
 import React from 'react';
-import { supabase } from '../../supabaseClient';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { Tag } from '../common/Tag';
 import { TabBar } from '../common/TabBar';
-import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useTrip } from '../../contexts/TripContext';
 import { useMemories } from '../../contexts/MemoriesContext';
 
 export function MemoriesScreen() {
-  const { user } = useAuth();
   const { navigate } = useNavigation();
-  const { selectedCreatedTrip, createdTrips, logActivity } = useTrip();
-  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, videoState, setVideoState, videoSettings, setVideoSettings, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, updatePhotoInSupabase, deletePhotoFromSupabase } = useMemories();
-  const handlePhotoUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    const trip = selectedCreatedTrip || createdTrips[0];
-    const tripId = trip?.dbId || trip?.id || 'default';
-
-    for (const f of files) {
-      const uniqueId = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-      const filePath = `${tripId}/${uniqueId}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      let url = URL.createObjectURL(f);
-      let storedInSupabase = false;
-
-      try {
-        const { data, error } = await supabase.storage.from('trip-photos').upload(filePath, f, { cacheControl: '3600', upsert: false });
-        if (!error && data) {
-          const { data: urlData } = supabase.storage.from('trip-photos').getPublicUrl(filePath);
-          if (urlData?.publicUrl) {
-            url = urlData.publicUrl;
-            storedInSupabase = true;
-          }
-        }
-      } catch (err) { /* Storage not set up — use local URL */ }
-
-      const newPhoto = {
-        id: uniqueId, url, name: f.name, day: "Untagged", liked: false, caption: "",
-        uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-        sortOrder: uploadedPhotos.length, filePath: storedInSupabase ? filePath : null,
-      };
-
-      setUploadedPhotos(prev => [...prev, newPhoto]);
-
-      // Save metadata to Supabase
-      if (storedInSupabase && user) {
-        try {
-          await supabase.from('trip_photos').insert({
-            trip_id: tripId, user_id: user.id, file_url: url, file_path: filePath,
-            file_name: f.name, day_tag: 'Untagged', liked: false, caption: '', sort_order: uploadedPhotos.length,
-          });
-        } catch (err) { /* table may not exist yet */ }
-      }
-    }
-    if (files.length > 0 && trip?.id) {
-      logActivity(trip.id, "📸", `Added ${files.length} photo${files.length > 1 ? "s" : ""} to memories`, "photo");
-    }
-    e.target.value = "";
-  };
+  const { selectedCreatedTrip, createdTrips } = useTrip();
+  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, videoState, setVideoState, videoSettings, setVideoSettings, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload } = useMemories();
 
   const totalPhotos = uploadedPhotos.length;
   const likedCount = uploadedPhotos.filter(p => p.liked).length;

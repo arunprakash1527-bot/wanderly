@@ -12,7 +12,6 @@ export function AuthProvider({ children }) {
   const [authPassword, setAuthPassword] = useState("");
   const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
-  const [syncing, setSyncing] = useState(false);
 
   // Auth listener
   useEffect(() => {
@@ -70,7 +69,6 @@ export function AuthProvider({ children }) {
     authPassword, setAuthPassword,
     authName, setAuthName,
     authError, setAuthError,
-    syncing, setSyncing,
     signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,

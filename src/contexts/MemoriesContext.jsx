@@ -1,9 +1,13 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from "react";
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
+import { useAuth } from "./AuthContext";
+import { useTrip } from "./TripContext";
 
 const MemoriesContext = createContext(null);
 
 export function MemoriesProvider({ children }) {
+  const { user } = useAuth();
+  const { selectedCreatedTrip, createdTrips, logActivity } = useTrip();
   // ─── Memories State ───
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
   const [viewingPhoto, setViewingPhoto] = useState(null);
@@ -62,6 +66,33 @@ export function MemoriesProvider({ children }) {
     return () => { if (reelTimerRef.current) clearInterval(reelTimerRef.current); };
   }, [reelPlaying, reelPaused, uploadedPhotos.length, reelStyle, videoSettings]);
 
+  // ─── Photo Upload ───
+  const handlePhotoUpload = useCallback(async (e) => {
+    const files = Array.from(e.target.files || []);
+    const trip = selectedCreatedTrip || createdTrips[0];
+    const tripId = trip?.dbId || trip?.id || 'default';
+    for (const f of files) {
+      const uniqueId = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+      const filePath = `${tripId}/${uniqueId}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      let url = URL.createObjectURL(f);
+      let storedInSupabase = false;
+      try {
+        const { data, error } = await supabase.storage.from('trip-photos').upload(filePath, f, { cacheControl: '3600', upsert: false });
+        if (!error && data) {
+          const { data: urlData } = supabase.storage.from('trip-photos').getPublicUrl(filePath);
+          if (urlData?.publicUrl) { url = urlData.publicUrl; storedInSupabase = true; }
+        }
+      } catch (err) { /* Storage not set up */ }
+      const newPhoto = { id: uniqueId, url, name: f.name, day: "Untagged", liked: false, caption: "", uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }), sortOrder: uploadedPhotos.length, filePath: storedInSupabase ? filePath : null };
+      setUploadedPhotos(prev => [...prev, newPhoto]);
+      if (storedInSupabase && user) {
+        try { await supabase.from('trip_photos').insert({ trip_id: tripId, user_id: user.id, file_url: url, file_path: filePath, file_name: f.name, day_tag: 'Untagged', liked: false, caption: '', sort_order: uploadedPhotos.length }); } catch (err) {}
+      }
+    }
+    if (files.length > 0 && trip?.id) logActivity(trip.id, "\uD83D\uDCF8", `Added ${files.length} photo${files.length > 1 ? "s" : ""} to memories`, "photo");
+    e.target.value = "";
+  }, [selectedCreatedTrip, createdTrips, uploadedPhotos, setUploadedPhotos, user, logActivity]);
+
   const value = {
     uploadedPhotos, setUploadedPhotos,
     viewingPhoto, setViewingPhoto,
@@ -76,6 +107,7 @@ export function MemoriesProvider({ children }) {
     loadTripPhotos,
     updatePhotoInSupabase,
     deletePhotoFromSupabase,
+    handlePhotoUpload,
   };
 
   return (

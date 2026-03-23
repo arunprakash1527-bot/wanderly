@@ -9,9 +9,9 @@ import { useNavigation } from '../../contexts/NavigationContext';
 import { useTrip } from '../../contexts/TripContext';
 
 export function SettingsScreen() {
-  const { user, syncing, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { navigate } = useNavigation();
-  const { selectedCreatedTrip } = useTrip();
+  const { selectedCreatedTrip, syncing } = useTrip();
   // settingsToggles is local to this screen
   const [settingsToggles, setSettingsToggles] = useState(() => {
     const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
