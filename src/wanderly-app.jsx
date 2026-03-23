@@ -3439,17 +3439,19 @@ export default function TripWithMeApp() {
       // Fetch restaurants and activities for the first location
       const loc = places[0];
       const [foodRes, actRes] = await Promise.all([
-        fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `best restaurants in ${loc}` }) }),
-        fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `things to do in ${loc}` }) }),
+        fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `popular restaurants ${loc}`, type: "restaurant" }) }),
+        fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `tourist attractions ${loc}`, type: "tourist_attraction" }) }),
       ]);
+      // Filter out generic search-phrase results (e.g. "Things to do in Cape Town")
+      const isGenericResult = (name) => /^(things to do|best restaurants|top attractions|what to do|where to eat|places to visit)\b/i.test(name) || name.length > 50;
       if (foodRes.ok) {
         const data = await foodRes.json();
-        const names = (data.places || []).map(p => p.name).filter(Boolean);
+        const names = (data.places || []).map(p => p.name).filter(n => n && !isGenericResult(n));
         if (names.length > 0) setPlacesFood(names);
       }
       if (actRes.ok) {
         const data = await actRes.json();
-        const names = (data.places || []).map(p => p.name).filter(Boolean);
+        const names = (data.places || []).map(p => p.name).filter(n => n && !isGenericResult(n));
         if (names.length > 0) setPlacesActivities(names);
       }
     } catch { /* keep static fallback */ }
