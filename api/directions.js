@@ -1,10 +1,16 @@
 // Vercel Serverless Function — Google Directions API proxy
 // Uses GOOGLE_MAPS_API_KEY from environment variables
 
+function getAllowedOrigin(req) {
+  const origin = req.headers?.origin || "";
+  const allowed = ["https://tripwithme.app", "https://www.tripwithme.app", "http://localhost:3000"];
+  return allowed.includes(origin) ? origin : allowed[0];
+}
+
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", getAllowedOrigin(req));
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
