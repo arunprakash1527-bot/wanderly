@@ -269,6 +269,54 @@ const ACCOM_TEMPLATES = [
   { suffix: "Guest House", type: "Guest House", baseTags: ["Homely", "Garden", "Breakfast"], baseRating: 4.5, price: "£" },
 ];
 
+// ─── Location Vibes: detect destination character for smarter suggestions ───
+const LOCATION_VIBES = {
+  coastal: {
+    match: /miami|cancun|phuket|bali|goa|amalfi|brighton|cornwall|devon|dorset|nice|barcelona|malaga|gold coast|byron bay|cape town|zanzibar|maldives|seychelles|mauritius|fiji|bora bora|tahiti|honolulu|san diego|koh samui|krabi|langkawi|dubrovnik|split|crete|mykonos|santorini|sicily|sardinia|majorca|ibiza|madeira|canary islands|azores|jersey|tulum|playa del carmen|cartagena|rio de janeiro|cairns|mirissa|da nang|hoi an|jeju/i,
+    food: ["Seafood", "Beach bar bites", "Fresh fish", "Ceviche", "Grilled prawns", "Coconut dishes"],
+    activities: ["Surfing", "Snorkelling", "Jet ski", "Beach day", "Boat tour", "Scuba diving", "Kayaking", "Sunset cruise", "Paddleboarding", "Deep-sea fishing", "Beach volleyball"],
+  },
+  tropical: {
+    match: /bali|phuket|koh samui|krabi|cancun|tulum|maldives|seychelles|mauritius|fiji|bora bora|tahiti|honolulu|goa|kerala|zanzibar|sri lanka|caribbean|jamaica|barbados|bahamas|costa rica|langkawi|ubud|mirissa/i,
+    food: ["Tropical fruit", "Smoothie bowls", "Jerk chicken", "Curry", "Fresh juice", "Açaí bowls"],
+    activities: ["Jungle trek", "Waterfall hike", "Zip lining", "Wildlife spotting", "Mangrove tour", "Rainforest walk", "Volcano visit"],
+  },
+  mountain: {
+    match: /swiss alps|interlaken|chamonix|banff|whistler|innsbruck|salzburg|zermatt|queenstown|patagonia|cusco|machu picchu|rishikesh|pokhara|kathmandu|snowdonia|peak district|lake district|highlands|fort william|ben nevis|dolomites|colorado|denver|aspen|jackson hole/i,
+    food: ["Fondue", "Hot chocolate", "Hearty stews", "Mountain hut dining", "Alpine cheese"],
+    activities: ["Hiking", "Skiing", "Snowboarding", "Cable car ride", "Mountain biking", "Rock climbing", "Via ferrata", "Paragliding", "Scenic train ride"],
+  },
+  city: {
+    match: /new york|london|paris|tokyo|berlin|amsterdam|barcelona|rome|chicago|los angeles|san francisco|singapore|dubai|hong kong|shanghai|beijing|bangkok|seoul|mumbai|delhi|istanbul|moscow|buenos aires|mexico city|toronto|sydney|melbourne|lisbon|madrid|vienna|prague|budapest|warsaw|dublin|brussels|copenhagen|stockholm|seattle|boston|washington dc|portland|austin|nashville|montreal|vancouver|edinburgh|glasgow|manchester|birmingham|leeds|liverpool/i,
+    food: ["Street food tour", "Fine dining", "Food market", "Rooftop restaurant", "Brunch spot", "Michelin star experience"],
+    activities: ["Walking tour", "Rooftop bar", "Museum hopping", "Street art tour", "Shopping district", "Live music venue", "Theatre show", "Night tour", "Architecture walk"],
+  },
+  cultural: {
+    match: /rome|florence|venice|athens|cairo|luxor|jerusalem|kyoto|nara|agra|varanasi|jaipur|udaipur|petra|marrakech|fez|york|bath|oxford|cambridge|krakow|prague|vienna|budapest|dubrovnik|granada|seville|cusco|angkor|luang prabang|hoi an|st andrews/i,
+    food: ["Traditional cuisine", "Cooking class", "Historic cafe", "Local market food"],
+    activities: ["Historical sites", "Temple visit", "Art gallery", "Archaeological tour", "Cultural workshop", "Traditional performance", "Heritage walk", "Guided history tour"],
+  },
+  island: {
+    match: /maldives|seychelles|mauritius|fiji|bora bora|tahiti|bali|sicily|sardinia|majorca|ibiza|crete|mykonos|santorini|jersey|isle of skye|zanzibar|madeira|canary islands|azores|sri lanka|galápagos|koh samui|langkawi|jeju|tasmania|hawaii|honolulu|phuket/i,
+    food: ["Island BBQ", "Fresh catch of the day", "Beachside dining"],
+    activities: ["Island hopping", "Snorkelling", "Beachcombing", "Whale watching", "Catamaran trip", "Sunset sail"],
+  },
+  adventure: {
+    match: /queenstown|banff|whistler|interlaken|cusco|patagonia|galápagos|costa rica|nepal|pokhara|rishikesh|chamonix|zermatt|jackson hole|moab|iceland|reykjavik|new zealand|cairns|bali/i,
+    food: ["Energy food", "Trail snacks", "Camp cooking"],
+    activities: ["Bungee jumping", "White water rafting", "Skydiving", "Canyoning", "Abseiling", "Mountain biking", "4WD safari", "Glacier walk"],
+  },
+};
+
+function getLocationVibes(places) {
+  const all = places.join(" ").toLowerCase();
+  const vibes = [];
+  for (const [vibe, config] of Object.entries(LOCATION_VIBES)) {
+    if (config.match.test(all)) vibes.push(vibe);
+  }
+  return vibes;
+}
+
 function getRegion(places) {
   const all = places.join(" ").toLowerCase();
   if (/tokyo|kyoto|osaka|japan|hiroshima|nara|sapporo|okinawa/.test(all)) return "japan";
@@ -2937,9 +2985,14 @@ export default function TripWithMeApp() {
     const removePlace = (place) => setWizTrip(prev => ({ ...prev, places: prev.places.filter(p => p !== place) }));
     const travelOpts = ["Flight", "EV vehicle", "Non-EV vehicle", "Train", "Walking", "Bicycle"];
     const filteredPlaces = placeInput.trim().length > 0
-      ? LOCATION_SUGGESTIONS.filter(loc =>
-          loc.toLowerCase().includes(placeInput.trim().toLowerCase()) && !wizTrip.places.includes(loc)
-        ).slice(0, 8)
+      ? (() => {
+          const q = placeInput.trim().toLowerCase();
+          const available = LOCATION_SUGGESTIONS.filter(loc => loc.toLowerCase().includes(q) && !wizTrip.places.includes(loc));
+          // Prioritize starts-with matches, then contains matches
+          const startsWith = available.filter(loc => loc.toLowerCase().startsWith(q));
+          const contains = available.filter(loc => !loc.toLowerCase().startsWith(q));
+          return [...startsWith, ...contains].slice(0, 8);
+        })()
       : [];
     return (
       <>
@@ -3414,16 +3467,19 @@ export default function TripWithMeApp() {
     const regionSugg = region && REGION_SUGGESTIONS[region] ? REGION_SUGGESTIONS[region] : null;
     const regionLabel = region ? region.charAt(0).toUpperCase() + region.slice(1) : "";
     const locationName = wizTrip.places.length > 0 ? wizTrip.places[0] : "";
+    const vibes = wizTrip.places.length > 0 ? getLocationVibes(wizTrip.places) : [];
 
-    // Build food options: Places API real restaurants → region suggestions → dietary defaults
+    // Build food options: Places API real restaurants → vibe suggestions → region suggestions → dietary defaults
     const dietaryDefaults = ["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly menus", "Vegan", "Halal", "Gluten-free", "Pescatarian", "Dairy-free", "Nut-free", "Organic", "Street food"];
     const regionFoodOpts = regionSugg ? regionSugg.food : [];
-    const allFoodOpts = [...new Set([...placesFood, ...regionFoodOpts, ...dietaryDefaults])];
+    const vibeFoodOpts = vibes.flatMap(v => LOCATION_VIBES[v]?.food || []);
+    const allFoodOpts = [...new Set([...placesFood, ...vibeFoodOpts, ...regionFoodOpts, ...dietaryDefaults])];
 
-    // Build activity options: Places API real activities → region suggestions → generic defaults
+    // Build activity options: Places API real activities → vibe suggestions → region suggestions → generic defaults
     const regionActOpts = regionSugg ? regionSugg.activities : [];
+    const vibeActOpts = vibes.flatMap(v => LOCATION_VIBES[v]?.activities || []);
     const genericActs = ACTIVITY_SUGGESTIONS.default.adults;
-    const allAdultActs = [...new Set([...placesActivities, ...regionActOpts, ...genericActs])];
+    const allAdultActs = [...new Set([...placesActivities, ...vibeActOpts, ...regionActOpts, ...genericActs])];
     const suggestions = { ...ACTIVITY_SUGGESTIONS.default, adults: allAdultActs };
 
     const togglePref = (key, item) => {
@@ -3467,7 +3523,7 @@ export default function TripWithMeApp() {
 
     return (
       <>
-        {regionSugg && <p style={{ fontSize: 11, color: T.a, fontWeight: 500, marginBottom: 8 }}>{"🌍"} Showing suggestions popular in {regionLabel}</p>}
+        {(regionSugg || vibes.length > 0) && <p style={{ fontSize: 11, color: T.a, fontWeight: 500, marginBottom: 8 }}>{"🌍"} Showing suggestions for {locationName || regionLabel}{vibes.length > 0 ? ` — ${vibes.join(", ")}` : ""}</p>}
         {renderPrefSection("Food preferences", "food", allFoodOpts, foodSearch, setFoodSearch, "Search or type a food preference...", placesFood.length > 0)}
         {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...", placesActivities.length > 0)}
         {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...", false)}
