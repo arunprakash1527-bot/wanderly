@@ -70,7 +70,7 @@ export function HomeScreen() {
 
         {createdTrips.map(trip => (
           <div key={trip.id} style={{ ...css.card, position: "relative", overflow: "hidden", marginBottom: 12, cursor: "pointer" }} onClick={() => viewCreatedTrip(trip)}>
-            <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${trip.status === "live" ? T.al : T.blueL} 0%, transparent 70%)`, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${trip.status === "completed" ? T.purpleL : trip.status === "live" ? T.al : T.blueL} 0%, transparent 70%)`, pointerEvents: "none" }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
               <div>
                 <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{trip.name}</h3>
@@ -78,7 +78,7 @@ export function HomeScreen() {
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {getUnreadCount(trip.id) > 0 && <Tag bg={T.coralL} color={T.coral}>{getUnreadCount(trip.id)} new</Tag>}
-                {trip.status === "live" ? <Tag bg={T.al} color={T.ad}>Live</Tag> : <Tag bg={T.blueL} color={T.blue}>New</Tag>}
+                {trip.status === "completed" ? <Tag bg={T.purpleL} color={T.purple}>Completed</Tag> : trip.status === "live" ? <Tag bg={T.al} color={T.ad}>Live</Tag> : <Tag bg={T.blueL} color={T.blue}>New</Tag>}
               </div>
             </div>
             {trip.brief && <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>{trip.brief}</p>}
@@ -92,7 +92,7 @@ export function HomeScreen() {
               {trip.budget && <Tag bg={T.greenL} color={T.green}>{trip.budget}</Tag>}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {trip.status !== "live" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 12 }}>Activate trip</button>}
+              {trip.status !== "live" && trip.status !== "completed" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 12 }}>Activate trip</button>}
               <button onClick={e => { e.stopPropagation(); if (window.confirm(`Remove "${trip.name}"? This cannot be undone.`)) deleteCreatedTrip(trip.id); }}
                 style={{ ...css.btn, ...css.btnSm, fontSize: 12, color: T.red, borderColor: "rgba(200,50,50,.2)" }}>Remove</button>
             </div>

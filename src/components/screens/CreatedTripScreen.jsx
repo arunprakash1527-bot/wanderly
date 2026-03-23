@@ -18,10 +18,10 @@ import { useMemories } from '../../contexts/MemoriesContext';
 export function CreatedTripScreen() {
   const { user } = useAuth();
   const { navigate, showToast } = useNavigation();
-  const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections } = useTrip();
+  const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections, endTrip } = useTrip();
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
   const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages } = useChat();
-  const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
+  const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
   const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
 
   // Load trip data from Supabase when selected trip changes
@@ -37,6 +37,7 @@ export function CreatedTripScreen() {
   const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const isLive = trip.status === "live";
+  const isCompleted = trip.status === "completed";
   const totalTravellers = (trip.travellers?.adults?.length || 0) + (trip.travellers?.olderKids?.length || 0) + (trip.travellers?.youngerKids?.length || 0);
   // Smart numDays: prefer stay date span if stays indicate shorter trip
   let numDays = 1;
@@ -78,15 +79,20 @@ export function CreatedTripScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* ── Header ── */}
-      <div style={{ background: isLive ? T.ad : T.blue, color: "#fff", padding: "16px 20px 12px" }}>
+      <div style={{ background: isCompleted ? "#6B6185" : isLive ? T.ad : T.blue, color: "#fff", padding: "16px 20px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <button style={{ ...css.btn, ...css.btnSm, background: "rgba(255,255,255,.18)", borderColor: "rgba(255,255,255,.3)", color: "#fff", fontSize: 12, fontWeight: 500 }} onClick={() => navigate("home")}>← Back</button>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            {isLive
+            {isCompleted
+              ? <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(255,255,255,.22)", color: "#fff", padding: "3px 10px", borderRadius: 12, letterSpacing: 0.5, textTransform: "uppercase" }}>Completed</span>
+              : isLive
               ? <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(255,255,255,.22)", color: "#fff", padding: "3px 10px", borderRadius: 12, letterSpacing: 0.5, textTransform: "uppercase" }}>● Live</span>
               : <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(255,255,255,.22)", color: "#fff", padding: "3px 10px", borderRadius: 12, letterSpacing: 0.5, textTransform: "uppercase" }}>Draft</span>
             }
-            <button onClick={editTrip} style={{ ...css.btn, ...css.btnSm, color: "#fff", fontSize: 12, fontWeight: 500, background: "rgba(255,255,255,.18)", borderColor: "rgba(255,255,255,.3)" }}>Edit</button>
+            {isLive && (
+              <button onClick={() => { if (window.confirm("End this trip? It will be marked as completed.")) endTrip(trip.id); }} style={{ ...css.btn, ...css.btnSm, color: "#fff", fontSize: 12, fontWeight: 500, background: "rgba(255,255,255,.18)", borderColor: "rgba(255,255,255,.3)" }}>End trip</button>
+            )}
+            {!isCompleted && <button onClick={editTrip} style={{ ...css.btn, ...css.btnSm, color: "#fff", fontSize: 12, fontWeight: 500, background: "rgba(255,255,255,.18)", borderColor: "rgba(255,255,255,.3)" }}>Edit</button>}
           </div>
         </div>
         <h2 style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400 }}>{trip.name}</h2>
@@ -97,7 +103,7 @@ export function CreatedTripScreen() {
       </div>
 
       {/* ── Not live: draft trip screen ── */}
-      {!isLive && (() => {
+      {!isLive && !isCompleted && (() => {
         const travelIcons = { "Flight": "✈️", "EV vehicle": "⚡", "Non-EV vehicle": "🚗", "Train": "🚆", "Walking": "🚶", "Bicycle": "🚲" };
         const hasDates = trip.rawStart && trip.rawEnd;
         const hasPrefs = (trip.prefs?.food?.length > 0) || (trip.prefs?.adultActs?.length > 0) || (trip.prefs?.activities?.length > 0);
@@ -233,8 +239,41 @@ export function CreatedTripScreen() {
         );
       })()}
 
+      {/* ── Completed trip: summary recap ── */}
+      {isCompleted && (
+        <div style={{ padding: 20, background: T.s2, borderBottom: `.5px solid ${T.border}` }}>
+          <div style={{ ...css.card, padding: 16, background: `linear-gradient(135deg, ${T.purpleL}, #E8E5F5)`, borderColor: T.purple }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 22 }}>{"\uD83C\uDFC1"}</span>
+              <div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: T.purple }}>Trip Complete</p>
+                <p style={{ fontSize: 11, color: T.t2 }}>Here's a recap of your adventure</p>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ padding: "10px 12px", background: "rgba(255,255,255,.7)", borderRadius: T.rs }}>
+                <p style={{ fontSize: 10, color: T.t3, textTransform: "uppercase", marginBottom: 2 }}>Duration</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: T.t }}>{numDays} day{numDays > 1 ? "s" : ""}</p>
+              </div>
+              <div style={{ padding: "10px 12px", background: "rgba(255,255,255,.7)", borderRadius: T.rs }}>
+                <p style={{ fontSize: 10, color: T.t3, textTransform: "uppercase", marginBottom: 2 }}>Travellers</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: T.t }}>{totalTravellers}</p>
+              </div>
+              <div style={{ padding: "10px 12px", background: "rgba(255,255,255,.7)", borderRadius: T.rs }}>
+                <p style={{ fontSize: 10, color: T.t3, textTransform: "uppercase", marginBottom: 2 }}>Expenses</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: T.t }}>{"\u00A3"}{expenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}</p>
+              </div>
+              <div style={{ padding: "10px 12px", background: "rgba(255,255,255,.7)", borderRadius: T.rs }}>
+                <p style={{ fontSize: 10, color: T.t3, textTransform: "uppercase", marginBottom: 2 }}>Photos</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: T.t }}>{uploadedPhotos.length}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Live trip: 3-tab layout ── */}
-      {isLive && (
+      {(isLive || isCompleted) && (
         <>
           {/* Tab bar */}
           <div style={{ display: "flex", background: T.s, borderBottom: `.5px solid ${T.border}`, position: "sticky", top: 0, zIndex: 10 }}>
@@ -812,6 +851,7 @@ export function CreatedTripScreen() {
                 setExpenseDesc(existingExpense.description);
                 setExpenseAmount(String(existingExpense.amount));
                 setExpenseCategory(existingExpense.category);
+                setExpenseDate(existingExpense.expense_date || new Date().toISOString().split('T')[0]);
                 setExpensePaidBy(existingExpense.paid_by);
                 setExpenseSplitMethod(existingExpense.split_method || 'equal');
                 setExpenseParticipants((existingExpense.splits || []).map(s => s.participant_name));
@@ -852,6 +892,11 @@ export function CreatedTripScreen() {
                       <input value={expenseAmount} onChange={e => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" type="text" inputMode="decimal"
                         style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 16, fontWeight: 600, outline: "none" }} />
                     </div>
+
+                    {/* Date */}
+                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Date</label>
+                    <input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)}
+                      style={{ width: "100%", padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, marginTop: 4, marginBottom: 12, outline: "none", boxSizing: "border-box" }} />
 
                     {/* Category */}
                     <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Category</label>
@@ -1037,7 +1082,11 @@ export function CreatedTripScreen() {
                           <p style={{ fontSize: 13, fontWeight: 500 }}>{sc.description}</p>
                           <p style={{ fontSize: 10, color: T.t3 }}>Split equally · {adults.length} people · £{(sc.amount / adults.length).toFixed(2)} each</p>
                         </div>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: T.amber }}>£{sc.amount.toFixed(2)}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <button onClick={() => { resetExpenseForm(); setExpenseDesc(sc.description); setExpenseAmount(String(sc.amount)); setExpenseCategory('accommodation'); setExpensePaidBy(adults[0] || ''); setExpenseParticipants([...adults]); setShowAddExpense(true); }}
+                            style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", color: T.a, borderColor: T.a, whiteSpace: "nowrap" }}>Add to expenses</button>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: T.amber }}>£{sc.amount.toFixed(2)}</span>
+                        </div>
                       </div>
                     ))}
                     <p style={{ fontSize: 10, color: T.t3, marginTop: 6, fontStyle: "italic" }}>Auto-added from accommodation details</p>
@@ -1055,7 +1104,7 @@ export function CreatedTripScreen() {
                 {expenses.length === 0 && stayCosts.length > 0 && (
                   <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: "12px 0" }}>No additional expenses logged yet. Tap <b>+ Add</b> to log meals, activities, and more.</p>
                 )}
-                {expenses.map((exp, i) => {
+                {[...expenses].sort((a, b) => (b.expense_date || b.created_at || '').localeCompare(a.expense_date || a.created_at || '')).map((exp, i) => {
                   const cat = getCatInfo(exp.category);
                   const splitNames = (exp.splits || []).map(s => s.participant_name).join(", ");
                   return (

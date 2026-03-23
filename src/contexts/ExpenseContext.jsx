@@ -23,6 +23,7 @@ export function ExpenseProvider({ children }) {
   const [expenseParticipants, setExpenseParticipants] = useState([]);
   const [expenseCustomSplits, setExpenseCustomSplits] = useState({});
   const [showSettlement, setShowSettlement] = useState(false);
+  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // ─── Expense Functions ───
   const loadExpenses = async (tripDbId) => {
@@ -37,6 +38,7 @@ export function ExpenseProvider({ children }) {
     setExpenseDesc(''); setExpenseAmount(''); setExpenseCategory('food');
     setExpensePaidBy(''); setExpenseSplitMethod('equal'); setExpenseParticipants([]);
     setExpenseCustomSplits({}); setShowAddExpense(false); setEditingExpense(null);
+    setExpenseDate(new Date().toISOString().split('T')[0]);
   };
 
   const saveExpense = async (trip, { selectedCreatedTrip, createdTrips } = {}) => {
@@ -70,13 +72,13 @@ export function ExpenseProvider({ children }) {
       }));
     }
     if (editingExpense) {
-      const updatedExpense = { ...editingExpense, description: expenseDesc.trim(), amount, category: expenseCategory, paid_by: expensePaidBy, split_method: expenseSplitMethod, updated_at: new Date().toISOString(), splits };
+      const updatedExpense = { ...editingExpense, description: expenseDesc.trim(), amount, category: expenseCategory, paid_by: expensePaidBy, split_method: expenseSplitMethod, expense_date: expenseDate, updated_at: new Date().toISOString(), splits };
       setExpenses(prev => prev.map(e => e.id === editingExpense.id ? updatedExpense : e));
       try {
         await supabase.from('expense_splits').delete().eq('expense_id', editingExpense.id);
         await supabase.from('expenses').update({
           description: expenseDesc.trim(), amount, category: expenseCategory,
-          paid_by: expensePaidBy, split_method: expenseSplitMethod, updated_at: new Date().toISOString(),
+          paid_by: expensePaidBy, split_method: expenseSplitMethod, expense_date: expenseDate, updated_at: new Date().toISOString(),
         }).eq('id', editingExpense.id);
         await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: editingExpense.id, ...s })));
       } catch (e) { /* local state already updated */ }
@@ -84,14 +86,14 @@ export function ExpenseProvider({ children }) {
     } else {
       const localExpense = {
         id: `local_${Date.now()}`, trip_id: tripDbId, description: expenseDesc.trim(), amount, category: expenseCategory,
-        paid_by: expensePaidBy, split_method: expenseSplitMethod, created_at: new Date().toISOString(),
+        paid_by: expensePaidBy, split_method: expenseSplitMethod, expense_date: expenseDate, created_at: new Date().toISOString(),
         created_by: user?.user_metadata?.full_name || user?.email || 'You', splits,
       };
       setExpenses(prev => [localExpense, ...prev]);
       try {
         const { data: exp } = await supabase.from('expenses').insert({
           trip_id: tripDbId, description: expenseDesc.trim(), amount, category: expenseCategory,
-          paid_by: expensePaidBy, split_method: expenseSplitMethod,
+          paid_by: expensePaidBy, split_method: expenseSplitMethod, expense_date: expenseDate,
           created_by: user?.user_metadata?.full_name || user?.email || 'You',
         }).select().single();
         if (exp) {
@@ -165,6 +167,7 @@ export function ExpenseProvider({ children }) {
       expenseParticipants, setExpenseParticipants,
       expenseCustomSplits, setExpenseCustomSplits,
       showSettlement, setShowSettlement,
+      expenseDate, setExpenseDate,
       // Functions
       resetExpenseForm,
       saveExpense,

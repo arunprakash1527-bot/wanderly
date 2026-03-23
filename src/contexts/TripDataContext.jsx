@@ -271,6 +271,17 @@ export function TripDataProvider({ children }) {
     }
   };
 
+  // ─── End Trip ───
+  const endTrip = async (tripId) => {
+    setCreatedTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: "completed" } : t));
+    setSelectedCreatedTrip(prev => prev?.id === tripId ? { ...prev, status: "completed" } : prev);
+    const trip = createdTrips.find(t => t.id === tripId);
+    const dbId = trip?.dbId || tripId;
+    await updateTripStatusInDB(dbId, "completed");
+    logActivity(tripId, "\uD83C\uDFC1", "Trip completed!", "milestone");
+    showToast("Trip completed!");
+  };
+
   // ─── WhatsApp Share Helper ───
   const shareToWhatsApp = (tripName, message, tripId) => {
     const link = `${window.location.origin}/join/${tripId}`;
@@ -404,6 +415,7 @@ export function TripDataProvider({ children }) {
     markTripSeen,
     shareToWhatsApp,
     deleteCreatedTrip,
+    endTrip,
   };
 
   return (
