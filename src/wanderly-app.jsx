@@ -18,34 +18,11 @@ import { Tag, GroupTag } from './components/common/Tag';
 import { Collapsible } from './components/common/Collapsible';
 import { ControlledField } from './components/common/ControlledField';
 import { TripMap } from './components/map/TripMap';
+import { TabBar } from './components/common/TabBar';
+import { SettingsScreen } from './components/screens/SettingsScreen';
+import { ExploreScreen } from './components/screens/ExploreScreen';
+import { AuthScreen } from './components/screens/AuthScreen';
 
-
-function TabBar({ active, onNav }) {
-  const tabStyle = (isActive) => ({ flex: 1, padding: "12px 0", minHeight: 48, textAlign: "center", fontSize: 11, color: isActive ? T.a : T.t3, cursor: "pointer", border: "none", background: "none", fontFamily: T.font, fontWeight: isActive ? 600 : 500, transition: "all .15s", borderTop: isActive ? `2px solid ${T.a}` : "2px solid transparent" });
-  const tabs = [
-    { id: "trip", label: "Timeline", screen: "trip" },
-    { id: "chat", label: "Chat", screen: "chat" },
-    { id: "explore", label: "Explore", screen: "explore" },
-    { id: "memories", label: "Memories", screen: "memories" },
-    { id: "settings", label: "Settings", screen: "settings" },
-  ];
-  if (active === "home") {
-    return (
-      <nav role="navigation" aria-label="Main navigation" style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
-        {[["home", "Trips"], ["settings", "Settings"]].map(([id, label]) => (
-          <button key={id} className="w-tab" onClick={() => onNav(id)} style={tabStyle(active === id)} aria-label={label} aria-current={active === id ? "page" : undefined}>{label}</button>
-        ))}
-      </nav>
-    );
-  }
-  return (
-    <nav role="navigation" aria-label="Trip navigation" style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
-      {tabs.map(t => (
-        <button key={t.id} className="w-tab" onClick={() => onNav(t.screen)} style={tabStyle(active === t.id)} aria-label={t.label} aria-current={active === t.id ? "page" : undefined}>{t.label}</button>
-      ))}
-    </nav>
-  );
-}
 
 // ─── Main App ───
 export default function TripWithMeApp() {
@@ -4040,129 +4017,6 @@ export default function TripWithMeApp() {
   );
 
   // ─── Screen: Explore ───
-  const renderExploreScreen = () => {
-    // Dynamic location: use created trip's places first, then demo data
-    const trip = selectedCreatedTrip || createdTrips[0];
-    const currentLoc = trip?.places?.[0] || DAYS[selectedDay - 1]?.location || "Ambleside";
-    const locActs = getLocationActivities(currentLoc);
-    // Build dynamic explore items from location data
-    const exploreItems = [];
-    if (locActs) {
-      if (locActs.dinner?.[0]) exploreItems.push({ title: locActs.dinner[0].split(" at ").pop() || locActs.dinner[0], sub: `Restaurant · ${currentLoc}`, tags: [["Dining", T.coralL, T.coral]], icon: "🍽️", bg: T.coralL });
-      if (locActs.kids?.[0]) exploreItems.push({ title: locActs.kids[0], sub: `Family activity · ${currentLoc}`, tags: [["Kids", T.pinkL, T.pink]], icon: "🎢", bg: T.pinkL });
-      exploreItems.push({ title: `EV Chargers near ${currentLoc}`, sub: "Open Charge Map", tags: [["EV charging", T.al, T.ad]], icon: "⚡", bg: T.al });
-      if (locActs.morning?.[0]) exploreItems.push({ title: locActs.morning[0], sub: `Activity · ${currentLoc}`, tags: [["Explore", T.blueL, T.blue]], icon: "🥾", bg: T.blueL });
-      if (locActs.afternoon?.[0]) exploreItems.push({ title: locActs.afternoon[0], sub: `Afternoon · ${currentLoc}`, tags: [["Sightseeing", T.purpleL, T.purple]], icon: "📸", bg: T.purpleL });
-    } else {
-      exploreItems.push(
-        { title: `Restaurants in ${currentLoc}`, sub: "Find dining nearby", tags: [["Dining", T.coralL, T.coral]], icon: "🍽️", bg: T.coralL },
-        { title: `Things to do in ${currentLoc}`, sub: "Activities & attractions", tags: [["Explore", T.blueL, T.blue]], icon: "🎯", bg: T.blueL },
-        { title: `EV Chargers near ${currentLoc}`, sub: "Open Charge Map", tags: [["EV charging", T.al, T.ad]], icon: "⚡", bg: T.al },
-        { title: `Walks near ${currentLoc}`, sub: "Trails & hikes", tags: [["Outdoors", T.purpleL, T.purple]], icon: "🥾", bg: T.purpleL },
-      );
-    }
-    const mapIcons = [["🍽️", "28%", "30%", T.coral], ["🎢", "68%", "22%", T.pink], ["⚡", "75%", "58%", T.a], ["🥾", "18%", "60%", T.purple]];
-    if (exploreItems.length > 4) mapIcons.push(["📸", "45%", "70%", T.blue]);
-    return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate(selectedCreatedTrip ? "tripDetail" : "trip")}>Back</button>
-        <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Explore nearby</h2>
-        <span style={{ fontSize: 12, color: T.t3 }}>{currentLoc}</span>
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        <div style={{ height: 160, background: T.s2, borderRadius: T.r, marginBottom: 12, position: "relative", overflow: "hidden", border: `.5px solid ${T.border}` }}>
-          <div style={{ width: "100%", height: "100%", background: "linear-gradient(170deg, #D4E8D0, #E2EDDA 40%, #C9DBC3)" }}>
-            <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", ...css.avatar(T.blue, 28), border: "2px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.15)" }}>You</div>
-            {mapIcons.map(([icon, l, t, c], i) => (
-              <div key={i} style={{ position: "absolute", left: l, top: t, ...css.avatar(c, 22), fontSize: 11, border: "2px solid #fff" }}>{icon}</div>
-            ))}
-          </div>
-        </div>
-        {exploreItems.map((p, i) => (
-          <div key={i} onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(p.title)}+${encodeURIComponent(currentLoc)}`, "_blank")} style={{ ...css.card, display: "flex", gap: 12, cursor: "pointer" }}>
-            <div style={{ width: 52, height: 52, borderRadius: T.rs, background: p.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{p.icon}</div>
-            <div>
-              <h4 style={{ fontSize: 14, fontWeight: 500 }}>{p.title}</h4>
-              <p style={{ fontSize: 12, color: T.t2, marginBottom: 4 }}>{p.sub}</p>
-              <div>{p.tags.map(([t, bg, c]) => <Tag key={t} bg={bg} color={c}>{t}</Tag>)}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <TabBar active="explore" onNav={navigate} />
-    </div>
-    );
-  };
-
-  // ─── Screen: Settings ───
-  const renderSettingsScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate(selectedCreatedTrip ? "tripDetail" : "trip")}>Back</button>
-        <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Settings</h2>
-        <div />
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        {/* User Profile */}
-        {user && (
-          <div style={{ ...css.card, marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              <div style={{ width: 40, height: 40, borderRadius: "50%", background: T.a, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 600, fontSize: 16 }}>
-                {(user.user_metadata?.full_name || user.email || "U")[0].toUpperCase()}
-              </div>
-              <div>
-                <p style={{ fontSize: 14, fontWeight: 500 }}>{user.user_metadata?.full_name || user.email?.split("@")[0] || "Guest"}</p>
-                <p style={{ fontSize: 12, color: T.t2 }}>{user.email || "Demo mode"}</p>
-              </div>
-            </div>
-            {user.id !== 'demo' && (
-              <div style={{ display: "flex", gap: 6 }}>
-                <Tag bg={T.al} color={T.ad}>Synced to cloud</Tag>
-                {syncing && <Tag bg={T.amberL} color={T.amber}>Syncing...</Tag>}
-              </div>
-            )}
-            <button onClick={signOut} style={{ ...css.btn, ...css.btnSm, marginTop: 10, color: T.red }}>Sign out</button>
-          </div>
-        )}
-        <div style={css.sectionTitle}>Food preferences</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-          {["Vegetarian", "Non-veg", "Local cuisine", "Kid-friendly"].map(o => (
-            <span key={o} style={{ ...css.chip, ...css.chipActive }}>{o}</span>
-          ))}
-        </div>
-        <div style={css.sectionTitle}>Connectors &amp; integrations</div>
-        <div style={{ background: T.amberL, padding: "8px 12px", borderRadius: T.rs, marginBottom: 8 }}>
-          <p style={{ fontSize: 11, color: T.amber, fontWeight: 500 }}>🔌 Coming soon — connector integrations will power live data from these services. Toggles saved for when ready.</p>
-        </div>
-        <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Trip With Me uses intelligent routing to connect the right services automatically. Toggle individual connectors on/off.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
-          {Object.entries(CONNECTORS).map(([key, c]) => (
-            <div key={key} onClick={() => setSettingsToggles(prev => ({ ...prev, [key]: !prev[key] }))}
-              style={{ background: settingsToggles[key] ? T.s : T.s2, border: `.5px solid ${settingsToggles[key] ? T.a : T.border}`, borderRadius: T.rs, padding: "10px 8px", textAlign: "center", fontSize: 11, color: settingsToggles[key] ? T.t1 : T.t3, cursor: "pointer", transition: "all .15s", opacity: settingsToggles[key] ? 1 : 0.5 }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
-              <div style={{ fontWeight: 500, fontSize: 10, lineHeight: 1.3 }}>{c.name.split(" / ")[0]}</div>
-              <div style={{ fontSize: 9, color: settingsToggles[key] ? T.a : T.t3, marginTop: 2 }}>{settingsToggles[key] ? "Active" : "Off"}</div>
-            </div>
-          ))}
-        </div>
-        <div style={css.sectionTitle}>Notifications</div>
-        <div style={{ background: T.blueL, padding: "8px 12px", borderRadius: T.rs, marginBottom: 8 }}>
-          <p style={{ fontSize: 11, color: T.blue, fontWeight: 500 }}>📱 Coming soon — push notifications require the mobile app. Preferences saved for launch.</p>
-        </div>
-        {[["Booking confirmations","n_booking"], ["EV charger alerts","n_ev"], ["Traffic & closures","n_traffic"], ["Daily video generation","n_video"], ["Poll reminders","n_poll"], ["Checkout reminders","n_checkout"]].map(([n, nk]) => (
-          <div key={nk} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `.5px solid ${T.border}` }}>
-            <span style={{ fontSize: 14 }}>{n}</span>
-            <div onClick={() => setSettingsToggles(prev => ({ ...prev, [nk]: !prev[nk] }))} style={{ width: 40, height: 22, borderRadius: 11, background: settingsToggles[nk] ? T.a : T.s3, position: "relative", cursor: "pointer", transition: "background .2s" }}>
-              <div style={{ position: "absolute", top: 2, left: settingsToggles[nk] ? 20 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.1)", transition: "left .2s" }} />
-            </div>
-          </div>
-        ))}
-      </div>
-      <TabBar active="settings" onNav={navigate} />
-    </div>
-  );
-
   // ─── Screen: Created Trip Detail ───
   const renderCreatedTripScreen = () => {
     const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
@@ -5513,68 +5367,6 @@ export default function TripWithMeApp() {
     );
   };
 
-  // ─── Auth Screen ───
-  const renderAuthScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <h1 style={{ fontFamily: T.fontD, fontSize: 32, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Trip With Me</h1>
-        <p style={{ fontSize: 13, color: T.t2, marginBottom: 30 }}>Your travel concierge</p>
-
-        <div style={{ width: "100%", maxWidth: 340 }}>
-          {/* Google Sign-in */}
-          <button onClick={signInWithGoogle}
-            style={{ ...css.btn, width: "100%", padding: "12px 16px", marginBottom: 16, justifyContent: "center", gap: 10, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-            Continue with Google
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-            <div style={{ flex: 1, height: 1, background: T.border }} />
-            <span style={{ fontSize: 12, color: T.t3 }}>or</span>
-            <div style={{ flex: 1, height: 1, background: T.border }} />
-          </div>
-
-          {/* Email auth */}
-          {authScreen === "signup" && (
-            <div style={{ marginBottom: 10 }}>
-              <input value={authName} onChange={e => setAuthName(e.target.value)} placeholder="Your name"
-                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
-            </div>
-          )}
-          <input value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" type="email"
-            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
-          <input value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" type="password"
-            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); authScreen === "signup" ? signUpWithEmail() : signInWithEmail(); } }}
-            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
-
-          <button onClick={authScreen === "signup" ? signUpWithEmail : signInWithEmail}
-            style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 14, fontWeight: 500, cursor: "pointer", marginBottom: 10 }}>
-            {authScreen === "signup" ? "Create account" : "Sign in"}
-          </button>
-
-          {authError && (
-            <p style={{ fontSize: 12, color: authError.includes("Check your email") ? T.a : T.red, textAlign: "center", marginBottom: 8 }}>{authError}</p>
-          )}
-
-          <p style={{ fontSize: 12, color: T.t2, textAlign: "center" }}>
-            {authScreen === "signup" ? "Already have an account? " : "Don't have an account? "}
-            <span onClick={() => { setAuthScreen(authScreen === "signup" ? "login" : "signup"); setAuthError(""); }}
-              style={{ color: T.a, cursor: "pointer", fontWeight: 500 }}>
-              {authScreen === "signup" ? "Sign in" : "Sign up"}
-            </span>
-          </p>
-
-          {/* Skip login for demo */}
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: `.5px solid ${T.border}`, textAlign: "center" }}>
-            <button onClick={() => { setUser({ id: 'demo', email: 'demo@tripwithme.app' }); setAuthLoading(false); }}
-              style={{ ...css.btn, fontSize: 12, color: T.t3, cursor: "pointer", margin: "0 auto" }}>
-              Skip — explore as guest
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   // ─── Render ───
   const phoneStyle = { maxWidth: 600, width: "100%", margin: "0 auto", minHeight: "100dvh", height: "100dvh", background: T.bg, overflow: "hidden", fontFamily: T.font, color: T.t1 };
@@ -5598,7 +5390,7 @@ export default function TripWithMeApp() {
       <div className="w-app" style={phoneStyle}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes reelEnergetic{0%{transform:scale(1) rotate(0deg);opacity:0}10%{opacity:1}100%{transform:scale(1.15) rotate(1.5deg);opacity:1}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
         <div style={{ height: "100%" }}>
-          {renderAuthScreen()}
+          <AuthScreen signInWithGoogle={signInWithGoogle} signUpWithEmail={signUpWithEmail} signInWithEmail={signInWithEmail} authScreen={authScreen} setAuthScreen={setAuthScreen} authEmail={authEmail} setAuthEmail={setAuthEmail} authPassword={authPassword} setAuthPassword={setAuthPassword} authName={authName} setAuthName={setAuthName} authError={authError} setAuthError={setAuthError} setUser={setUser} setAuthLoading={setAuthLoading} />
         </div>
       </div>
     );
@@ -5616,8 +5408,8 @@ export default function TripWithMeApp() {
         {screen === "vote" && renderVoteScreen()}
         {screen === "memories" && renderMemoriesScreen()}
         {screen === "share" && renderShareScreen()}
-        {screen === "explore" && renderExploreScreen()}
-        {screen === "settings" && renderSettingsScreen()}
+        {screen === "explore" && <ExploreScreen selectedCreatedTrip={selectedCreatedTrip} createdTrips={createdTrips} selectedDay={selectedDay} navigate={navigate} />}
+        {screen === "settings" && <SettingsScreen user={user} navigate={navigate} signOut={signOut} selectedCreatedTrip={selectedCreatedTrip} syncing={syncing} settingsToggles={settingsToggles} setSettingsToggles={setSettingsToggles} />}
         {screen === "joinPreview" && renderJoinPreviewScreen()}
       </div>
       {/* ── Activation Preferences Modal (global, works from any screen) ── */}
