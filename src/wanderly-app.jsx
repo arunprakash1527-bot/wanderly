@@ -800,7 +800,7 @@ function TabBar({ active, onNav }) {
   if (active === "home") {
     return (
       <nav role="navigation" aria-label="Main navigation" style={{ display: "flex", background: T.s, borderTop: `.5px solid ${T.border}`, flexShrink: 0 }}>
-        {[["home", "Trips"], ["explore", "Explore"], ["settings", "Settings"]].map(([id, label]) => (
+        {[["home", "Trips"], ["settings", "Settings"]].map(([id, label]) => (
           <button key={id} className="w-tab" onClick={() => onNav(id)} style={tabStyle(active === id)} aria-label={label} aria-current={active === id ? "page" : undefined}>{label}</button>
         ))}
       </nav>
@@ -4702,8 +4702,9 @@ export default function TripWithMeApp() {
 
   // ─── Screen: Explore ───
   const renderExploreScreen = () => {
-    // Dynamic location: use current day's location from demo or created trip
-    const currentLoc = DAYS[selectedDay - 1]?.location || "Ambleside";
+    // Dynamic location: use created trip's places first, then demo data
+    const trip = selectedCreatedTrip || createdTrips[0];
+    const currentLoc = trip?.places?.[0] || DAYS[selectedDay - 1]?.location || "Ambleside";
     const locActs = getLocationActivities(currentLoc);
     // Build dynamic explore items from location data
     const exploreItems = [];
@@ -4726,7 +4727,7 @@ export default function TripWithMeApp() {
     return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
+        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate(selectedCreatedTrip ? "tripDetail" : "trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Explore nearby</h2>
         <span style={{ fontSize: 12, color: T.t3 }}>{currentLoc}</span>
       </div>
@@ -4759,7 +4760,7 @@ export default function TripWithMeApp() {
   const renderSettingsScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
+        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate(selectedCreatedTrip ? "tripDetail" : "trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Settings</h2>
         <div />
       </div>
