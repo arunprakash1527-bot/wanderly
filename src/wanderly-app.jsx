@@ -1631,7 +1631,7 @@ export default function TripWithMeApp() {
       setSaving(false);
       navigate("createdTrip");
     } else {
-      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
+      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], polls: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
       setCreatedTrips(prev => [newTrip, ...prev]);
       // Save to Supabase
       if (user && user.id !== 'demo') {
@@ -4429,7 +4429,7 @@ export default function TripWithMeApp() {
   const [newPollQuestion, setNewPollQuestion] = useState("");
   const [newPollOptions, setNewPollOptions] = useState(["", ""]);
 
-  const createNewPoll = () => {
+  const createNewPoll = (tripId) => {
     if (!newPollQuestion.trim()) { alert("Enter a question"); return; }
     const validOpts = newPollOptions.filter(o => o.trim());
     if (validOpts.length < 2) { alert("Add at least 2 options"); return; }
@@ -4442,7 +4442,13 @@ export default function TripWithMeApp() {
       votes: 0,
       options: validOpts.map(text => ({ text: text.trim(), pct: 0, voters: [], voted: false })),
     };
-    setPollData(prev => [newPoll, ...prev]);
+    if (tripId) {
+      // Add to created trip's polls
+      setCreatedTrips(prev => prev.map(t => t.id === tripId ? { ...t, polls: [newPoll, ...(t.polls || [])] } : t));
+    } else {
+      // Demo trip
+      setPollData(prev => [newPoll, ...prev]);
+    }
     setNewPollQuestion("");
     setNewPollOptions(["", ""]);
     setShowPollCreator(false);
@@ -5490,14 +5496,14 @@ export default function TripWithMeApp() {
                         <button onClick={() => setNewPollOptions(prev => [...prev, ""])}
                           style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>+ Add option</button>
                       )}
-                      <button onClick={createNewPoll} style={{ ...css.btn, ...css.btnSm, ...css.btnP, flex: 1, justifyContent: "center", fontSize: 11 }}>Create poll</button>
+                      <button onClick={() => createNewPoll(trip.id)} style={{ ...css.btn, ...css.btnSm, ...css.btnP, flex: 1, justifyContent: "center", fontSize: 11 }}>Create poll</button>
                       <button onClick={() => { setShowPollCreator(false); setNewPollQuestion(""); setNewPollOptions(["", ""]); }}
                         style={{ ...css.btn, ...css.btnSm, flex: 0, justifyContent: "center", fontSize: 11, color: T.t3 }}>Cancel</button>
                     </div>
                   </div>
                 )}
 
-                {pollData.length === 0 && !showPollCreator && (
+                {(trip.polls || []).length === 0 && !showPollCreator && (
                   <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
                     <div style={{ fontSize: 28, marginBottom: 8 }}>🗳️</div>
                     <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>No polls yet</p>
@@ -5505,7 +5511,7 @@ export default function TripWithMeApp() {
                   </div>
                 )}
 
-                {pollData.map(poll => (
+                {(trip.polls || []).map(poll => (
                   <div key={poll.id} style={{ ...css.card, opacity: poll.status === "closed" ? 0.6 : 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                       <Tag bg={poll.status === "active" ? T.al : T.s2} color={poll.status === "active" ? T.ad : T.t3}>
@@ -5517,7 +5523,7 @@ export default function TripWithMeApp() {
                     {poll.options.map((opt, i) => (
                       <div key={i} onClick={() => {
                         if (poll.status === "closed") return;
-                        setPollData(prev => prev.map(p => p.id === poll.id ? { ...p, options: p.options.map((o, j) => j === i ? { ...o, voted: !o.voted, pct: Math.min(100, o.pct + (o.voted ? -10 : 10)), voters: o.voted ? o.voters.filter(v => v !== "You") : [...(o.voters||[]), "You"] } : o) } : p));
+                        setCreatedTrips(prev => prev.map(t => t.id !== trip.id ? t : { ...t, polls: (t.polls || []).map(p => p.id === poll.id ? { ...p, options: p.options.map((o, j) => j === i ? { ...o, voted: !o.voted, pct: Math.min(100, o.pct + (o.voted ? -10 : 10)), voters: o.voted ? o.voters.filter(v => v !== "You") : [...(o.voters||[]), "You"] } : o) } : p) }));
                       }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: `.5px solid ${opt.voted ? T.a : T.border}`, borderRadius: T.rs, marginBottom: 6, cursor: poll.status === "closed" ? "default" : "pointer", position: "relative", overflow: "hidden", background: opt.voted ? T.al : T.s }}>
                         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${opt.pct}%`, background: T.al, borderRadius: T.rs, zIndex: 0 }} />
                         <span style={{ position: "relative", zIndex: 1, fontSize: 13, flex: 1 }}>{opt.text}</span>
@@ -5534,7 +5540,7 @@ export default function TripWithMeApp() {
                       <span>{poll.options.reduce((s, o) => s + (o.voters?.length || 0), 0)} votes · by {poll.by}</span>
                       <div style={{ display: "flex", gap: 6 }}>
                         {poll.status === "active" && (
-                          <button onClick={(e) => { e.stopPropagation(); setPollData(prev => prev.map(p => p.id === poll.id ? { ...p, status: "closed" } : p)); showToast("Poll closed"); }}
+                          <button onClick={(e) => { e.stopPropagation(); setCreatedTrips(prev => prev.map(t => t.id !== trip.id ? t : { ...t, polls: (t.polls || []).map(p => p.id === poll.id ? { ...p, status: "closed" } : p) })); showToast("Poll closed"); }}
                             style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", color: T.red, borderColor: T.red }}>Close poll</button>
                         )}
                         {poll.status === "closed" && (() => {
