@@ -456,7 +456,7 @@ export function ChatScreen() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.s, borderBottom: `.5px solid ${T.border}` }}>
         <div style={{ padding: "14px 20px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
+          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("createdTrip")}>Back</button>
           <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Trip chat</h2>
           <div style={{ display: "flex" }}>
             {[["You", T.a], ["JM", T.coral], ["SP", T.blue]].map(([l, c], i) => (
