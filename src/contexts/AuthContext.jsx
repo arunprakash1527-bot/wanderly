@@ -13,17 +13,47 @@ export function AuthProvider({ children }) {
   const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
 
+  // Ensure profile row exists for authenticated user
+  const ensureProfile = async (u) => {
+    if (!u) return;
+    try {
+      const { data } = await supabase.from('profiles').select('id').eq('id', u.id).single();
+      if (!data) {
+        await supabase.from('profiles').upsert({
+          id: u.id,
+          name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'User',
+          email: u.email,
+          avatar_url: u.user_metadata?.avatar_url || null,
+        }, { onConflict: 'id' });
+      }
+    } catch {
+      // Profile check failed — try upsert anyway
+      try {
+        await supabase.from('profiles').upsert({
+          id: u.id,
+          name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'User',
+          email: u.email,
+          avatar_url: u.user_metadata?.avatar_url || null,
+        }, { onConflict: 'id' });
+      } catch {} // eslint-disable-line
+    }
+  };
+
   // Auth listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      const u = session?.user ?? null;
+      setUser(u);
       setAuthLoading(false);
+      if (u) ensureProfile(u);
     }).catch(() => {
       setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      const u = session?.user ?? null;
+      setUser(u);
       setAuthLoading(false);
+      if (u) ensureProfile(u);
     });
     return () => subscription.unsubscribe();
   }, []);

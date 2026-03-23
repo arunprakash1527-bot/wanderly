@@ -92,17 +92,20 @@ export function TripDataProvider({ children }) {
 
       const travellerRows = mapTravellersForInsert(tripData, trip.id, user.id);
       if (travellerRows.length > 0) {
-        await supabase.from('trip_travellers').insert(travellerRows);
+        const { error: tErr } = await supabase.from('trip_travellers').insert(travellerRows);
+        if (tErr) console.error('Error saving travellers:', tErr);
       }
 
       const stayRows = mapStaysForInsert(tripData.stays, trip.id);
       if (stayRows.length > 0) {
-        await supabase.from('trip_stays').insert(stayRows);
+        const { error: sErr } = await supabase.from('trip_stays').insert(stayRows);
+        if (sErr) console.error('Error saving stays:', sErr);
       }
 
       const prefsRow = mapPrefsForInsert(tripData.prefs, trip.id);
       if (prefsRow) {
-        await supabase.from('trip_preferences').insert(prefsRow);
+        const { error: pErr } = await supabase.from('trip_preferences').insert(prefsRow);
+        if (pErr) console.error('Error saving preferences:', pErr);
       }
 
       return { ...tripData, id: trip.id, shareCode: trip.share_code, dbId: trip.id };
