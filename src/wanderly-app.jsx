@@ -882,6 +882,10 @@ export default function TripWithMeApp() {
   const [reelStyle, setReelStyle] = useState("cinematic"); // "cinematic" | "slideshow" | "energetic"
   const [tripDirections, setTripDirections] = useState(null);
   const [showMap, setShowMap] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [lastSeenActivity, setLastSeenActivity] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("twm_lastSeen") || "{}"); } catch { return {}; }
+  });
 
   // ─── Expense Tracking State ───
   const [expenses, setExpenses] = useState([]);
@@ -1661,6 +1665,29 @@ export default function TripWithMeApp() {
     setCreatedTrips(prev => prev.map(t => t.id === tripId ? { ...t, activity: [entry, ...(t.activity || [])].slice(0, 50) } : t));
   };
 
+  // ─── Notification helpers ───
+  const getUnreadCount = useCallback((tripId) => {
+    const trip = createdTrips.find(t => t.id === tripId);
+    if (!trip) return 0;
+    const lastSeen = lastSeenActivity[tripId] || 0;
+    return (trip.activity || []).filter(a => new Date(a.time).getTime() > lastSeen).length;
+  }, [createdTrips, lastSeenActivity]);
+
+  const totalUnread = createdTrips.reduce((sum, t) => sum + getUnreadCount(t.id), 0);
+
+  const markTripSeen = useCallback((tripId) => {
+    setLastSeenActivity(prev => {
+      const next = { ...prev, [tripId]: Date.now() };
+      try { localStorage.setItem("twm_lastSeen", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const allRecentActivity = createdTrips
+    .flatMap(t => (t.activity || []).map(a => ({ ...a, tripId: t.id, tripName: t.name })))
+    .sort((a, b) => new Date(b.time) - new Date(a.time))
+    .slice(0, 30);
+
   // ─── WhatsApp share helper ───
   const shareToWhatsApp = (tripName, message, tripId) => {
     const link = `${window.location.origin}/join/${tripId}`;
@@ -2364,6 +2391,7 @@ export default function TripWithMeApp() {
     setTripChatInput("");
     setTripDetailTab("itinerary");
     setSelectedDay(1);
+    setShowNotifications(false);
     loadTripMessages(trip.dbId);
     loadExpenses(trip.dbId);
     loadTripPhotos(trip.dbId);
@@ -2869,14 +2897,57 @@ export default function TripWithMeApp() {
 
   // ─── Screen: Home (render function, not component) ───
   const renderHomeScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <div style={{ padding: "16px 20px 12px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: T.t1 }}>Trip With Me</h1>
           <span style={{ fontSize: 11, color: T.t3, fontWeight: 500, letterSpacing: 0.5 }}>TRAVEL CONCIERGE</span>
         </div>
-        <button style={{ ...css.btn, ...css.btnP, ...css.btnSm }} onClick={() => { resetWizard(); navigate("create"); }}>+ New trip</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button style={{ position: "relative", background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 4 }} onClick={() => setShowNotifications(prev => !prev)} title="Notifications">
+            🔔
+            {totalUnread > 0 && <span style={{ position: "absolute", top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, background: T.coral, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: `2px solid ${T.s}` }}>{totalUnread > 99 ? "99+" : totalUnread}</span>}
+          </button>
+          <button style={{ ...css.btn, ...css.btnP, ...css.btnSm }} onClick={() => { resetWizard(); navigate("create"); }}>+ New trip</button>
+        </div>
       </div>
+
+      {/* ── Notification panel ── */}
+      {showNotifications && <>
+        <div onClick={() => setShowNotifications(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99 }} />
+        <div style={{ position: "absolute", top: 56, right: 12, width: "calc(100% - 24px)", maxWidth: 360, maxHeight: 420, background: T.s, borderRadius: T.r, boxShadow: "0 8px 32px rgba(0,0,0,.15), 0 2px 8px rgba(0,0,0,.08)", border: `.5px solid ${T.border}`, zIndex: 100, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `.5px solid ${T.border}` }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: T.t1 }}>Notifications</p>
+            {totalUnread > 0 && <button onClick={() => { createdTrips.forEach(t => markTripSeen(t.id)); }} style={{ background: "none", border: "none", fontSize: 11, color: T.a, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>Mark all read</button>}
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", maxHeight: 360 }}>
+            {allRecentActivity.length === 0 && (
+              <div style={{ textAlign: "center", padding: "32px 16px", color: T.t3 }}>
+                <div style={{ fontSize: 24, marginBottom: 6 }}>🔕</div>
+                <p style={{ fontSize: 13, color: T.t2 }}>No notifications yet</p>
+                <p style={{ fontSize: 11 }}>Activity from your trips will appear here.</p>
+              </div>
+            )}
+            {allRecentActivity.map((a) => {
+              const isUnread = new Date(a.time).getTime() > (lastSeenActivity[a.tripId] || 0);
+              const diff = Date.now() - new Date(a.time).getTime();
+              const ago = diff < 60000 ? "Just now" : diff < 3600000 ? `${Math.floor(diff / 60000)}m` : diff < 86400000 ? `${Math.floor(diff / 3600000)}h` : `${Math.floor(diff / 86400000)}d`;
+              return (
+                <div key={a.id} onClick={() => { const trip = createdTrips.find(t => t.id === a.tripId); if (trip) { viewCreatedTrip(trip); setTripDetailTab("activity"); markTripSeen(a.tripId); } setShowNotifications(false); }}
+                  style={{ display: "flex", gap: 10, padding: "10px 16px", cursor: "pointer", background: isUnread ? T.al + "40" : "transparent", borderBottom: `.5px solid ${T.border}`, transition: "background .15s" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: a.type === "milestone" ? T.al : a.type === "poll" ? T.purpleL : a.type === "expense" ? T.amberL : a.type === "photo" ? T.coralL : T.blueL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{a.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: T.a, marginBottom: 2 }}>{a.tripName}</p>
+                    <p style={{ fontSize: 12, color: T.t1, lineHeight: 1.4 }}>{a.text}</p>
+                    <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{a.by} · {ago}</p>
+                  </div>
+                  {isUnread && <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.a, flexShrink: 0, marginTop: 12 }} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </>}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Your upcoming adventures</p>
 
@@ -2888,7 +2959,10 @@ export default function TripWithMeApp() {
                 <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{trip.name}</h3>
                 <p style={{ fontSize: 12, color: T.t2 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
               </div>
-              {trip.status === "live" ? <Tag bg={T.al} color={T.ad}>Live</Tag> : <Tag bg={T.blueL} color={T.blue}>New</Tag>}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {getUnreadCount(trip.id) > 0 && <Tag bg={T.coralL} color={T.coral}>{getUnreadCount(trip.id)} new</Tag>}
+                {trip.status === "live" ? <Tag bg={T.al} color={T.ad}>Live</Tag> : <Tag bg={T.blueL} color={T.blue}>New</Tag>}
+              </div>
             </div>
             {trip.brief && <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>{trip.brief}</p>}
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
@@ -5150,9 +5224,9 @@ export default function TripWithMeApp() {
               <button className="w-tab" style={tripTabStyle("polls")} onClick={() => setTripDetailTab("polls")}>Polls</button>
               <button className="w-tab" style={tripTabStyle("expenses")} onClick={() => setTripDetailTab("expenses")}>Expenses</button>
               <button className="w-tab" style={tripTabStyle("memories")} onClick={() => setTripDetailTab("memories")}>Memories</button>
-              <button className="w-tab" style={{ ...tripTabStyle("activity"), position: "relative" }} onClick={() => setTripDetailTab("activity")}>
+              <button className="w-tab" style={{ ...tripTabStyle("activity"), position: "relative" }} onClick={() => { setTripDetailTab("activity"); markTripSeen(trip.id); }}>
                 Activity
-                {(trip.activity || []).length > 0 && tripDetailTab !== "activity" && <span style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, borderRadius: "50%", background: T.coral }} />}
+                {getUnreadCount(trip.id) > 0 && tripDetailTab !== "activity" && <span style={{ position: "absolute", top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, background: T.coral, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{getUnreadCount(trip.id)}</span>}
               </button>
             </div>
 
