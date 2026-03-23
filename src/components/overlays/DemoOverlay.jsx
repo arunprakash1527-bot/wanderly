@@ -3,8 +3,7 @@ import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useWizard } from '../../contexts/WizardContext';
-
-const DEMO_SLIDE_DURATIONS = [62, 56, 54, 72, 58, 62, 58, 56, 54, 999];
+import { DEMO_SLIDE_DURATIONS } from '../../constants/demo';
 
 export function DemoOverlay() {
   const {
