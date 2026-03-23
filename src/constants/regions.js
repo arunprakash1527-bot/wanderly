@@ -90,6 +90,16 @@ export const REGION_SUGGESTIONS = {
     activities: ["Snorkelling", "Sunset cruise", "Spa treatment", "Diving", "Fishing trip", "Island hopping", "Kayaking"],
     olderKids: ["Snorkelling", "Dolphin watching", "Kayaking", "Glass-bottom boat", "Beach volleyball"],
   },
+  india: {
+    food: ["Dosa & idli", "Biryani", "Butter chicken", "Thali", "Masala chai", "Street chaat", "Pani puri"],
+    activities: ["Temple visit", "Spice market walk", "Cooking class", "Rickshaw tour", "Heritage walk", "Yoga session", "Textile shopping"],
+    olderKids: ["Bollywood tour", "Cricket match", "Fort exploration", "Cooking class", "Camel ride"],
+  },
+  srilanka: {
+    food: ["Rice & curry", "Hoppers", "Kottu roti", "Fresh seafood", "Ceylon tea tasting", "Pol sambol", "String hoppers"],
+    activities: ["Temple visit", "Tea plantation tour", "Safari", "Beach day", "Train ride", "Whale watching", "Ayurveda spa"],
+    olderKids: ["Whale watching", "Surfing lesson", "Elephant sanctuary", "Train ride", "Snorkelling"],
+  },
   czech: {
     food: ["Sv\u00ed\u010dkov\u00e1", "Trdeln\u00edk", "Goulash", "Koleno", "Czech beer tasting", "Fried cheese", "Dumplings"],
     activities: ["Castle tour", "Beer tasting", "Old Town walk", "River cruise", "Jazz club", "Market visit", "Spa visit"],

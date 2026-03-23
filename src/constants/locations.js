@@ -28,7 +28,7 @@ export const LOCATION_SUGGESTIONS = [
   "Ho Chi Minh City", "Hanoi", "Da Nang", "Hoi An",
   "Seoul", "Busan", "Jeju Island",
   "Beijing", "Shanghai", "Hong Kong", "Taipei", "Macau", "Guilin", "Xi'an", "Chengdu",
-  "Delhi", "Mumbai", "Jaipur", "Goa", "Kerala", "Udaipur", "Agra", "Rishikesh", "Varanasi",
+  "Delhi", "Mumbai", "Chennai", "Bangalore", "Hyderabad", "Kolkata", "Jaipur", "Goa", "Kerala", "Udaipur", "Agra", "Rishikesh", "Varanasi", "Pune", "Kochi", "Mysore", "Shimla", "Darjeeling", "Amritsar", "Jodhpur",
   "Colombo", "Kandy", "Ella", "Mirissa",
   "Kathmandu", "Pokhara",
   // Middle East

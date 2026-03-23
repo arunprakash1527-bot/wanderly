@@ -746,7 +746,15 @@ export function CreatedTripScreen() {
                   {poll.options.map((opt, i) => (
                     <div key={i} onClick={() => {
                       if (poll.status === "closed") return;
-                      setCreatedTrips(prev => prev.map(t => t.id !== trip.id ? t : { ...t, polls: (t.polls || []).map(p => p.id === poll.id ? { ...p, options: p.options.map((o, j) => j === i ? { ...o, voted: !o.voted, pct: Math.min(100, o.pct + (o.voted ? -10 : 10)), voters: o.voted ? o.voters.filter(v => v !== "You") : [...(o.voters||[]), "You"] } : o) } : p) }));
+                      setCreatedTrips(prev => prev.map(t => {
+                        if (t.id !== trip.id) return t;
+                        return { ...t, polls: (t.polls || []).map(p => {
+                          if (p.id !== poll.id) return p;
+                          const updated = p.options.map((o, j) => j === i ? { ...o, voted: !o.voted, voters: o.voted ? o.voters.filter(v => v !== "You") : [...(o.voters||[]), "You"] } : o);
+                          const totalVotes = updated.reduce((s, o) => s + (o.voters?.length || 0), 0);
+                          return { ...p, options: updated.map(o => ({ ...o, pct: totalVotes > 0 ? Math.round((o.voters?.length || 0) / totalVotes * 100) : 0 })) };
+                        }) };
+                      }));
                     }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: `.5px solid ${opt.voted ? T.a : T.border}`, borderRadius: T.rs, marginBottom: 6, cursor: poll.status === "closed" ? "default" : "pointer", position: "relative", overflow: "hidden", background: opt.voted ? T.al : T.s }}>
                       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${opt.pct}%`, background: T.al, borderRadius: T.rs, zIndex: 0 }} />
                       <span style={{ position: "relative", zIndex: 1, fontSize: 13, flex: 1 }}>{opt.text}</span>

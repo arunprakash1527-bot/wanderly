@@ -29,6 +29,8 @@ export function getRegion(places) {
   if (/bangkok|thailand|phuket|chiang mai/.test(all)) return "thailand";
   if (/bali|indonesia|jakarta/.test(all)) return "indonesia";
   if (/maldives/.test(all)) return "maldives";
+  if (/delhi|mumbai|chennai|bangalore|bengaluru|hyderabad|kolkata|jaipur|goa|kerala|udaipur|agra|rishikesh|varanasi|pune|ahmedabad|kochi|mysore|shimla|darjeeling|amritsar|jodhpur|india/.test(all)) return "india";
+  if (/colombo|kandy|ella|mirissa|galle|sri lanka/.test(all)) return "srilanka";
   if (/edinburgh|glasgow|inverness|aberdeen|isle of skye|skye|highlands|loch ness|stirling|dundee|fort william|oban|st andrews/.test(all)) return "scotland";
   if (/london|manchester|birmingham|liverpool|bristol|oxford|cambridge|york|bath|brighton|cornwall|lake district|cotswolds|leeds|newcastle|nottingham|sheffield/.test(all)) return "england";
   return "uk";
