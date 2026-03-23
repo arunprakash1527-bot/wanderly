@@ -2938,18 +2938,13 @@ export default function TripWithMeApp() {
         ))}
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        {(() => { const stepMeta = [
-          { icon: "🗺️", title: "Details", sub: "Name, dates, and destinations" },
-          { icon: "👥", title: "Travellers", sub: "Add your travel group" },
-          { icon: "🏨", title: "Stays", sub: "Where you're staying" },
-          { icon: "🎯", title: "Preferences", sub: "Food and activities" },
-          { icon: "✅", title: "Review", sub: "Review your trip summary" },
-        ][wizStep]; return (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: T.al + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{stepMeta.icon}</div>
-            <div><h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 1 }}>{stepMeta.title}</h3><p style={{ fontSize: 12, color: T.t3 }}>{stepMeta.sub}</p></div>
+        {(() => { const stepSubs = ["Name, dates, and destinations", "Add your travel group", "Where you're staying", "Food and activities", "Review your trip summary"];
+        return wizStep > 0 ? (
+          <div style={{ marginBottom: 14 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 2 }}>{wizSteps[wizStep]}</h3>
+            <p style={{ fontSize: 12, color: T.t3 }}>{stepSubs[wizStep]}</p>
           </div>
-        ); })()}
+        ) : null; })()}
         {wizStep > 0 && (wizTrip.places.length > 0 || wizTrip.name) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14, padding: "8px 12px", background: T.s2, borderRadius: T.rs }}>
             {wizTrip.name && <span style={{ fontSize: 11, color: T.t2 }}>✏️ {wizTrip.name}</span>}
@@ -3020,81 +3015,121 @@ export default function TripWithMeApp() {
         })()
       : [];
     const tripDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1) : null;
+    const hasDrivingMode = wizTrip.travel.has("EV vehicle") || wizTrip.travel.has("Non-EV vehicle");
+    const cardStyle = { background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 12 };
+    const sectionLabel = (text, required) => (
+      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>
+        {text}{required && <span style={{ color: T.red, fontSize: 13 }}>*</span>}
+      </label>
+    );
     return (
       <>
-        <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" icon="✏️" required error={wizShowErrors && !wizTrip.name.trim() ? "Give your trip a name" : undefined} />
-        <ControlledField label="Brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="Describe your trip — who's going, what kind of experience you want..." hint="Optional — helps the AI personalise your itinerary" />
-        <div style={{ display: "flex", gap: 10 }}>
-          <ControlledField label="Start date" type="date" value={wizTrip.start} onChange={v => setWizTrip(prev => ({ ...prev, start: v }))} style={{ flex: 1 }} hint={!wizTrip.start ? "Recommended" : undefined} />
-          <ControlledField label="End date" type="date" value={wizTrip.end} onChange={v => setWizTrip(prev => ({ ...prev, end: v }))} style={{ flex: 1 }} min={wizTrip.start || undefined} />
-        </div>
-        {tripDays && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.al + "30", borderRadius: T.rs, marginBottom: 14, marginTop: -8 }}>
-            <span style={{ fontSize: 16 }}>📅</span>
-            <span style={{ fontSize: 12, color: T.ad, fontWeight: 500 }}>{tripDays} day{tripDays > 1 ? "s" : ""} trip</span>
-          </div>
-        )}
-        <div style={{ marginBottom: 14, position: "relative" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: wizShowErrors && !wizTrip.places.length ? T.red : T.t3, marginBottom: 5, textTransform: "uppercase", letterSpacing: .5 }}>Locations visiting<span style={{ color: T.red, fontSize: 13 }}>*</span></label>
-          {wizTrip.places.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
-              {wizTrip.places.map(p => (
-                <span key={p} style={{ ...css.chip, ...css.chipActive, paddingRight: 8 }}>{p} <span onClick={() => removePlace(p)} style={{ opacity: 0.5, cursor: "pointer", marginLeft: 3 }}>×</span></span>
-              ))}
-            </div>
-          )}
-          <input value={placeInput}
-            onChange={e => { setPlaceInput(e.target.value); setPlaceSuggestionsOpen(true); }}
-            onKeyDown={e => { if (e.key === "Enter" || e.key === "Tab") { if (placeInput.trim()) { e.preventDefault(); addPlace(); } } }}
-            onFocus={() => { if (placeInput.trim()) setPlaceSuggestionsOpen(true); }}
-            onBlur={() => setTimeout(() => setPlaceSuggestionsOpen(false), 200)}
-            style={{ width: "100%", padding: "9px 12px 9px 36px", border: `.5px solid ${wizShowErrors && !wizTrip.places.length ? T.red + "80" : T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: wizShowErrors && !wizTrip.places.length ? T.red + "06" : T.s, outline: "none", minHeight: 44, transition: "border-color .2s" }}
-            placeholder="Search locations — type and press Enter or Tab to add" />
-          <span style={{ position: "absolute", left: 10, top: wizTrip.places.length > 0 ? "calc(100% - 30px)" : 12, fontSize: 14, pointerEvents: "none", opacity: 0.5 }}>📍</span>
-          {placeSuggestionsOpen && filteredPlaces.length > 0 && (
-            <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", maxHeight: 200, overflowY: "auto", marginTop: 2 }}>
-              {filteredPlaces.map(loc => (
-                <div key={loc} onMouseDown={e => e.preventDefault()} onClick={() => addPlace(loc)}
-                  style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", borderBottom: `.5px solid ${T.border}`, fontFamily: T.font, transition: "background .1s" }}
+        {/* ── Where ── */}
+        <div style={cardStyle}>
+          <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" required error={wizShowErrors && !wizTrip.name.trim() ? "Give your trip a name" : undefined} />
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            {sectionLabel("Where to", true)}
+            {wizTrip.places.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {wizTrip.places.map(p => (
+                  <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px 6px 12px", borderRadius: 20, fontSize: 13, background: T.al, color: T.ad, fontWeight: 500, fontFamily: T.font }}>
+                    {p} <span onClick={() => removePlace(p)} style={{ width: 18, height: 18, borderRadius: "50%", background: T.ad + "20", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 11, lineHeight: 1 }}>×</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input value={placeInput}
+              onChange={e => { setPlaceInput(e.target.value); setPlaceSuggestionsOpen(true); }}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === "Tab") { if (placeInput.trim()) { e.preventDefault(); addPlace(); } } }}
+              onFocus={() => { if (placeInput.trim()) setPlaceSuggestionsOpen(true); }}
+              onBlur={() => setTimeout(() => setPlaceSuggestionsOpen(false), 200)}
+              style={{ width: "100%", padding: "9px 12px", border: `.5px solid ${wizShowErrors && !wizTrip.places.length ? T.red + "80" : T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none", minHeight: 40, transition: "border-color .2s" }}
+              placeholder="Search destinations..." />
+            {wizShowErrors && !wizTrip.places.length && <p style={{ fontSize: 11, color: T.red, marginTop: 4 }}>Add at least one destination</p>}
+            {placeSuggestionsOpen && filteredPlaces.length > 0 && (
+              <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", maxHeight: 200, overflowY: "auto", marginTop: 2 }}>
+                {filteredPlaces.map(loc => (
+                  <div key={loc} onMouseDown={e => e.preventDefault()} onClick={() => addPlace(loc)}
+                    style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", borderBottom: `.5px solid ${T.border}`, fontFamily: T.font, transition: "background .1s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.s2}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    {loc}
+                  </div>
+                ))}
+              </div>
+            )}
+            {placeSuggestionsOpen && placeInput.trim().length > 0 && filteredPlaces.length === 0 && (
+              <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", marginTop: 2 }}>
+                <div onMouseDown={e => e.preventDefault()} onClick={() => addPlace()}
+                  style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", fontFamily: T.font, color: T.a }}
                   onMouseEnter={e => e.currentTarget.style.background = T.s2}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  📍 {loc}
+                  + Add "{placeInput.trim()}"
                 </div>
-              ))}
-            </div>
-          )}
-          {placeSuggestionsOpen && placeInput.trim().length > 0 && filteredPlaces.length === 0 && (
-            <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", marginTop: 2 }}>
-              <div onMouseDown={e => e.preventDefault()} onClick={() => addPlace()}
-                style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", fontFamily: T.font, color: T.a }}
-                onMouseEnter={e => e.currentTarget.style.background = T.s2}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                + Add "{placeInput.trim()}" as custom location
               </div>
-            </div>
+            )}
+          </div>
+          {sectionLabel("When")}
+          <div style={{ display: "flex", gap: 8, marginBottom: 0 }}>
+            <ControlledField label="" type="date" value={wizTrip.start} onChange={v => setWizTrip(prev => ({ ...prev, start: v }))} style={{ flex: 1, marginBottom: 0 }} />
+            <span style={{ alignSelf: "center", color: T.t3, fontSize: 12, padding: "0 2px" }}>to</span>
+            <ControlledField label="" type="date" value={wizTrip.end} onChange={v => setWizTrip(prev => ({ ...prev, end: v }))} style={{ flex: 1, marginBottom: 0 }} min={wizTrip.start || undefined} />
+          </div>
+          {tripDays && <p style={{ fontSize: 12, color: T.ad, fontWeight: 500, marginTop: 6 }}>{tripDays} day{tripDays > 1 ? "s" : ""}</p>}
+        </div>
+
+        {/* ── How ── */}
+        <div style={cardStyle}>
+          {sectionLabel("How are you getting there")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+            {[["Flight", "✈️"], ["EV vehicle", "⚡"], ["Non-EV vehicle", "🚗"], ["Train", "🚆"], ["Walking", "🚶"], ["Bicycle", "🚲"]].map(([o, icon]) => {
+              const active = wizTrip.travel.has(o);
+              return (
+                <div key={o} onClick={() => setWizTrip(prev => { const s = new Set(prev.travel); s.has(o) ? s.delete(o) : s.add(o); return { ...prev, travel: s }; })}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 6px", borderRadius: T.rs, border: `.5px solid ${active ? T.a : T.border}`, background: active ? T.al : T.s2, cursor: "pointer", transition: "all .15s" }}>
+                  <span style={{ fontSize: 20 }}>{icon}</span>
+                  <span style={{ fontSize: 11, fontWeight: active ? 600 : 400, color: active ? T.ad : T.t2, fontFamily: T.font }}>{o}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {hasDrivingMode && (
+            <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
+              placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 route" />
           )}
-        </div>
-        {wizShowErrors && !wizTrip.places.length && <p style={{ fontSize: 11, color: T.red, marginTop: -10, marginBottom: 10 }}>Add at least one destination to continue</p>}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Mode of travel</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {[["Flight", "✈️"], ["EV vehicle", "⚡"], ["Non-EV vehicle", "🚗"], ["Train", "🚆"], ["Walking", "🚶"], ["Bicycle", "🚲"]].map(([o, icon]) => (
-              <span key={o} onClick={() => setWizTrip(prev => { const s = new Set(prev.travel); s.has(o) ? s.delete(o) : s.add(o); return { ...prev, travel: s }; })}
-                style={{ ...css.chip, ...(wizTrip.travel.has(o) ? css.chipActive : {}), display: "flex", alignItems: "center", gap: 4 }}>{icon} {o}</span>
-            ))}
+
+          {sectionLabel("Budget")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[["Budget", "💰", "Keep it lean"], ["Mid-range", "💳", "Balanced spend"], ["Luxury", "💎", "Treat yourself"], ["No limit", "✨", "Sky's the limit"]].map(([o, icon, desc]) => {
+              const active = wizTrip.budget === o;
+              return (
+                <div key={o} onClick={() => setWizTrip(prev => ({ ...prev, budget: prev.budget === o ? "" : o }))}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: T.rs, border: `.5px solid ${active ? T.a : T.border}`, background: active ? T.al : T.s2, cursor: "pointer", transition: "all .15s" }}>
+                  <span style={{ fontSize: 18 }}>{icon}</span>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? T.ad : T.t, fontFamily: T.font }}>{o}</p>
+                    <p style={{ fontSize: 10, color: T.t3, fontFamily: T.font }}>{desc}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
-          placeholder="Postcode or city — e.g. Manchester, M1 2AB" icon="🏠" hint="Helps plan your Day 1 route and departure time" />
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Budget per person</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {[["Budget", "💰"], ["Mid-range", "💳"], ["Luxury", "💎"], ["No limit", "🤑"]].map(([o, icon]) => (
-              <span key={o} onClick={() => setWizTrip(prev => ({ ...prev, budget: o }))}
-                style={{ ...css.chip, ...(wizTrip.budget === o ? css.chipActive : {}), cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>{icon} {o}</span>
-            ))}
+
+        {/* ── Optional brief ── */}
+        {wizTrip.brief || wizTrip._showBrief ? (
+          <div style={cardStyle}>
+            <ControlledField label="Trip brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="Who's going, what kind of experience you want..." hint="Helps the AI personalise your itinerary" />
           </div>
-        </div>
+        ) : (
+          <button onClick={() => setWizTrip(prev => ({ ...prev, _showBrief: true }))}
+            style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "12px 16px", background: T.s2, border: `.5px dashed ${T.border}`, borderRadius: T.r, cursor: "pointer", fontFamily: T.font, fontSize: 13, color: T.t2, marginBottom: 12, transition: "background .15s" }}
+            onMouseEnter={e => e.currentTarget.style.background = T.s3}
+            onMouseLeave={e => e.currentTarget.style.background = T.s2}>
+            + Add a trip description <span style={{ fontSize: 11, color: T.t3, marginLeft: "auto" }}>Optional</span>
+          </button>
+        )}
       </>
     );
   };
