@@ -2711,13 +2711,15 @@ export default function TripWithMeApp() {
         const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
         if (itemTitle && itemTitle.length > 2) {
           // Add a specific named item to the specified day
-          const newItem = { time: "12:00 PM", title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
+          const newItem = { time: "12:30 PM", title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
           setCreatedTrips(prev => prev.map(t => {
             if (t.id !== tripId) return t;
             const tl = t.timeline || {};
             return { ...t, timeline: { ...tl, [targetDay]: [...(tl[targetDay] || []), newItem] } };
           }));
-          reply = `✅ Added **${itemTitle}** to **Day ${targetDay}** in ${firstLoc}. Switch to the Itinerary tab to see it — tap ✏️ to adjust the time.`;
+          // Auto-switch to itinerary on the added day
+          setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+          reply = `✅ Added **${itemTitle}** to **Day ${targetDay}** in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
         } else {
           addTimelineItem(tripId);
           reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
@@ -5405,7 +5407,7 @@ export default function TripWithMeApp() {
                                     {Array.from({ length: tripDays }, (_, d) => d + 1).map(day => (
                                       <button key={day} onClick={() => {
                                         const curLoc = trip.places?.[(day - 1) % (trip.places?.length || 1)] || "your destination";
-                                        const newItem = { time: "12:00 PM", title: item, desc: `${curLoc} \u00B7 Added from chat`, group: "Everyone", color: T.blue };
+                                        const newItem = { time: "12:30 PM", title: item, desc: `${curLoc} · Added from chat`, group: "Everyone", color: T.blue };
                                         setCreatedTrips(prev => prev.map(t => {
                                           if (t.id !== trip.id) return t;
                                           const tl = t.timeline || {};
@@ -5413,6 +5415,9 @@ export default function TripWithMeApp() {
                                         }));
                                         showToast(`Added "${item}" to Day ${day}`);
                                         setChatAddDayPicker(null);
+                                        // Auto-switch to itinerary tab on the added day
+                                        setSelectedDay(day);
+                                        setTripDetailTab("itinerary");
                                       }}
                                         style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
                                           background: day === selectedDay ? T.a : T.s2, color: day === selectedDay ? "#fff" : T.t1, border: `.5px solid ${day === selectedDay ? T.ad : T.border}` }}>
