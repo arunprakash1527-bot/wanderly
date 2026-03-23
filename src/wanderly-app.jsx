@@ -1688,6 +1688,46 @@ export default function TripWithMeApp() {
     .sort((a, b) => new Date(b.time) - new Date(a.time))
     .slice(0, 30);
 
+  // ─── Smart time slot finder for chat additions ───
+  const findSmartSlot = useCallback((tripId, day, itemType) => {
+    const trip = createdTrips.find(t => t.id === tripId);
+    const dayItems = (trip?.timeline || {})[day] || [];
+    const existingTimes = dayItems.map(item => {
+      const m = item.time?.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!m) return null;
+      let h = parseInt(m[1]); const min = parseInt(m[2]); const ampm = m[3].toUpperCase();
+      if (ampm === "PM" && h !== 12) h += 12; if (ampm === "AM" && h === 12) h = 0;
+      return h * 60 + min;
+    }).filter(Boolean);
+
+    const isRestaurant = /restaurant|food|eat|cafe|dinner|lunch|breakfast|brunch/i.test(itemType);
+    if (isRestaurant) {
+      // Try lunch first (12:30), then dinner (7:00), then breakfast (8:30)
+      const slots = [
+        { time: "12:30 PM", mins: 750, label: "Lunch" },
+        { time: "7:00 PM", mins: 1140, label: "Dinner" },
+        { time: "8:30 AM", mins: 510, label: "Breakfast" },
+        { time: "1:00 PM", mins: 780, label: "Lunch" },
+        { time: "6:30 PM", mins: 1110, label: "Dinner" },
+      ];
+      for (const slot of slots) {
+        if (!existingTimes.some(t => Math.abs(t - slot.mins) < 60)) return slot;
+      }
+      return { time: "12:30 PM", mins: 750, label: "Meal" };
+    }
+    // Activity — try morning, afternoon, evening
+    const actSlots = [
+      { time: "10:00 AM", mins: 600, label: "Morning" },
+      { time: "2:30 PM", mins: 870, label: "Afternoon" },
+      { time: "4:00 PM", mins: 960, label: "Afternoon" },
+      { time: "11:00 AM", mins: 660, label: "Morning" },
+    ];
+    for (const slot of actSlots) {
+      if (!existingTimes.some(t => Math.abs(t - slot.mins) < 45)) return slot;
+    }
+    return { time: "2:00 PM", mins: 840, label: "Activity" };
+  }, [createdTrips]);
+
   // ─── WhatsApp share helper ───
   const shareToWhatsApp = (tripName, message, tripId) => {
     const link = `${window.location.origin}/join/${tripId}`;
@@ -2758,8 +2798,9 @@ export default function TripWithMeApp() {
         const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
         const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
         if (itemTitle && itemTitle.length > 2) {
-          // Add a specific named item to the specified day
-          const newItem = { time: "12:30 PM", title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
+          // Add a specific named item to the specified day — smart time slot
+          const smartSlot = findSmartSlot(tripId, targetDay, lower);
+          const newItem = { time: smartSlot.time, title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
           setCreatedTrips(prev => prev.map(t => {
             if (t.id !== tripId) return t;
             const tl = t.timeline || {};
@@ -2768,7 +2809,7 @@ export default function TripWithMeApp() {
           logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
           // Auto-switch to itinerary on the added day
           setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
-          reply = `✅ Added **${itemTitle}** to **Day ${targetDay}** in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
+          reply = `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
         } else {
           addTimelineItem(tripId);
           reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
@@ -5465,79 +5506,150 @@ export default function TripWithMeApp() {
             )}
 
             {/* ── CHAT TAB ── */}
-            {tripDetailTab === "chat" && (
-              <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+            {tripDetailTab === "chat" && (() => {
+              const tripDays = trip.start && trip.end ? Math.max(1, Math.ceil((new Date(trip.end) - new Date(trip.start)) / 86400000) + 1) : Object.keys(trip.timeline || {}).length || 5;
+              const currentLoc = trip.places?.[(selectedDay - 1) % (trip.places?.length || 1)] || "this area";
+
+              // Parse structured suggestion cards from AI messages
+              const parseSuggestions = (text) => {
+                const items = [];
+                const lines = text.split("\n");
+                let current = null;
+                for (const line of lines) {
+                  // Match "1. **Name** ..." or "- **Name** ..."
+                  const m = line.match(/^\s*(?:\d+\.\s*|\-\s*)\*\*([^*]+)\*\*\s*(.*)/);
+                  if (m) {
+                    if (current) items.push(current);
+                    const name = m[1].trim();
+                    const rest = m[2].replace(/^[\s\-–—·]+/, "").trim();
+                    // Extract rating, price, type hints from the rest
+                    const ratingM = rest.match(/(\d\.\d)★/);
+                    const priceM = rest.match(/(£{1,4})/);
+                    const isRestaurant = /restaurant|food|eat|seafood|cuisine|cafe|bistro|bakery|dining|grill|kitchen/i.test(rest + " " + name);
+                    current = { name, desc: rest, rating: ratingM ? ratingM[1] : null, price: priceM ? priceM[1] : null, isRestaurant };
+                  } else if (current && line.match(/^\s{2,}/) && !line.match(/^\s*(\*|#|Pro|💡|Say)/)) {
+                    current.address = line.trim();
+                  }
+                }
+                if (current) items.push(current);
+                return items;
+              };
+
+              // Render a suggestion card
+              const renderSuggestionCard = (item, msgIdx, itemIdx) => {
+                const addedKey = `${msgIdx}_${itemIdx}`;
+                const isAdded = chatAddDayPicker?.added === addedKey;
+                const showDayPicker = chatAddDayPicker?.msgIdx === msgIdx && chatAddDayPicker?.itemIdx === itemIdx && !isAdded;
+                const slot = findSmartSlot(trip.id, selectedDay, item.isRestaurant ? "restaurant" : "activity");
+
+                return (
+                  <div key={itemIdx} style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 6, transition: "all .15s" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: T.t1, marginBottom: 2 }}>{item.name}</p>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
+                          {item.rating && <span style={{ fontSize: 11, color: T.amber, fontWeight: 600 }}>{item.rating}★</span>}
+                          {item.price && <span style={{ fontSize: 11, color: T.green, fontWeight: 500 }}>{item.price}</span>}
+                          {item.isRestaurant && <span style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "1px 6px", borderRadius: 4 }}>🍽️ Restaurant</span>}
+                        </div>
+                        {item.desc && <p style={{ fontSize: 11, color: T.t3, lineHeight: 1.4 }}>{item.desc.replace(/[\d.]+★/g, "").replace(/£+/g, "").replace(/^\s*[,·\-–]\s*/, "").trim()}</p>}
+                      </div>
+                      {isAdded ? (
+                        <span style={{ fontSize: 11, color: T.a, fontWeight: 600, whiteSpace: "nowrap", padding: "6px 10px" }}>✓ Added</span>
+                      ) : (
+                        <button onClick={() => setChatAddDayPicker(showDayPicker ? null : { msgIdx, itemIdx })}
+                          style={{ background: T.al, color: T.ad, border: `1px solid ${T.a}40`, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: T.font, whiteSpace: "nowrap", flexShrink: 0 }}>
+                          + Add
+                        </button>
+                      )}
+                    </div>
+                    {showDayPicker && (
+                      <div style={{ marginTop: 8, padding: "8px 0", borderTop: `.5px solid ${T.border}` }}>
+                        <p style={{ fontSize: 10, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>Add to which day?</p>
+                        <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
+                          {Array.from({ length: tripDays }, (_, d) => d + 1).map(day => {
+                            const daySlot = findSmartSlot(trip.id, day, item.isRestaurant ? "restaurant" : "activity");
+                            const dayLoc = trip.places?.[(day - 1) % (trip.places?.length || 1)] || "";
+                            return (
+                              <button key={day} onClick={() => {
+                                const newItem = { time: daySlot.time, title: item.name, desc: `${dayLoc || currentLoc} · ${item.desc ? item.desc.slice(0, 40) : "Added from chat"}`, group: "Everyone", color: item.isRestaurant ? T.coral : T.blue };
+                                setCreatedTrips(prev => prev.map(t => {
+                                  if (t.id !== trip.id) return t;
+                                  const tl = t.timeline || {};
+                                  const dayTl = [...(tl[day] || []), newItem].sort((a, b) => {
+                                    const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+                                    return parseT(a.time) - parseT(b.time);
+                                  });
+                                  return { ...t, timeline: { ...tl, [day]: dayTl } };
+                                }));
+                                showToast(`Added "${item.name}" to Day ${day} · ${daySlot.label} (${daySlot.time})`);
+                                logActivity(trip.id, "📍", `Added "${item.name}" to Day ${day} · ${daySlot.time}`, "itinerary");
+                                setChatAddDayPicker({ added: `${msgIdx}_${itemIdx}` });
+                                setTimeout(() => setChatAddDayPicker(null), 2000);
+                              }}
+                                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "6px 12px", borderRadius: 8, cursor: "pointer", border: `.5px solid ${day === selectedDay ? T.a : T.border}`, background: day === selectedDay ? T.al : T.s, minWidth: 56, flexShrink: 0, fontFamily: T.font }}>
+                                <span style={{ fontSize: 12, fontWeight: day === selectedDay ? 700 : 500, color: day === selectedDay ? T.ad : T.t1 }}>Day {day}</span>
+                                <span style={{ fontSize: 9, color: T.t3 }}>{daySlot.label} · {daySlot.time}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+
+              return (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+                <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px", minHeight: 0 }}>
                   {tripChatMessages.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
+                    <div style={{ textAlign: "center", padding: "32px 12px", color: T.t3 }}>
                       <div style={{ fontSize: 28, marginBottom: 8 }}>💬</div>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>Chat with AI</p>
-                      <p style={{ fontSize: 12, lineHeight: 1.5 }}>Ask about restaurants, adjust times, add activities, get budget tips — anything about your trip.</p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 16 }}>
-                        {[`Find restaurants in ${trip.places?.[(selectedDay - 1) % (trip.places?.length || 1)] || "this area"}`, "Suggest kid-friendly activities", "What's the budget looking like?", "Regenerate itinerary"].map(q => (
+                      <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>Your trip concierge</p>
+                      <p style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 16 }}>Find restaurants, add activities, adjust plans — I know your preferences.</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 280, margin: "0 auto" }}>
+                        {[
+                          { q: `Find restaurants in ${currentLoc}`, icon: "🍽️" },
+                          { q: "Suggest activities for today", icon: "🎯" },
+                          { q: "What's the budget looking like?", icon: "💰" },
+                          { q: "Regenerate itinerary", icon: "🔄" },
+                        ].map(({ q, icon }) => (
                           <button key={q} onClick={() => { setTripChatInput(q); }} className="w-btn"
-                            style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.a, background: T.al, borderColor: T.a }}>
-                            {q}
+                            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: T.s, border: `.5px solid ${T.border}`, borderRadius: 10, fontSize: 12, color: T.t1, cursor: "pointer", fontFamily: T.font, textAlign: "left", transition: "all .15s" }}>
+                            <span style={{ fontSize: 16 }}>{icon}</span> {q}
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
                   {tripChatMessages.map((msg, i) => {
-                    // Extract actionable items from AI messages (lines starting with "- **Name**" or "1. **Name**")
-                    const actionItems = msg.role === "ai" ? (msg.text.match(/(?:^|\n)\s*(?:\d+\.\s*|\-\s*)\*\*([^*]+)\*\*/g) || []).map(m => {
-                      const match = m.match(/\*\*([^*]+)\*\*/);
-                      return match ? match[1].trim() : null;
-                    }).filter(Boolean).slice(0, 6) : [];
+                    const suggestions = msg.role === "ai" ? parseSuggestions(msg.text) : [];
+                    // Strip suggestion lines from the displayed text to avoid duplication
+                    let displayText = msg.text;
+                    if (suggestions.length > 0) {
+                      // Keep only non-list lines (headers, tips, pro tips)
+                      displayText = msg.text.split("\n").filter(line => {
+                        const isSuggestionLine = /^\s*(?:\d+\.\s*|\-\s*)\*\*[^*]+\*\*/.test(line);
+                        const isAddressLine = /^\s{2,}(?![\*#💡])/.test(line) && !/^\s*[\*#]/.test(line);
+                        return !isSuggestionLine && !isAddressLine;
+                      }).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+                    }
 
                     return (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
-                      <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 16, fontSize: 13, lineHeight: 1.5,
-                        background: msg.role === "user" ? T.a : T.s2, color: msg.role === "user" ? "#fff" : T.t1,
-                        borderBottomRightRadius: msg.role === "user" ? 4 : 16, borderBottomLeftRadius: msg.role === "user" ? 16 : 4,
-                        wordBreak: "break-word", overflowWrap: "break-word" }}
-                        dangerouslySetInnerHTML={{ __html: renderChatHtml(msg.text, msg.role === "user" ? "#fff" : T.a) }} />
-                      {/* Action buttons for AI suggestions */}
-                      {actionItems.length > 0 && (
-                        <div style={{ maxWidth: "85%", display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4, position: "relative" }}>
-                          {actionItems.map((item, j) => {
-                            const pickerOpen = chatAddDayPicker?.msgIdx === i && chatAddDayPicker?.itemIdx === j;
-                            const tripDays = trip.start && trip.end ? Math.max(1, Math.ceil((new Date(trip.end) - new Date(trip.start)) / 86400000) + 1) : Object.keys(trip.timeline || {}).length || 5;
-                            return (
-                              <div key={j} style={{ position: "relative" }}>
-                                <button onClick={() => setChatAddDayPicker(pickerOpen ? null : { msgIdx: i, itemIdx: j })}
-                                  className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 8px", borderRadius: 12,
-                                    color: T.a, background: T.al, borderColor: T.a }}>
-                                  + {item.length > 22 ? item.slice(0, 22) + "\u2026" : item}
-                                </button>
-                                {pickerOpen && (
-                                  <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: T.bg, border: `.5px solid ${T.border}`, borderRadius: 10, padding: 4, marginTop: 4, boxShadow: "0 4px 12px rgba(0,0,0,.12)", display: "flex", flexWrap: "wrap", gap: 3, minWidth: 140 }}>
-                                    {Array.from({ length: tripDays }, (_, d) => d + 1).map(day => (
-                                      <button key={day} onClick={() => {
-                                        const curLoc = trip.places?.[(day - 1) % (trip.places?.length || 1)] || "your destination";
-                                        const newItem = { time: "12:30 PM", title: item, desc: `${curLoc} · Added from chat`, group: "Everyone", color: T.blue };
-                                        setCreatedTrips(prev => prev.map(t => {
-                                          if (t.id !== trip.id) return t;
-                                          const tl = t.timeline || {};
-                                          return { ...t, timeline: { ...tl, [day]: [...(tl[day] || []), newItem] } };
-                                        }));
-                                        showToast(`Added "${item}" to Day ${day}`);
-                                        logActivity(trip.id, "📍", `Added "${item}" to Day ${day}`, "itinerary");
-                                        setChatAddDayPicker(null);
-                                        // Auto-switch to itinerary tab on the added day
-                                        setSelectedDay(day);
-                                        setTripDetailTab("itinerary");
-                                      }}
-                                        style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
-                                          background: day === selectedDay ? T.a : T.s2, color: day === selectedDay ? "#fff" : T.t1, border: `.5px solid ${day === selectedDay ? T.ad : T.border}` }}>
-                                        Day {day}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 10 }}>
+                      {/* Chat bubble */}
+                      {displayText && (
+                        <div style={{ maxWidth: "88%", padding: "10px 14px", borderRadius: 16, fontSize: 13, lineHeight: 1.5,
+                          background: msg.role === "user" ? T.a : T.s2, color: msg.role === "user" ? "#fff" : T.t1,
+                          borderBottomRightRadius: msg.role === "user" ? 4 : 16, borderBottomLeftRadius: msg.role === "user" ? 16 : 4,
+                          wordBreak: "break-word", overflowWrap: "break-word" }}
+                          dangerouslySetInnerHTML={{ __html: renderChatHtml(displayText, msg.role === "user" ? "#fff" : T.a) }} />
+                      )}
+                      {/* Structured suggestion cards */}
+                      {suggestions.length > 0 && (
+                        <div style={{ width: "100%", maxWidth: "92%", marginTop: 6 }}>
+                          {suggestions.map((item, j) => renderSuggestionCard(item, i, j))}
                         </div>
                       )}
                     </div>
@@ -5554,17 +5666,32 @@ export default function TripWithMeApp() {
                   )}
                   <div ref={tripChatEndRef} />
                 </div>
-                <div style={{ padding: "12px 20px", borderTop: `.5px solid ${T.border}`, background: T.s }}>
+                {/* Day context bar */}
+                <div style={{ padding: "6px 16px", background: T.s2, borderTop: `.5px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 11, color: T.t3 }}>Chatting about:</span>
+                  <div style={{ display: "flex", gap: 4, overflowX: "auto" }}>
+                    {Array.from({ length: Math.min(tripDays, 7) }, (_, d) => d + 1).map(day => (
+                      <button key={day} onClick={() => setSelectedDay(day)}
+                        style={{ padding: "3px 10px", borderRadius: 12, fontSize: 10, fontWeight: day === selectedDay ? 700 : 400, border: "none", cursor: "pointer", fontFamily: T.font,
+                          background: day === selectedDay ? T.a : "transparent", color: day === selectedDay ? "#fff" : T.t3 }}>
+                        D{day}
+                      </button>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 10, color: T.t2, fontWeight: 500, marginLeft: "auto" }}>{currentLoc}</span>
+                </div>
+                <div style={{ padding: "10px 16px", borderTop: `.5px solid ${T.border}`, background: T.s }}>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input value={tripChatInput} onChange={e => setTripChatInput(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
                       style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 13, background: "#fff", outline: "none" }}
-                      placeholder="Ask about your trip..." aria-label="Trip chat input" />
-                    <button onClick={() => handleTripChat(trip.id)} aria-label="Send trip message" style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 12 }}>Send</button>
+                      placeholder={`Ask about ${currentLoc}...`} aria-label="Trip chat input" />
+                    <button onClick={() => handleTripChat(trip.id)} aria-label="Send trip message" style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 16px", fontSize: 12 }}>Send</button>
                   </div>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* ── POLLS TAB ── */}
             {tripDetailTab === "polls" && (
