@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from "../supabaseClient";
 import { T } from "../styles/tokens";
 import { POLLS } from "../constants/tripData";
+import { API } from "../constants/api";
 import { mapTripFromDB, mapTripForInsert, mapTravellersForInsert, mapStaysForInsert, mapPrefsForInsert } from "../utils/tripMappers";
 import { getLocationActivities, estimateTravelHours } from "../utils/locationHelpers";
 import { useAuth } from "./AuthContext";
@@ -729,7 +730,7 @@ export function TripProvider({ children }) {
       try {
         const enriched = await Promise.all(evItems.map(async (ev) => {
           const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
-          const res = await fetch("/api/places", {
+          const res = await fetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),
@@ -860,7 +861,7 @@ export function TripProvider({ children }) {
       try {
         const enriched = await Promise.all(evItems.map(async (ev) => {
           const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
-          const res = await fetch("/api/places", {
+          const res = await fetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),

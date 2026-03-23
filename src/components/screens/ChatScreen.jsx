@@ -2,6 +2,7 @@ import React from 'react';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { TRIP, DAYS, TIMELINE, POLLS } from '../../constants/tripData';
+import { API } from '../../constants/api';
 import { Tag } from '../common/Tag';
 import { Avatar } from '../common/Avatar';
 import { TabBar } from '../common/TabBar';
@@ -341,7 +342,7 @@ export function ChatScreen() {
           const body = lat && lng
             ? { location: { lat, lng }, type: searchType, radius: 8000 }
             : { query: `${searchType} near ${fallbackLoc}`, radius: 8000 };
-          const res = await fetch("/api/places", {
+          const res = await fetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -398,7 +399,7 @@ export function ChatScreen() {
 
     try {
       const gps = isPlaceSearch ? await getGpsContext() : null;
-      const res = await fetch("/api/chat", {
+      const res = await fetch(API.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

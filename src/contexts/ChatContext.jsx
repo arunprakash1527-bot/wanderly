@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { T } from "../styles/tokens";
-import { DAYS, TIMELINE, POLLS, TRIP } from "../constants/tripData";
+import { API } from "../constants/api";
 import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
@@ -112,7 +112,7 @@ export function ChatProvider({ children }) {
           const body = lat && lng
             ? { location: { lat, lng }, type: "electric_vehicle_charging_station", radius: 15000 }
             : { query: `EV charging stations near ${firstLoc}`, radius: 15000 };
-          const res = await fetch("/api/places", {
+          const res = await fetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -196,7 +196,7 @@ export function ChatProvider({ children }) {
           const body = lat && lng
             ? { location: { lat, lng }, type: searchType, radius: 5000 }
             : { query: `${searchType} near ${firstLoc}`, radius: 5000 };
-          const res = await fetch("/api/places", {
+          const res = await fetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -242,7 +242,7 @@ export function ChatProvider({ children }) {
 
     // Try Claude API first for richer, context-aware responses
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch(API.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -288,7 +288,7 @@ export function ChatProvider({ children }) {
         const doPlacesSearch = async (gpsLat, gpsLng) => {
           const body = { query: searchQuery, type: "restaurant" };
           if (gpsLat && gpsLng) { body.location = { lat: gpsLat, lng: gpsLng }; body.radius = 5000; }
-          const placesRes = await fetch("/api/places", {
+          const placesRes = await fetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -400,88 +400,78 @@ export function ChatProvider({ children }) {
     }, Math.min(2500, Math.max(800, 1200)));
   };
 
-  // ─── Day-Aware Chat Greeting ───
+  // ─── Day-Aware Chat Greeting (uses real trip data) ───
   const buildDayGreeting = useCallback((dayNum) => {
-    const day = DAYS[dayNum - 1];
-    const items = TIMELINE[dayNum] || [];
-    const totalDays = DAYS.length;
+    const trip = selectedCreatedTrip || createdTrips[0];
+    if (!trip) return `Welcome to Trip With Me! Create a trip to get started.`;
+
+    const places = trip.places || [];
+    const stays = trip.stays || [];
+    const travelModes = trip.travel || [];
+    const travelMode = Array.isArray(travelModes) ? travelModes[0] : (travelModes instanceof Set ? [...travelModes][0] : travelModes) || "car";
+    const modeIcon = String(travelMode).toLowerCase().includes("ev") ? "\uD83D\uDD0B" : String(travelMode).toLowerCase().includes("flight") ? "\u2708\uFE0F" : String(travelMode).toLowerCase().includes("train") ? "\uD83D\uDE86" : "\uD83D\uDE97";
+
+    // Calculate total days
+    const numDays = trip.rawStart && trip.rawEnd
+      ? Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1)
+      : places.length || 3;
     const isFirstDay = dayNum === 1;
-    const isLastDay = dayNum === totalDays;
-    const { temp, cond, icon } = day.weather;
-    const loc = day.location;
-    const bookingsNeeded = items.filter(it => it.needsBooking).map(it => `${it.title} (${it.price})`);
-    const activePolls = POLLS.filter(p => p.status === "active");
+    const isLastDay = dayNum >= numDays;
+
+    // Figure out today's location from stays or places
+    const currentLocation = places[Math.min(dayNum - 1, places.length - 1)] || places[0] || "your destination";
+    const currentStay = stays.find((s, i) => {
+      if (!s.checkIn || !s.checkOut) return i === 0;
+      const ci = new Date(s.checkIn + "T12:00:00");
+      const co = new Date(s.checkOut + "T12:00:00");
+      const tripStart = trip.rawStart ? new Date(trip.rawStart + "T12:00:00") : ci;
+      const dayDate = new Date(tripStart.getTime() + (dayNum - 1) * 86400000);
+      return dayDate >= ci && dayDate < co;
+    }) || stays[0];
+
+    // Timeline items for this day
+    const dayTimeline = trip.timeline?.[dayNum] || [];
+    const highlights = dayTimeline.slice(0, 3).map(it => `${it.time || ""} ${it.title}`).join("\n").trim();
 
     if (isFirstDay) {
-      const stay = TRIP.stays[0];
-      const travelMode = TRIP.travelMode || "car";
-      const modeIcon = travelMode.toLowerCase().includes("ev") ? "🔋" : travelMode.toLowerCase().includes("flight") ? "✈️" : travelMode.toLowerCase().includes("train") ? "🚆" : "🚗";
-      if (TRIP.startLocation) {
-        // Start location known — go straight to route suggestion
-        setChatFlowStep("ask_pickups");
-        setChatFlowData({ startLocation: TRIP.startLocation });
-        return `${modeIcon} **Travel day — heading to ${loc}!**\n\n**From:** ${TRIP.startLocation}\n**To:** ${stay ? stay.name : loc}\n**Mode:** ${travelMode}\n**Weather at destination:** ${temp}°C ${icon} ${cond}\n\nAnyone to pick up along the way?`;
+      setChatFlowStep(trip.startLocation ? "ask_pickups" : "ask_start");
+      setChatFlowData(trip.startLocation ? { startLocation: trip.startLocation } : {});
+      let msg = `${modeIcon} **Travel day \u2014 heading to ${currentLocation}!**\n\n`;
+      if (trip.startLocation) msg += `**From:** ${trip.startLocation}\n`;
+      if (currentStay) msg += `**Staying at:** ${currentStay.name}\n`;
+      msg += `**Mode:** ${travelMode}\n`;
+      if (trip.startLocation) {
+        msg += `\nAnyone to pick up along the way?`;
       } else {
-        // Need to ask for start location
-        setChatFlowStep("ask_start");
-        setChatFlowData({});
-        return `${modeIcon} **Travel day — heading to ${loc}!**\n\n**Staying at:** ${stay ? stay.name + " (" + stay.tags.join(", ") + ")" : loc}\n**Mode:** ${travelMode}\n**Weather at destination:** ${temp}°C ${icon} ${cond}\n\nWhere are you starting from? Enter your postcode or city so I can plan your route.`;
+        msg += `\nWhere are you starting from? Enter your postcode or city so I can plan your route.`;
       }
+      return msg;
     }
 
     if (isLastDay) {
-      const stay = TRIP.stays[TRIP.stays.length - 1];
-      const travelMode = TRIP.travelMode || "car";
-      const modeIcon = travelMode.toLowerCase().includes("ev") ? "🔋" : travelMode.toLowerCase().includes("flight") ? "✈️" : travelMode.toLowerCase().includes("train") ? "🚆" : "🚗";
-      if (TRIP.startLocation) {
-        // Home location known — skip ask_home, go to departure time
-        setChatFlowStep("ask_departure_time");
-        setChatFlowData({ homeLocation: TRIP.startLocation });
-        return `🏠 **Final day — heading back to ${TRIP.startLocation}!**\n\n${modeIcon} **From:** ${stay ? stay.name + ", " : ""}${loc}\n**To:** ${TRIP.startLocation}\n**Mode:** ${travelMode}\n**Weather:** ${temp}°C ${icon} ${cond}\n\nWhat time would you like to leave?`;
-      } else {
-        setChatFlowStep("ask_home");
-        setChatFlowData({});
-        return `🏠 **Final day — time to head home!**\n\n**From:** ${stay ? stay.name + ", " : ""}${loc}\n**Weather:** ${temp}°C ${icon} ${cond}\n\nWhere are you heading home to? I'll plan your departure with the best stops.`;
-      }
+      setChatFlowStep(trip.startLocation ? "ask_departure_time" : "ask_home");
+      setChatFlowData(trip.startLocation ? { homeLocation: trip.startLocation } : {});
+      let msg = `\uD83C\uDFE0 **Final day \u2014 ${trip.startLocation ? `heading back to ${trip.startLocation}!` : "time to head home!"}**\n\n`;
+      msg += `${modeIcon} **From:** ${currentStay ? currentStay.name + ", " : ""}${currentLocation}\n`;
+      if (trip.startLocation) msg += `**To:** ${trip.startLocation}\n`;
+      msg += `\n${trip.startLocation ? "What time would you like to leave?" : "Where are you heading home to? I'll plan your departure with the best stops."}`;
+      return msg;
     }
 
-    // Middle days — activity-focused, anchored to current stay
+    // Middle days
     setChatFlowStep(null);
     setChatFlowData({});
-    // Find which stay covers this day
-    let currentStay = null;
-    let nightsSoFar = 0;
-    for (const stay of TRIP.stays) {
-      if (dayNum >= nightsSoFar + 1 && dayNum <= nightsSoFar + stay.nights) {
-        currentStay = stay;
-        break;
-      }
-      nightsSoFar += stay.nights;
-    }
-
-    const adultItems = items.filter(it => it.for === "adults");
-    const kidItems = items.filter(it => it.for === "kids");
-    const allItems = items.filter(it => it.for === "all");
-
-    let msg = `Good morning! Day ${dayNum} in **${loc}** · ${temp}°C ${icon} ${cond}\n\n`;
+    let msg = `Good morning! Day ${dayNum} in **${currentLocation}**\n\n`;
     if (currentStay) {
-      msg += `🏨 Your base today: **${currentStay.name}** (${currentStay.type})\n`;
-      if (currentStay.tags.length) msg += `${currentStay.tags.join(" · ")}\n`;
-      msg += `\n`;
+      msg += `\uD83C\uDFE8 Your base today: **${currentStay.name}**${currentStay.type ? ` (${currentStay.type})` : ""}\n\n`;
     }
-
-    if (adultItems.length && kidItems.length) {
-      msg += `I've split activities today:\n**Adults:** ${adultItems.map(it => it.title).join(", ")}\n**Kids:** ${kidItems.map(it => it.title).join(", ")}\n`;
-      const meetup = allItems.find(it => it.title.toLowerCase().includes("lunch"));
-      if (meetup) msg += `Everyone meets at **${meetup.title.replace("Lunch at ", "")}** for lunch.\n`;
+    if (highlights) {
+      msg += highlights + "\n";
     } else {
-      const highlights = items.slice(0, 3).map(it => `${it.time} — ${it.title}`).join("\n");
-      if (highlights) msg += highlights + "\n";
+      msg += `Ask me for restaurant recommendations, activities, or anything else in **${currentLocation}**!`;
     }
-    if (bookingsNeeded.length) msg += `\n📋 **Needs confirmation:** ${bookingsNeeded.join(", ")}`;
-    if (activePolls.length) msg += `\n🗳️ ${activePolls.length} active poll${activePolls.length > 1 ? "s" : ""} — cast your vote!`;
     return msg;
-  }, []);
+  }, [selectedCreatedTrip, createdTrips]);
 
   // Initialize chat greeting when entering chat or switching days
   useEffect(() => {

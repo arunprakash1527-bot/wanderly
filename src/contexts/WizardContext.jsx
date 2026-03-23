@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { REGION_SUGGESTIONS } from "../constants/regions";
+import { API } from "../constants/api";
 
 const WizardContext = createContext(null);
 
@@ -50,7 +51,7 @@ export function WizardProvider({ children }) {
       try {
         const locationName = wizTrip.places.length > 0 ? wizTrip.places[0] : "";
         const query = locationName ? `${value} near ${locationName}` : value;
-        const res = await fetch("/api/places", {
+        const res = await fetch(API.PLACES, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query, type: "lodging" }),
@@ -91,7 +92,7 @@ export function WizardProvider({ children }) {
     const fetchPlacesSuggestions = async () => {
       // Fetch food suggestions
       try {
-        const foodRes = await fetch("/api/places", {
+        const foodRes = await fetch(API.PLACES, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: `best restaurants in ${locationName}`, type: "restaurant" }),
@@ -110,7 +111,7 @@ export function WizardProvider({ children }) {
 
       // Fetch activity suggestions
       try {
-        const actRes = await fetch("/api/places", {
+        const actRes = await fetch(API.PLACES, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: `things to do in ${locationName}`, type: "tourist_attraction" }),
