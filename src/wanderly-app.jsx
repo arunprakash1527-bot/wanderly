@@ -1203,6 +1203,8 @@ export default function TripWithMeApp() {
         }
       } catch (e) { /* local state already has the expense */ }
       showToast("Expense added");
+      const expTrip = selectedCreatedTrip || createdTrips[0];
+      if (expTrip?.id) logActivity(expTrip.id, "💰", `Added expense: ${expenseTitle} (${expenseCurrency}${expenseAmount})`, "expense");
     }
     resetExpenseForm();
   };
@@ -1631,7 +1633,7 @@ export default function TripWithMeApp() {
       setSaving(false);
       navigate("createdTrip");
     } else {
-      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], polls: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
+      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], polls: [], activity: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
       setCreatedTrips(prev => [newTrip, ...prev]);
       // Save to Supabase
       if (user && user.id !== 'demo') {
@@ -1650,6 +1652,20 @@ export default function TripWithMeApp() {
       setSelectedCreatedTrip(newTrip);
       navigate("createdTrip");
     }
+  };
+
+  // ─── Activity log helper ───
+  const logActivity = (tripId, icon, text, type = "info") => {
+    const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "You";
+    const entry = { id: Date.now(), icon, text, by: userName, time: new Date().toISOString(), type };
+    setCreatedTrips(prev => prev.map(t => t.id === tripId ? { ...t, activity: [entry, ...(t.activity || [])].slice(0, 50) } : t));
+  };
+
+  // ─── WhatsApp share helper ───
+  const shareToWhatsApp = (tripName, message, tripId) => {
+    const link = `${window.location.origin}/join/${tripId}`;
+    const text = `${message}\n\n${tripName} on TripWithMe\n${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const deleteCreatedTrip = async (id) => {
@@ -2321,6 +2337,7 @@ export default function TripWithMeApp() {
       if (t.id !== id) return { ...t, status: t.status === "live" ? "new" : t.status };
       return updated;
     }));
+    logActivity(id, "🚀", "Trip activated — itinerary generated!", "milestone");
     setShowActivationModal(false);
     setPendingActivationTripId(null);
     setSelectedDay(1);
@@ -2720,6 +2737,7 @@ export default function TripWithMeApp() {
             const tl = t.timeline || {};
             return { ...t, timeline: { ...tl, [targetDay]: [...(tl[targetDay] || []), newItem] } };
           }));
+          logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
           // Auto-switch to itinerary on the added day
           setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
           reply = `✅ Added **${itemTitle}** to **Day ${targetDay}** in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
@@ -4445,6 +4463,7 @@ export default function TripWithMeApp() {
     if (tripId) {
       // Add to created trip's polls
       setCreatedTrips(prev => prev.map(t => t.id === tripId ? { ...t, polls: [newPoll, ...(t.polls || [])] } : t));
+      logActivity(tripId, "🗳️", `Created poll: "${newPollQuestion.trim()}"`, "poll");
     } else {
       // Demo trip
       setPollData(prev => [newPoll, ...prev]);
@@ -4583,6 +4602,9 @@ export default function TripWithMeApp() {
           });
         } catch (err) { /* table may not exist yet */ }
       }
+    }
+    if (files.length > 0 && trip?.id) {
+      logActivity(trip.id, "📸", `Added ${files.length} photo${files.length > 1 ? "s" : ""} to memories`, "photo");
     }
     e.target.value = "";
   };
@@ -5128,7 +5150,10 @@ export default function TripWithMeApp() {
               <button className="w-tab" style={tripTabStyle("polls")} onClick={() => setTripDetailTab("polls")}>Polls</button>
               <button className="w-tab" style={tripTabStyle("expenses")} onClick={() => setTripDetailTab("expenses")}>Expenses</button>
               <button className="w-tab" style={tripTabStyle("memories")} onClick={() => setTripDetailTab("memories")}>Memories</button>
-              <button className="w-tab" style={tripTabStyle("info")} onClick={() => setTripDetailTab("info")}>Info</button>
+              <button className="w-tab" style={{ ...tripTabStyle("activity"), position: "relative" }} onClick={() => setTripDetailTab("activity")}>
+                Activity
+                {(trip.activity || []).length > 0 && tripDetailTab !== "activity" && <span style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, borderRadius: "50%", background: T.coral }} />}
+              </button>
             </div>
 
             {/* ── ITINERARY TAB ── */}
@@ -5423,6 +5448,7 @@ export default function TripWithMeApp() {
                                           return { ...t, timeline: { ...tl, [day]: [...(tl[day] || []), newItem] } };
                                         }));
                                         showToast(`Added "${item}" to Day ${day}`);
+                                        logActivity(trip.id, "📍", `Added "${item}" to Day ${day}`, "itinerary");
                                         setChatAddDayPicker(null);
                                         // Auto-switch to itinerary tab on the added day
                                         setSelectedDay(day);
@@ -5540,7 +5566,7 @@ export default function TripWithMeApp() {
                       <span>{poll.options.reduce((s, o) => s + (o.voters?.length || 0), 0)} votes · by {poll.by}</span>
                       <div style={{ display: "flex", gap: 6 }}>
                         {poll.status === "active" && (
-                          <button onClick={(e) => { e.stopPropagation(); setCreatedTrips(prev => prev.map(t => t.id !== trip.id ? t : { ...t, polls: (t.polls || []).map(p => p.id === poll.id ? { ...p, status: "closed" } : p) })); showToast("Poll closed"); }}
+                          <button onClick={(e) => { e.stopPropagation(); setCreatedTrips(prev => prev.map(t => t.id !== trip.id ? t : { ...t, polls: (t.polls || []).map(p => p.id === poll.id ? { ...p, status: "closed" } : p) })); logActivity(trip.id, "🗳️", `Poll closed: "${poll.q}"`, "poll"); showToast("Poll closed"); }}
                             style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", color: T.red, borderColor: T.red }}>Close poll</button>
                         )}
                         {poll.status === "closed" && (() => {
@@ -5975,61 +6001,100 @@ export default function TripWithMeApp() {
             })()}
 
             {/* ── INFO TAB ── */}
-            {tripDetailTab === "info" && (
+            {tripDetailTab === "activity" && (() => {
+              const activities = trip.activity || [];
+              const formatAgo = (iso) => {
+                const diff = Date.now() - new Date(iso).getTime();
+                if (diff < 60000) return "Just now";
+                if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                return `${Math.floor(diff / 86400000)}d ago`;
+              };
+              const tripLink = `${window.location.origin}?join=${trip.shareCode || trip.dbId || trip.id}`;
+              return (
               <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-                {/* Share & Invite */}
+                {/* ── WhatsApp share ── */}
+                <div style={{ ...css.card, marginBottom: 12, padding: 14, background: "#E8F5E8", borderColor: "#25D366" }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: "#128C7E", marginBottom: 8 }}>Share with your group</p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => shareToWhatsApp(trip.name, `Check out our trip plan for ${trip.places.join(", ")}! 🗺️`, trip.dbId || trip.id)}
+                      style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rs, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
+                      <span style={{ fontSize: 16 }}>💬</span> Share trip
+                    </button>
+                    <button onClick={() => { const activePolls = (trip.polls || []).filter(p => p.status === "active"); if (!activePolls.length) { showToast("No active polls to share"); return; } shareToWhatsApp(trip.name, `🗳️ Vote on: "${activePolls[0].q}"\n${activePolls[0].options.map(o => `• ${o.text}`).join("\n")}`, trip.dbId || trip.id); }}
+                      style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px", background: "#128C7E", color: "#fff", border: "none", borderRadius: T.rs, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
+                      <span style={{ fontSize: 16 }}>🗳️</span> Share poll
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Share & Invite ── */}
                 {trip.shareCode && (
-                  <div style={{ marginBottom: 16 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Share & Invite</p>
-                    <div className="w-card" style={{ ...css.card, borderColor: T.a }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 8 }}>
-                        <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${window.location.origin}?join=${trip.shareCode}`}</code>
-                        <button className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}?join=${trip.shareCode}`); showToast("Link copied!"); }}>Copy</button>
-                      </div>
-                      {trip.travellers.adults.map((a, i) => {
-                        const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
-                        const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
-                        const status = a.isLead ? "Organiser" : a.email ? "Invited" : "Pending";
-                        const statusColor = a.isLead ? T.ad : a.email ? T.blue : T.t3;
-                        return (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < trip.travellers.adults.length - 1 ? `.5px solid ${T.border}` : "none" }}>
-                            <Avatar bg={adultColors[i % adultColors.length]} label={getInit(a.name)} size={24} />
-                            <p style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{a.name || `Adult ${i + 1}`}</p>
-                            <p style={{ fontSize: 10, color: statusColor }}>{status}</p>
-                          </div>
-                        );
-                      })}
+                  <div style={{ ...css.card, marginBottom: 12, padding: 14 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Invite link</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.s2, borderRadius: T.rs, fontSize: 12, color: T.t2, marginBottom: 8 }}>
+                      <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tripLink}</code>
+                      <button className="w-btn" style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={() => { navigator.clipboard?.writeText(tripLink); showToast("Link copied!"); }}>Copy</button>
                     </div>
+                    {trip.travellers.adults.map((a, i) => {
+                      const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
+                      const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
+                      const status = a.isLead ? "Organiser" : a.email ? "Invited" : "Pending";
+                      const statusColor = a.isLead ? T.ad : a.email ? T.blue : T.t3;
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < trip.travellers.adults.length - 1 ? `.5px solid ${T.border}` : "none" }}>
+                          <Avatar bg={adultColors[i % adultColors.length]} label={getInit(a.name)} size={24} />
+                          <p style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{a.name || `Adult ${i + 1}`}</p>
+                          <p style={{ fontSize: 10, color: statusColor }}>{status}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* Trip brief */}
-                {trip.brief && (
-                  <div style={{ marginBottom: 16 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Trip Summary</p>
-                    <p style={{ fontSize: 13, color: T.t2, lineHeight: 1.5, background: T.s2, padding: 12, borderRadius: T.rs }}>{trip.brief}</p>
-                  </div>
-                )}
+                {/* ── Activity feed ── */}
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>Recent activity</p>
+                  {activities.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "30px 16px", color: T.t3 }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
+                      <p style={{ fontSize: 13, color: T.t2, marginBottom: 2 }}>No activity yet</p>
+                      <p style={{ fontSize: 11 }}>Changes to polls, itinerary, expenses, and photos will appear here.</p>
+                    </div>
+                  )}
+                  {activities.map((a) => (
+                    <div key={a.id} style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: `.5px solid ${T.border}` }}>
+                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: a.type === "milestone" ? T.al : a.type === "poll" ? T.purpleL : a.type === "expense" ? T.amberL : a.type === "photo" ? T.coralL : T.blueL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{a.icon}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 12, color: T.t, lineHeight: 1.4 }}>{a.text}</p>
+                        <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{a.by} · {formatAgo(a.time)}</p>
+                      </div>
+                      {(a.type === "poll" || a.type === "itinerary") && (
+                        <button onClick={() => shareToWhatsApp(trip.name, `${a.icon} ${a.text}`, trip.dbId || trip.id)}
+                          style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", opacity: 0.5, flexShrink: 0, padding: 4 }} title="Share on WhatsApp">💬</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
 
-                {/* Details */}
-                <div style={{ marginBottom: 16 }}>
-                  <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Trip Details</p>
+                {/* ── Trip details (collapsed) ── */}
+                <Collapsible title="Trip details" icon="📋" sectionKey="activityTripDetails" defaultOpen={false} expandedSections={expandedSections} setExpandedSections={setExpandedSections}
+                  count={trip.places.length + trip.travel.length}>
                   <div className="w-card" style={css.card}>
                     {trip.places.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Locations</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}</div></div>}
                     {trip.travel.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Travel</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.travel.map(tv => <Tag key={tv} bg={T.blueL} color={T.blue}>{tv}</Tag>)}</div></div>}
                     {trip.stayNames.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Stays</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.stayNames.map(s => <Tag key={s} bg={T.amberL} color={T.amber}>{s}</Tag>)}</div></div>}
-                    {trip.prefs.food.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Food</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.food.map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}</div></div>}
-                    {(trip.prefs.adultActs?.length > 0 || trip.prefs.activities?.length > 0) && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Adult activities</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{(trip.prefs.adultActs || trip.prefs.activities).map(a => <Tag key={a} bg={T.blueL} color={T.blue}>{a}</Tag>)}</div></div>}
-                    {trip.prefs.olderActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Older kids</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.olderActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
-                    {trip.prefs.youngerActs?.length > 0 && <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Younger kids</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{trip.prefs.youngerActs.map(a => <Tag key={a} bg={T.pinkL} color={T.pink}>{a}</Tag>)}</div></div>}
-                    {trip.prefs.instructions && <div><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Instructions</label><p style={{ fontSize: 12, color: T.t2, marginTop: 4, lineHeight: 1.5 }}>{trip.prefs.instructions}</p></div>}
+                    {trip.brief && <div><label style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Brief</label><p style={{ fontSize: 12, color: T.t2, marginTop: 4, lineHeight: 1.5 }}>{trip.brief}</p></div>}
                   </div>
-                </div>
+                </Collapsible>
 
                 <button onClick={() => { if (window.confirm(`Are you sure you want to remove "${trip.name}"? This cannot be undone.`)) { deleteCreatedTrip(trip.id); navigate("home"); } }}
-                  style={{ ...css.btn, ...css.btnSm, color: T.red, borderColor: "rgba(200,50,50,.2)", background: "rgba(200,50,50,.04)", fontSize: 12, justifyContent: "center", width: "100%", marginTop: 16 }}>Remove trip</button>
+                  style={{ background: "none", border: "none", color: T.t3, fontSize: 11, cursor: "pointer", fontFamily: T.font, padding: "16px 0", width: "100%", textAlign: "center", opacity: 0.6 }}>
+                  Remove trip
+                </button>
               </div>
-            )}
+              );
+            })()}
           </>
         )}
       </div>
