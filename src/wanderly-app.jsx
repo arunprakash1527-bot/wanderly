@@ -2798,18 +2798,36 @@ export default function TripWithMeApp() {
         const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
         const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
         if (itemTitle && itemTitle.length > 2) {
-          // Add a specific named item to the specified day — smart time slot
+          // Add a specific named item to the specified day — smart time slot, replace if conflict
           const smartSlot = findSmartSlot(tripId, targetDay, lower);
           const newItem = { time: smartSlot.time, title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
+          const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+          let replacedTitle = null;
           setCreatedTrips(prev => prev.map(t => {
             if (t.id !== tripId) return t;
             const tl = t.timeline || {};
-            return { ...t, timeline: { ...tl, [targetDay]: [...(tl[targetDay] || []), newItem] } };
+            let dayTl = [...(tl[targetDay] || [])];
+            const slotMins = parseT(smartSlot.time);
+            const existIdx = dayTl.findIndex(it => Math.abs(parseT(it.time) - slotMins) < 30);
+            if (existIdx >= 0) {
+              replacedTitle = dayTl[existIdx].title;
+              dayTl[existIdx] = { ...dayTl[existIdx], ...newItem };
+            } else {
+              dayTl = [...dayTl, newItem];
+            }
+            dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
+            return { ...t, timeline: { ...tl, [targetDay]: dayTl } };
           }));
-          logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
+          if (replacedTitle) {
+            logActivity(tripId, "🔄", `Replaced "${replacedTitle}" with "${itemTitle}" on Day ${targetDay} · ${smartSlot.time}`, "itinerary");
+          } else {
+            logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
+          }
           // Auto-switch to itinerary on the added day
           setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
-          reply = `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
+          reply = replacedTitle
+            ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust.`
+            : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
         } else {
           addTimelineItem(tripId);
           reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
@@ -5555,7 +5573,7 @@ export default function TripWithMeApp() {
                         {item.desc && <p style={{ fontSize: 11, color: T.t3, lineHeight: 1.4 }}>{item.desc.replace(/[\d.]+★/g, "").replace(/£+/g, "").replace(/^\s*[,·\-–]\s*/, "").trim()}</p>}
                       </div>
                       {isAdded ? (
-                        <span style={{ fontSize: 11, color: T.a, fontWeight: 600, whiteSpace: "nowrap", padding: "6px 10px" }}>✓ Added</span>
+                        <span style={{ fontSize: 11, color: T.a, fontWeight: 600, whiteSpace: "nowrap", padding: "6px 10px" }}>{chatAddDayPicker?.replaced ? `🔄 Replaced` : "✓ Added"}</span>
                       ) : (
                         <button onClick={() => setChatAddDayPicker(showDayPicker ? null : { msgIdx, itemIdx })}
                           style={{ background: T.al, color: T.ad, border: `1px solid ${T.a}40`, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: T.font, whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -5570,26 +5588,49 @@ export default function TripWithMeApp() {
                           {Array.from({ length: tripDays }, (_, d) => d + 1).map(day => {
                             const daySlot = findSmartSlot(trip.id, day, item.isRestaurant ? "restaurant" : "activity");
                             const dayLoc = trip.places?.[(day - 1) % (trip.places?.length || 1)] || "";
+                            // Check if an existing item would be replaced
+                            const parseTm = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+                            const slotMins = parseTm(daySlot.time);
+                            const dayItems = (trip.timeline || {})[day] || [];
+                            const wouldReplace = dayItems.find(it => Math.abs(parseTm(it.time) - slotMins) < 30);
                             return (
                               <button key={day} onClick={() => {
                                 const newItem = { time: daySlot.time, title: item.name, desc: `${dayLoc || currentLoc} · ${item.desc ? item.desc.slice(0, 40) : "Added from chat"}`, group: "Everyone", color: item.isRestaurant ? T.coral : T.blue };
+                                const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+                                let replacedName = null;
                                 setCreatedTrips(prev => prev.map(t => {
                                   if (t.id !== trip.id) return t;
                                   const tl = t.timeline || {};
-                                  const dayTl = [...(tl[day] || []), newItem].sort((a, b) => {
-                                    const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
-                                    return parseT(a.time) - parseT(b.time);
+                                  let dayTl = [...(tl[day] || [])];
+                                  // Find existing item at the same time slot to replace
+                                  const slotMins = parseT(daySlot.time);
+                                  const existIdx = dayTl.findIndex(it => {
+                                    const itMins = parseT(it.time);
+                                    return Math.abs(itMins - slotMins) < 30;
                                   });
+                                  if (existIdx >= 0) {
+                                    replacedName = dayTl[existIdx].title;
+                                    dayTl[existIdx] = { ...dayTl[existIdx], ...newItem };
+                                  } else {
+                                    dayTl = [...dayTl, newItem];
+                                  }
+                                  dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
                                   return { ...t, timeline: { ...tl, [day]: dayTl } };
                                 }));
-                                showToast(`Added "${item.name}" to Day ${day} · ${daySlot.label} (${daySlot.time})`);
-                                logActivity(trip.id, "📍", `Added "${item.name}" to Day ${day} · ${daySlot.time}`, "itinerary");
-                                setChatAddDayPicker({ added: `${msgIdx}_${itemIdx}` });
-                                setTimeout(() => setChatAddDayPicker(null), 2000);
+                                if (replacedName) {
+                                  showToast(`Replaced "${replacedName}" with "${item.name}" · Day ${day} ${daySlot.time}`);
+                                  logActivity(trip.id, "🔄", `Replaced "${replacedName}" with "${item.name}" on Day ${day} · ${daySlot.time}`, "itinerary");
+                                } else {
+                                  showToast(`Added "${item.name}" to Day ${day} · ${daySlot.label} (${daySlot.time})`);
+                                  logActivity(trip.id, "📍", `Added "${item.name}" to Day ${day} · ${daySlot.time}`, "itinerary");
+                                }
+                                setChatAddDayPicker({ added: addedKey, replaced: replacedName });
+                                setTimeout(() => setChatAddDayPicker(null), 2500);
                               }}
-                                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "6px 12px", borderRadius: 8, cursor: "pointer", border: `.5px solid ${day === selectedDay ? T.a : T.border}`, background: day === selectedDay ? T.al : T.s, minWidth: 56, flexShrink: 0, fontFamily: T.font }}>
+                                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "6px 12px", borderRadius: 8, cursor: "pointer", border: `.5px solid ${wouldReplace ? T.amber : day === selectedDay ? T.a : T.border}`, background: wouldReplace ? T.amberL : day === selectedDay ? T.al : T.s, minWidth: 64, flexShrink: 0, fontFamily: T.font }}>
                                 <span style={{ fontSize: 12, fontWeight: day === selectedDay ? 700 : 500, color: day === selectedDay ? T.ad : T.t1 }}>Day {day}</span>
                                 <span style={{ fontSize: 9, color: T.t3 }}>{daySlot.label} · {daySlot.time}</span>
+                                {wouldReplace && <span style={{ fontSize: 8, color: T.amber, fontWeight: 600 }}>Replaces: {wouldReplace.title.length > 16 ? wouldReplace.title.slice(0, 16) + "…" : wouldReplace.title}</span>}
                               </button>
                             );
                           })}
