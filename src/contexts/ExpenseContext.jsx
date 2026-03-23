@@ -1,10 +1,16 @@
 import React, { createContext, useContext, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { getCatInfo } from "../constants/expenses";
+import { useAuth } from "./AuthContext";
+import { useNavigation } from "./NavigationContext";
+import { useTrip } from "./TripContext";
 
 const ExpenseContext = createContext(null);
 
-export function ExpenseProvider({ user, showToast, logActivity, children }) {
+export function ExpenseProvider({ children }) {
+  const { user } = useAuth();
+  const { showToast } = useNavigation();
+  const { logActivity } = useTrip();
   // ─── Expense Tracking State ───
   const [expenses, setExpenses] = useState([]);
   const [showAddExpense, setShowAddExpense] = useState(false);
