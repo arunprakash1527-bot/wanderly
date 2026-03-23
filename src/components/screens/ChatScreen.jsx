@@ -6,19 +6,14 @@ import { Tag } from '../common/Tag';
 import { Avatar } from '../common/Avatar';
 import { TabBar } from '../common/TabBar';
 import { renderChatHtml } from '../../utils/chatHelpers';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
+import { useChat } from '../../contexts/ChatContext';
 
-export function ChatScreen({
-  selectedDay, setSelectedDay,
-  chatMessages, setChatMessages,
-  chatInput, setChatInput,
-  chatRef, chatTyping, setChatTyping,
-  chatFlowStep, setChatFlowStep,
-  chatFlowData, setChatFlowData,
-  lastChatTopic, setLastChatTopic,
-  navigate, showToast,
-  createdTrips, selectedCreatedTrip, setCreatedTrips,
-  findSmartSlot, addTimelineItem, logActivity,
-}) {
+export function ChatScreen() {
+  const { navigate, showToast } = useNavigation();
+  const { selectedDay, setSelectedDay, createdTrips, selectedCreatedTrip, setCreatedTrips, findSmartSlot, addTimelineItem, logActivity } = useTrip();
+  const { chatMessages, setChatMessages, chatInput, setChatInput, chatRef, chatTyping, setChatTyping, chatFlowStep, setChatFlowStep, chatFlowData, setChatFlowData, lastChatTopic, setLastChatTopic } = useChat();
   const chatDay = DAYS[selectedDay - 1];
   const chatLoc = chatDay.location;
   const chatItems = TIMELINE[selectedDay] || [];

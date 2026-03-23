@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback } from "react";
 import { supabase } from './supabaseClient';
 import { T } from './styles/tokens';
 import { css } from './styles/shared';
-import { CONNECTORS } from './constants/connectors';
 import { MEMORIES } from './constants/tripData';
 
 // Screen components
@@ -228,11 +227,6 @@ function AppShell() {
   } = useMemories();
 
   // ── Local state (not in any context) ──
-  const [settingsToggles, setSettingsToggles] = useState(() => {
-    const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
-    ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
-    return s;
-  });
   const [photos, setPhotos] = useState(MEMORIES);
 
   // ── handlePhotoUpload bridge (used by CreatedTripScreen) ──
@@ -305,7 +299,7 @@ function AppShell() {
       <div className="w-app" style={phoneStyle}>
         <style>{CSS_STRING}</style>
         <div style={{ height: "100%" }}>
-          <AuthScreen signInWithGoogle={signInWithGoogle} signUpWithEmail={signUpWithEmail} signInWithEmail={signInWithEmail} authScreen={authScreen} setAuthScreen={setAuthScreen} authEmail={authEmail} setAuthEmail={setAuthEmail} authPassword={authPassword} setAuthPassword={setAuthPassword} authName={authName} setAuthName={setAuthName} authError={authError} setAuthError={setAuthError} setUser={setUser} setAuthLoading={setAuthLoading} />
+          <AuthScreen />
         </div>
       </div>
     );
@@ -316,17 +310,17 @@ function AppShell() {
     <div className="w-app" style={phoneStyle}>
       <style>{CSS_STRING}</style>
       <div style={{ height: "100%" }}>
-        {screen === "home" && <HomeScreen navigate={navigate} resetWizard={resetWizard} createdTrips={createdTrips} viewCreatedTrip={viewCreatedTrip} makeTripLive={makeTripLive} deleteCreatedTrip={deleteCreatedTrip} showNotifications={showNotifications} setShowNotifications={setShowNotifications} totalUnread={totalUnread} lastSeenActivity={lastSeenActivity} allRecentActivity={allRecentActivity} getUnreadCount={getUnreadCount} markTripSeen={markTripSeen} setSelectedDay={setSelectedDay} setShowDemo={setShowDemo} setDemoSlide={setDemoSlide} setTripDetailTab={setTripDetailTab} />}
-        {screen === "create" && <CreateScreen wizStep={wizStep} setWizStep={setWizStep} wizTrip={wizTrip} setWizTrip={setWizTrip} wizShowErrors={wizShowErrors} setWizShowErrors={setWizShowErrors} wizTravellers={wizTravellers} setWizTravellers={setWizTravellers} wizStays={wizStays} setWizStays={setWizStays} wizPrefs={wizPrefs} setWizPrefs={setWizPrefs} placeInput={placeInput} setPlaceInput={setPlaceInput} placeSuggestionsOpen={placeSuggestionsOpen} setPlaceSuggestionsOpen={setPlaceSuggestionsOpen} staySearch={staySearch} setStaySearch={setStaySearch} staySearchOpen={staySearchOpen} setStaySearchOpen={setStaySearchOpen} stayPlacesResults={stayPlacesResults} setStayPlacesResults={setStayPlacesResults} staySearching={staySearching} handleStaySearchChange={handleStaySearchChange} foodSearch={foodSearch} setFoodSearch={setFoodSearch} adultActSearch={adultActSearch} setAdultActSearch={setAdultActSearch} olderActSearch={olderActSearch} setOlderActSearch={setOlderActSearch} youngerActSearch={youngerActSearch} setYoungerActSearch={setYoungerActSearch} expandedPrefSections={expandedPrefSections} setExpandedPrefSections={setExpandedPrefSections} placesFood={placesFood} placesActivities={placesActivities} REGION_SUGGESTIONS={REGION_SUGGESTIONS} editingTripId={editingTripId} setEditingTripId={setEditingTripId} navigate={navigate} showToast={showToast} createTrip={createTrip} />}
-        {screen === "createdTrip" && <CreatedTripScreen createdTrips={createdTrips} selectedCreatedTrip={selectedCreatedTrip} setCreatedTrips={setCreatedTrips} setSelectedCreatedTrip={setSelectedCreatedTrip} navigate={navigate} showToast={showToast} tripDetailTab={tripDetailTab} setTripDetailTab={setTripDetailTab} selectedDay={selectedDay} setSelectedDay={setSelectedDay} expandedItem={expandedItem} setExpandedItem={setExpandedItem} editingTimelineIdx={editingTimelineIdx} setEditingTimelineIdx={setEditingTimelineIdx} addTimelineItem={addTimelineItem} updateTimelineItem={updateTimelineItem} deleteTimelineItem={deleteTimelineItem} moveTimelineItem={moveTimelineItem} getDayItems={getDayItems} hasTimeline={hasTimeline} findSmartSlot={findSmartSlot} generateAndSetTimeline={generateAndSetTimeline} makeTripLive={makeTripLive} deleteCreatedTrip={deleteCreatedTrip} setWizTrip={setWizTrip} setWizTravellers={setWizTravellers} setWizStays={setWizStays} setWizPrefs={setWizPrefs} setWizStep={setWizStep} setEditingTripId={setEditingTripId} logActivity={logActivity} getUnreadCount={getUnreadCount} markTripSeen={markTripSeen} showMap={showMap} setShowMap={setShowMap} tripDirections={tripDirections} setTripDirections={setTripDirections} getFullRouteFromStays={getFullRouteFromStays} tripChatInput={tripChatInput} setTripChatInput={setTripChatInput} tripChatMessages={tripChatMessages} tripChatTyping={tripChatTyping} tripChatEndRef={tripChatEndRef} handleTripChat={handleTripChat} chatAddDayPicker={chatAddDayPicker} setChatAddDayPicker={setChatAddDayPicker} showPollCreator={showPollCreator} setShowPollCreator={setShowPollCreator} newPollQuestion={newPollQuestion} setNewPollQuestion={setNewPollQuestion} newPollOptions={newPollOptions} setNewPollOptions={setNewPollOptions} createNewPoll={createNewPoll} expenses={expenses} showAddExpense={showAddExpense} setShowAddExpense={setShowAddExpense} editingExpense={editingExpense} setEditingExpense={setEditingExpense} expenseDesc={expenseDesc} setExpenseDesc={setExpenseDesc} expenseAmount={expenseAmount} setExpenseAmount={setExpenseAmount} expenseCategory={expenseCategory} setExpenseCategory={setExpenseCategory} expensePaidBy={expensePaidBy} setExpensePaidBy={setExpensePaidBy} expenseSplitMethod={expenseSplitMethod} setExpenseSplitMethod={setExpenseSplitMethod} expenseParticipants={expenseParticipants} setExpenseParticipants={setExpenseParticipants} expenseCustomSplits={expenseCustomSplits} setExpenseCustomSplits={setExpenseCustomSplits} showSettlement={showSettlement} setShowSettlement={setShowSettlement} resetExpenseForm={resetExpenseForm} saveExpense={saveExpense} deleteExpense={deleteExpense} getCategoryBreakdown={getCategoryBreakdown} calculateSettlement={calculateSettlement} uploadedPhotos={uploadedPhotos} setUploadedPhotos={setUploadedPhotos} handlePhotoUpload={handlePhotoUpload} updatePhotoInSupabase={updatePhotoInSupabase} deletePhotoFromSupabase={deletePhotoFromSupabase} viewingPhoto={viewingPhoto} setViewingPhoto={setViewingPhoto} reelPlaying={reelPlaying} setReelPlaying={setReelPlaying} reelIndex={reelIndex} setReelIndex={setReelIndex} reelPaused={reelPaused} setReelPaused={setReelPaused} reelStyle={reelStyle} setReelStyle={setReelStyle} photoInputRef={photoInputRef} shareToWhatsApp={shareToWhatsApp} expandedSections={expandedSections} setExpandedSections={setExpandedSections} />}
-        {screen === "trip" && <TripScreen selectedDay={selectedDay} setSelectedDay={setSelectedDay} expandedItem={expandedItem} setExpandedItem={setExpandedItem} bookingStates={bookingStates} setBookingStates={setBookingStates} navigate={navigate} />}
-        {screen === "chat" && <ChatScreen selectedDay={selectedDay} setSelectedDay={setSelectedDay} chatMessages={chatMessages} setChatMessages={setChatMessages} chatInput={chatInput} setChatInput={setChatInput} chatRef={chatRef} chatTyping={chatTyping} setChatTyping={setChatTyping} chatFlowStep={chatFlowStep} setChatFlowStep={setChatFlowStep} chatFlowData={chatFlowData} setChatFlowData={setChatFlowData} lastChatTopic={lastChatTopic} setLastChatTopic={setLastChatTopic} navigate={navigate} showToast={showToast} createdTrips={createdTrips} selectedCreatedTrip={selectedCreatedTrip} setCreatedTrips={setCreatedTrips} findSmartSlot={findSmartSlot} addTimelineItem={addTimelineItem} logActivity={logActivity} />}
-        {screen === "vote" && <VoteScreen pollData={pollData} setPollData={setPollData} showPollCreator={showPollCreator} setShowPollCreator={setShowPollCreator} newPollQuestion={newPollQuestion} setNewPollQuestion={setNewPollQuestion} newPollOptions={newPollOptions} setNewPollOptions={setNewPollOptions} createNewPoll={createNewPoll} navigate={navigate} showToast={showToast} selectedCreatedTrip={selectedCreatedTrip} createdTrips={createdTrips} addTimelineItem={addTimelineItem} selectedDay={selectedDay} />}
-        {screen === "memories" && <MemoriesScreen uploadedPhotos={uploadedPhotos} setUploadedPhotos={setUploadedPhotos} navigate={navigate} selectedCreatedTrip={selectedCreatedTrip} createdTrips={createdTrips} user={user} supabase={supabase} logActivity={logActivity} photoInputRef={photoInputRef} viewingPhoto={viewingPhoto} setViewingPhoto={setViewingPhoto} videoState={videoState} setVideoState={setVideoState} reelPlaying={reelPlaying} setReelPlaying={setReelPlaying} reelIndex={reelIndex} setReelIndex={setReelIndex} reelPaused={reelPaused} setReelPaused={setReelPaused} reelStyle={reelStyle} setReelStyle={setReelStyle} videoSettings={videoSettings} setVideoSettings={setVideoSettings} updatePhotoInSupabase={updatePhotoInSupabase} deletePhotoFromSupabase={deletePhotoFromSupabase} />}
-        {screen === "share" && <ShareScreen navigate={navigate} />}
-        {screen === "explore" && <ExploreScreen selectedCreatedTrip={selectedCreatedTrip} createdTrips={createdTrips} selectedDay={selectedDay} navigate={navigate} />}
-        {screen === "settings" && <SettingsScreen user={user} navigate={navigate} signOut={signOut} selectedCreatedTrip={selectedCreatedTrip} syncing={syncing} settingsToggles={settingsToggles} setSettingsToggles={setSettingsToggles} />}
-        {screen === "joinPreview" && <JoinPreviewScreen selectedCreatedTrip={selectedCreatedTrip} createdTrips={createdTrips} setCreatedTrips={setCreatedTrips} setSelectedCreatedTrip={setSelectedCreatedTrip} navigate={navigate} joinedSlot={joinedSlot} setJoinedSlot={setJoinedSlot} joinTripAsTraveller={joinTripAsTraveller} user={user} showToast={showToast} />}
+        {screen === "home" && <HomeScreen />}
+        {screen === "create" && <CreateScreen />}
+        {screen === "createdTrip" && <CreatedTripScreen />}
+        {screen === "trip" && <TripScreen />}
+        {screen === "chat" && <ChatScreen />}
+        {screen === "vote" && <VoteScreen />}
+        {screen === "memories" && <MemoriesScreen />}
+        {screen === "share" && <ShareScreen />}
+        {screen === "explore" && <ExploreScreen />}
+        {screen === "settings" && <SettingsScreen />}
+        {screen === "joinPreview" && <JoinPreviewScreen />}
       </div>
       {/* ── Activation Preferences Modal (global, works from any screen) ── */}
       {showActivationModal && (() => {

@@ -4,17 +4,12 @@ import { css } from '../../styles/shared';
 import { Tag } from '../common/Tag';
 import { Avatar } from '../common/Avatar';
 import { TabBar } from '../common/TabBar';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
 
-export function VoteScreen({
-  pollData, setPollData,
-  showPollCreator, setShowPollCreator,
-  newPollQuestion, setNewPollQuestion,
-  newPollOptions, setNewPollOptions,
-  createNewPoll,
-  navigate, showToast,
-  selectedCreatedTrip, createdTrips,
-  addTimelineItem, selectedDay,
-}) {
+export function VoteScreen() {
+  const { navigate, showToast } = useNavigation();
+  const { pollData, setPollData, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, selectedCreatedTrip, createdTrips, addTimelineItem, selectedDay } = useTrip();
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>

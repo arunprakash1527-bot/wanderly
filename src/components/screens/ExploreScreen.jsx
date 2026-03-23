@@ -5,8 +5,12 @@ import { DAYS } from '../../constants/tripData';
 import { getLocationActivities } from '../../utils/locationHelpers';
 import { Tag } from '../common/Tag';
 import { TabBar } from '../common/TabBar';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
 
-export function ExploreScreen({ selectedCreatedTrip, createdTrips, selectedDay, navigate }) {
+export function ExploreScreen() {
+  const { navigate } = useNavigation();
+  const { selectedCreatedTrip, createdTrips, selectedDay } = useTrip();
   // Dynamic location: use created trip's places first, then demo data
   const trip = selectedCreatedTrip || createdTrips[0];
   const currentLoc = trip?.places?.[0] || DAYS[selectedDay - 1]?.location || "Ambleside";

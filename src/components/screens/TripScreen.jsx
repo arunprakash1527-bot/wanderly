@@ -6,6 +6,8 @@ import { Tag, GroupTag } from '../common/Tag';
 import { Avatar } from '../common/Avatar';
 import { TabBar } from '../common/TabBar';
 import { TripMap } from '../map/TripMap';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
 
 const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, onSkip, onCostUpdate }) => {
   const forMap = { all: "Everyone", adults: "Adults", kids: "Max & Ella", older: "Max (12)", younger: "Ella (8)" };
@@ -62,7 +64,9 @@ const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, o
   );
 };
 
-export function TripScreen({ selectedDay, setSelectedDay, expandedItem, setExpandedItem, bookingStates, setBookingStates, navigate }) {
+export function TripScreen() {
+  const { navigate } = useNavigation();
+  const { selectedDay, setSelectedDay, expandedItem, setExpandedItem, bookingStates, setBookingStates } = useTrip();
   const day = DAYS[selectedDay - 1];
   const items = TIMELINE[selectedDay] || [];
   return (

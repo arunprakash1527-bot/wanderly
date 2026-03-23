@@ -1,11 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { CONNECTORS } from '../../constants/connectors';
 import { Tag } from '../common/Tag';
 import { TabBar } from '../common/TabBar';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
 
-export function SettingsScreen({ user, navigate, signOut, selectedCreatedTrip, syncing, settingsToggles, setSettingsToggles }) {
+export function SettingsScreen() {
+  const { user, syncing, signOut } = useAuth();
+  const { navigate } = useNavigation();
+  const { selectedCreatedTrip } = useTrip();
+  // settingsToggles is local to this screen
+  const [settingsToggles, setSettingsToggles] = useState(() => {
+    const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
+    ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
+    return s;
+  });
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>

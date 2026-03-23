@@ -3,8 +3,14 @@ import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { Avatar } from '../common/Avatar';
 import { Tag } from '../common/Tag';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
 
-export function JoinPreviewScreen({ selectedCreatedTrip, createdTrips, setCreatedTrips, setSelectedCreatedTrip, navigate, joinedSlot, setJoinedSlot, joinTripAsTraveller, user, showToast }) {
+export function JoinPreviewScreen() {
+  const { user } = useAuth();
+  const { navigate, showToast } = useNavigation();
+  const { selectedCreatedTrip, createdTrips, setCreatedTrips, setSelectedCreatedTrip, joinedSlot, setJoinedSlot, joinTripAsTraveller } = useTrip();
   const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];

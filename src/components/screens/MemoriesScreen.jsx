@@ -1,25 +1,19 @@
 import React from 'react';
+import { supabase } from '../../supabaseClient';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { Tag } from '../common/Tag';
 import { TabBar } from '../common/TabBar';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
+import { useMemories } from '../../contexts/MemoriesContext';
 
-export function MemoriesScreen({
-  uploadedPhotos, setUploadedPhotos,
-  navigate,
-  selectedCreatedTrip, createdTrips,
-  user, supabase,
-  logActivity,
-  photoInputRef,
-  viewingPhoto, setViewingPhoto,
-  videoState, setVideoState,
-  reelPlaying, setReelPlaying,
-  reelIndex, setReelIndex,
-  reelPaused, setReelPaused,
-  reelStyle, setReelStyle,
-  videoSettings, setVideoSettings,
-  updatePhotoInSupabase, deletePhotoFromSupabase,
-}) {
+export function MemoriesScreen() {
+  const { user } = useAuth();
+  const { navigate } = useNavigation();
+  const { selectedCreatedTrip, createdTrips, logActivity } = useTrip();
+  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, videoState, setVideoState, videoSettings, setVideoSettings, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, updatePhotoInSupabase, deletePhotoFromSupabase } = useMemories();
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     const trip = selectedCreatedTrip || createdTrips[0];

@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { supabase } from '../../supabaseClient';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { EXPENSE_CATEGORIES, getCatInfo } from '../../constants/expenses';
@@ -7,134 +8,49 @@ import { Avatar } from '../common/Avatar';
 import { Tag } from '../common/Tag';
 import { Collapsible } from '../common/Collapsible';
 import { TripMap } from '../map/TripMap';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
+import { useWizard } from '../../contexts/WizardContext';
+import { useChat } from '../../contexts/ChatContext';
+import { useExpenses } from '../../contexts/ExpenseContext';
+import { useMemories } from '../../contexts/MemoriesContext';
 
-export function CreatedTripScreen({
-  // Core trip data
-  createdTrips,
-  selectedCreatedTrip,
-  setCreatedTrips,
-  setSelectedCreatedTrip,
-  navigate,
-  showToast,
+export function CreatedTripScreen() {
+  const { user } = useAuth();
+  const { navigate, showToast } = useNavigation();
+  const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections } = useTrip();
+  const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
+  const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker } = useChat();
+  const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement } = useExpenses();
+  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, updatePhotoInSupabase, deletePhotoFromSupabase } = useMemories();
 
-  // Tab state
-  tripDetailTab,
-  setTripDetailTab,
-
-  // Day/timeline state
-  selectedDay,
-  setSelectedDay,
-  expandedItem,
-  setExpandedItem,
-  editingTimelineIdx,
-  setEditingTimelineIdx,
-
-  // Timeline functions
-  addTimelineItem,
-  updateTimelineItem,
-  deleteTimelineItem,
-  moveTimelineItem,
-  getDayItems,
-  hasTimeline,
-  findSmartSlot,
-  generateAndSetTimeline,
-
-  // Trip lifecycle functions
-  makeTripLive,
-  deleteCreatedTrip,
-
-  // Edit trip / wizard state setters
-  setWizTrip,
-  setWizTravellers,
-  setWizStays,
-  setWizPrefs,
-  setWizStep,
-  setEditingTripId,
-
-  // Activity logging
-  logActivity,
-  getUnreadCount,
-  markTripSeen,
-
-  // Map state
-  showMap,
-  setShowMap,
-  tripDirections,
-  setTripDirections,
-  getFullRouteFromStays,
-
-  // Chat state & functions
-  tripChatInput,
-  setTripChatInput,
-  tripChatMessages,
-  tripChatTyping,
-  tripChatEndRef,
-  handleTripChat,
-  chatAddDayPicker,
-  setChatAddDayPicker,
-
-  // Poll state & functions
-  showPollCreator,
-  setShowPollCreator,
-  newPollQuestion,
-  setNewPollQuestion,
-  newPollOptions,
-  setNewPollOptions,
-  createNewPoll,
-
-  // Expense state & functions
-  expenses,
-  showAddExpense,
-  setShowAddExpense,
-  editingExpense,
-  setEditingExpense,
-  expenseDesc,
-  setExpenseDesc,
-  expenseAmount,
-  setExpenseAmount,
-  expenseCategory,
-  setExpenseCategory,
-  expensePaidBy,
-  setExpensePaidBy,
-  expenseSplitMethod,
-  setExpenseSplitMethod,
-  expenseParticipants,
-  setExpenseParticipants,
-  expenseCustomSplits,
-  setExpenseCustomSplits,
-  showSettlement,
-  setShowSettlement,
-  resetExpenseForm,
-  saveExpense,
-  deleteExpense,
-  getCategoryBreakdown,
-  calculateSettlement,
-
-  // Memories / photos state & functions
-  uploadedPhotos,
-  setUploadedPhotos,
-  handlePhotoUpload,
-  updatePhotoInSupabase,
-  deletePhotoFromSupabase,
-  viewingPhoto,
-  setViewingPhoto,
-  reelPlaying,
-  setReelPlaying,
-  reelIndex,
-  setReelIndex,
-  reelPaused,
-  setReelPaused,
-  reelStyle,
-  setReelStyle,
-  photoInputRef,
-
-  // WhatsApp sharing
-  shareToWhatsApp,
-
-  // Collapsible sections
-  expandedSections,
-  setExpandedSections,
-}) {
+  // handlePhotoUpload defined locally (uses cross-context state)
+  const handlePhotoUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    const trip = selectedCreatedTrip || createdTrips[0];
+    const tripId = trip?.dbId || trip?.id || 'default';
+    for (const f of files) {
+      const uniqueId = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+      const filePath = `${tripId}/${uniqueId}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      let url = URL.createObjectURL(f);
+      let storedInSupabase = false;
+      try {
+        const { data, error } = await supabase.storage.from('trip-photos').upload(filePath, f, { cacheControl: '3600', upsert: false });
+        if (!error && data) {
+          const { data: urlData } = supabase.storage.from('trip-photos').getPublicUrl(filePath);
+          if (urlData?.publicUrl) { url = urlData.publicUrl; storedInSupabase = true; }
+        }
+      } catch (err) { /* Storage not set up */ }
+      const newPhoto = { id: uniqueId, url, name: f.name, day: "Untagged", liked: false, caption: "", uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }), sortOrder: uploadedPhotos.length, filePath: storedInSupabase ? filePath : null };
+      setUploadedPhotos(prev => [...prev, newPhoto]);
+      if (storedInSupabase && user) {
+        try { await supabase.from('trip_photos').insert({ trip_id: tripId, user_id: user.id, file_url: url, file_path: filePath, file_name: f.name, day_tag: 'Untagged', liked: false, caption: '', sort_order: uploadedPhotos.length }); } catch (err) { /* table may not exist */ }
+      }
+    }
+    if (files.length > 0 && trip?.id) logActivity(trip.id, "📸", `Added ${files.length} photo${files.length > 1 ? "s" : ""} to memories`, "photo");
+    e.target.value = "";
+  };
   const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const isLive = trip.status === "live";

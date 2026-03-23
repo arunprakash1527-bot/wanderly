@@ -1,8 +1,10 @@
 import React from 'react';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
+import { useAuth } from '../../contexts/AuthContext';
 
-export function AuthScreen({ signInWithGoogle, signUpWithEmail, signInWithEmail, authScreen, setAuthScreen, authEmail, setAuthEmail, authPassword, setAuthPassword, authName, setAuthName, authError, setAuthError, setUser, setAuthLoading }) {
+export function AuthScreen() {
+  const { signInWithGoogle, signUpWithEmail, signInWithEmail, authScreen, setAuthScreen, authEmail, setAuthEmail, authPassword, setAuthPassword, authName, setAuthName, authError, setAuthError, setUser, setAuthLoading } = useAuth();
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>

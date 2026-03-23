@@ -4,8 +4,10 @@ import { css } from '../../styles/shared';
 import { Avatar } from '../common/Avatar';
 import { Tag } from '../common/Tag';
 import { TabBar } from '../common/TabBar';
+import { useNavigation } from '../../contexts/NavigationContext';
 
-export function ShareScreen({ navigate }) {
+export function ShareScreen() {
+  const { navigate } = useNavigation();
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>

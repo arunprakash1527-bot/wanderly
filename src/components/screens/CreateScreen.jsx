@@ -6,68 +6,14 @@ import { ControlledField } from '../common/ControlledField';
 import { Avatar } from '../common/Avatar';
 import { LOCATION_SUGGESTIONS, ACTIVITY_SUGGESTIONS, LOCATION_VIBES } from '../../constants/locations';
 import { getLocationVibes, getRegion } from '../../utils/locationHelpers';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
+import { useWizard } from '../../contexts/WizardContext';
 
-export function CreateScreen({
-  // Wizard step state
-  wizStep,
-  setWizStep,
-  wizTrip,
-  setWizTrip,
-  wizShowErrors,
-  setWizShowErrors,
-  wizTravellers,
-  setWizTravellers,
-  wizStays,
-  setWizStays,
-  wizPrefs,
-  setWizPrefs,
-
-  // Place input state (Details step)
-  placeInput,
-  setPlaceInput,
-  placeSuggestionsOpen,
-  setPlaceSuggestionsOpen,
-
-  // Stay search state (Stays step)
-  staySearch,
-  setStaySearch,
-  staySearchOpen,
-  setStaySearchOpen,
-  stayPlacesResults,
-  setStayPlacesResults,
-  staySearching,
-  handleStaySearchChange,
-
-  // Prefs search state
-  foodSearch,
-  setFoodSearch,
-  adultActSearch,
-  setAdultActSearch,
-  olderActSearch,
-  setOlderActSearch,
-  youngerActSearch,
-  setYoungerActSearch,
-  expandedPrefSections,
-  setExpandedPrefSections,
-
-  // Places API suggestions for prefs
-  placesFood,
-  placesActivities,
-
-  // REGION_SUGGESTIONS constant (defined in parent near prefs)
-  REGION_SUGGESTIONS,
-
-  // Editing state
-  editingTripId,
-  setEditingTripId,
-
-  // Navigation & toast
-  navigate,
-  showToast,
-
-  // Trip creation
-  createTrip,
-}) {
+export function CreateScreen() {
+  const { navigate, showToast } = useNavigation();
+  const { createTrip } = useTrip();
+  const { wizStep, setWizStep, wizTrip, setWizTrip, wizShowErrors, setWizShowErrors, wizTravellers, setWizTravellers, wizStays, setWizStays, wizPrefs, setWizPrefs, placeInput, setPlaceInput, placeSuggestionsOpen, setPlaceSuggestionsOpen, staySearch, setStaySearch, staySearchOpen, setStaySearchOpen, stayPlacesResults, setStayPlacesResults, staySearching, handleStaySearchChange, foodSearch, setFoodSearch, adultActSearch, setAdultActSearch, olderActSearch, setOlderActSearch, youngerActSearch, setYoungerActSearch, expandedPrefSections, setExpandedPrefSections, placesFood, placesActivities, REGION_SUGGESTIONS, editingTripId, setEditingTripId } = useWizard();
   const wizSteps = ["Details", "Travellers", "Stays", "Preferences", "Review"];
 
   // ─── Wizard Step: Details ───

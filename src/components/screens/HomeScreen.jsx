@@ -5,12 +5,14 @@ import { TRIP } from '../../constants/tripData';
 import { Avatar } from '../common/Avatar';
 import { Tag } from '../common/Tag';
 import { TabBar } from '../common/TabBar';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { useTrip } from '../../contexts/TripContext';
+import { useWizard } from '../../contexts/WizardContext';
 
-export function HomeScreen({
-  navigate, resetWizard, createdTrips, viewCreatedTrip, makeTripLive, deleteCreatedTrip,
-  showNotifications, setShowNotifications, totalUnread, lastSeenActivity, allRecentActivity,
-  getUnreadCount, markTripSeen, setSelectedDay, setShowDemo, setDemoSlide, setTripDetailTab,
-}) {
+export function HomeScreen() {
+  const { navigate, setShowDemo, setDemoSlide } = useNavigation();
+  const { createdTrips, viewCreatedTrip, makeTripLive, deleteCreatedTrip, showNotifications, setShowNotifications, totalUnread, lastSeenActivity, allRecentActivity, getUnreadCount, markTripSeen, setSelectedDay, setTripDetailTab } = useTrip();
+  const { resetWizard } = useWizard();
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <div style={{ padding: "16px 20px 12px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
