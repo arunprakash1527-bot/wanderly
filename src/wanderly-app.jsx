@@ -3120,7 +3120,7 @@ export default function TripWithMeApp() {
         {/* ── Optional brief ── */}
         {wizTrip.brief || wizTrip._showBrief ? (
           <div style={cardStyle}>
-            <ControlledField label="Trip brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="Who's going, what kind of experience you want..." hint="Helps the AI personalise your itinerary" />
+            <ControlledField label="Trip brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="e.g. Family trip with 2 kids (ages 5 & 9). We love outdoor adventures, local food markets, and easy hikes. Prefer late morning starts — not early risers! Dog-friendly stops a bonus." hint="Helps the AI personalise your itinerary" />
           </div>
         ) : (
           <button onClick={() => setWizTrip(prev => ({ ...prev, _showBrief: true }))}
