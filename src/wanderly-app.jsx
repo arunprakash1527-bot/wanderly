@@ -899,6 +899,7 @@ export default function TripWithMeApp() {
   const [adultActSearch, setAdultActSearch] = useState("");
   const [olderActSearch, setOlderActSearch] = useState("");
   const [youngerActSearch, setYoungerActSearch] = useState("");
+  const [expandedPrefSections, setExpandedPrefSections] = useState(new Set());
   const [lastChatTopic, setLastChatTopic] = useState("");
   const [chatTyping, setChatTyping] = useState(false);
   const [tripChatTyping, setTripChatTyping] = useState(false);
@@ -3442,8 +3443,9 @@ export default function TripWithMeApp() {
         fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `popular restaurants ${loc}`, type: "restaurant" }) }),
         fetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: `tourist attractions ${loc}`, type: "tourist_attraction" }) }),
       ]);
-      // Filter out generic search-phrase results (e.g. "Things to do in Cape Town")
-      const isGenericResult = (name) => /^(things to do|best restaurants|top attractions|what to do|where to eat|places to visit)\b/i.test(name) || name.length > 50;
+      // Filter out generic search-phrase results and bare city names
+      const locLower = loc.toLowerCase();
+      const isGenericResult = (name) => /^(things to do|best restaurants|top attractions|what to do|where to eat|places to visit)\b/i.test(name) || name.length > 50 || name.toLowerCase() === locLower || name.toLowerCase().replace(/^the\s+/, "") === locLower;
       if (foodRes.ok) {
         const data = await foodRes.json();
         const names = (data.places || []).map(p => p.name).filter(n => n && !isGenericResult(n));
@@ -3497,35 +3499,52 @@ export default function TripWithMeApp() {
       return search.trim() ? all.filter(o => o.toLowerCase().includes(search.toLowerCase())) : all;
     };
 
-    const renderPrefSection = (label, key, allOpts, searchVal, setSearchVal, placeholder, hasPlacesData) => (
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
-        {hasPlacesData && (
-          <p style={{ fontSize: 10, color: T.a, marginBottom: 4 }}>{"📍"} Includes real places near {locationName}</p>
-        )}
-        <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
-          onKeyDown={e => { if ((e.key === "Enter" || e.key === "Tab") && searchVal.trim()) { e.preventDefault(); addCustomPref(key, searchVal, setSearchVal); } }}
-          style={{ width: "100%", padding: "8px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s2, outline: "none", marginBottom: 6 }}
-          placeholder={placeholder} />
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {filterOpts(allOpts, searchVal, wizPrefs[key]).map(o => {
-            const isFromPlaces = key === "food" ? placesFood.includes(o) : key === "adultActs" ? placesActivities.includes(o) : false;
-            return (
-              <span key={o} onClick={() => togglePref(key, o)} style={{ ...css.chip, ...(wizPrefs[key].has(o) ? css.chipActive : {}), ...(isFromPlaces && !wizPrefs[key].has(o) ? { borderColor: T.a + "40", background: T.al + "30" } : {}) }}>
-                {isFromPlaces && "📍 "}{o}
+    const INITIAL_VISIBLE = 8;
+    const renderPrefSection = (label, key, allOpts, searchVal, setSearchVal, placeholder, hasPlacesData) => {
+      const isExpanded = expandedPrefSections.has(key) || searchVal.trim().length > 0;
+      const filtered = filterOpts(allOpts, searchVal, wizPrefs[key]);
+      // Always show selected items first, then fill remaining slots
+      const selected = filtered.filter(o => wizPrefs[key].has(o));
+      const unselected = filtered.filter(o => !wizPrefs[key].has(o));
+      const visible = isExpanded ? filtered : [...selected, ...unselected.slice(0, Math.max(0, INITIAL_VISIBLE - selected.length))];
+      const hiddenCount = filtered.length - visible.length;
+
+      return (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
+          <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
+            onKeyDown={e => { if ((e.key === "Enter" || e.key === "Tab") && searchVal.trim()) { e.preventDefault(); addCustomPref(key, searchVal, setSearchVal); } }}
+            style={{ width: "100%", padding: "8px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s2, outline: "none", marginBottom: 6 }}
+            placeholder={placeholder} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {visible.map(o => (
+              <span key={o} onClick={() => togglePref(key, o)} style={{ ...css.chip, ...(wizPrefs[key].has(o) ? css.chipActive : {}) }}>
+                {o}
               </span>
-            );
-          })}
-          {searchVal.trim() && !allOpts.includes(searchVal.trim()) && !wizPrefs[key].has(searchVal.trim()) && (
-            <span onClick={() => addCustomPref(key, searchVal, setSearchVal)} style={{ ...css.chip, borderStyle: "dashed", color: T.a }}>+ Add "{searchVal.trim()}"</span>
+            ))}
+            {searchVal.trim() && !allOpts.includes(searchVal.trim()) && !wizPrefs[key].has(searchVal.trim()) && (
+              <span onClick={() => addCustomPref(key, searchVal, setSearchVal)} style={{ ...css.chip, borderStyle: "dashed", color: T.a }}>+ Add "{searchVal.trim()}"</span>
+            )}
+          </div>
+          {hiddenCount > 0 && (
+            <button onClick={() => setExpandedPrefSections(prev => { const s = new Set(prev); s.add(key); return s; })}
+              style={{ background: "none", border: "none", color: T.a, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: T.font, padding: "6px 0 0", display: "flex", alignItems: "center", gap: 4 }}>
+              Show {hiddenCount} more options ▾
+            </button>
+          )}
+          {isExpanded && filtered.length > INITIAL_VISIBLE && (
+            <button onClick={() => setExpandedPrefSections(prev => { const s = new Set(prev); s.delete(key); return s; })}
+              style={{ background: "none", border: "none", color: T.t3, fontSize: 11, cursor: "pointer", fontFamily: T.font, padding: "4px 0 0" }}>
+              Show less ▴
+            </button>
           )}
         </div>
-      </div>
-    );
+      );
+    };
 
     return (
       <>
-        {(regionSugg || vibes.length > 0) && <p style={{ fontSize: 11, color: T.a, fontWeight: 500, marginBottom: 8 }}>{"🌍"} Showing suggestions for {locationName || regionLabel}{vibes.length > 0 ? ` — ${vibes.join(", ")}` : ""}</p>}
+        {locationName && <p style={{ fontSize: 11, color: T.t3, marginBottom: 8 }}>Suggestions based on <span style={{ fontWeight: 600, color: T.t }}>{locationName}</span>{vibes.length > 0 ? ` · ${vibes.join(", ")}` : ""}</p>}
         {renderPrefSection("Food preferences", "food", allFoodOpts, foodSearch, setFoodSearch, "Search or type a food preference...", placesFood.length > 0)}
         {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...", placesActivities.length > 0)}
         {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...", false)}
