@@ -744,7 +744,7 @@ export function CreateScreen() {
             }
           }
           setWizShowErrors(false);
-          wizStep < 4 ? setWizStep(wizStep + 1) : createTrip();
+          wizStep < 4 ? setWizStep(wizStep + 1) : createTrip({ wizTrip, wizTravellers, wizStays, wizPrefs, editingTripId });
         }}>
           {wizStep < 4 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
         </button>
