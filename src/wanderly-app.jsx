@@ -3108,10 +3108,8 @@ export default function TripWithMeApp() {
             })}
           </div>
 
-          {hasDrivingMode && (
-            <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
-              placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 route" />
-          )}
+          <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
+            placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 departure" />
 
           {sectionLabel("Budget")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
