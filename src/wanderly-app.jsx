@@ -22,6 +22,9 @@ import { TabBar } from './components/common/TabBar';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { ExploreScreen } from './components/screens/ExploreScreen';
 import { AuthScreen } from './components/screens/AuthScreen';
+import { HomeScreen } from './components/screens/HomeScreen';
+import { ShareScreen } from './components/screens/ShareScreen';
+import { JoinPreviewScreen } from './components/screens/JoinPreviewScreen';
 
 
 // ─── Main App ───
@@ -2022,143 +2025,6 @@ export default function TripWithMeApp() {
   // Auto-scroll chat to bottom when messages change
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight); }, [chatMessages]);
 
-  // ─── Screen: Home (render function, not component) ───
-  const renderHomeScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
-      <div style={{ padding: "16px 20px 12px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: T.t1 }}>Trip With Me</h1>
-          <span style={{ fontSize: 11, color: T.t3, fontWeight: 500, letterSpacing: 0.5 }}>TRAVEL CONCIERGE</span>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button style={{ position: "relative", background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 4 }} onClick={() => setShowNotifications(prev => !prev)} title="Notifications">
-            🔔
-            {totalUnread > 0 && <span style={{ position: "absolute", top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, background: T.coral, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: `2px solid ${T.s}` }}>{totalUnread > 99 ? "99+" : totalUnread}</span>}
-          </button>
-          <button style={{ ...css.btn, ...css.btnP, ...css.btnSm }} onClick={() => { resetWizard(); navigate("create"); }}>+ New trip</button>
-        </div>
-      </div>
-
-      {/* ── Notification panel ── */}
-      {showNotifications && <>
-        <div onClick={() => setShowNotifications(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99 }} />
-        <div style={{ position: "absolute", top: 56, right: 12, width: "calc(100% - 24px)", maxWidth: 360, maxHeight: 420, background: T.s, borderRadius: T.r, boxShadow: "0 8px 32px rgba(0,0,0,.15), 0 2px 8px rgba(0,0,0,.08)", border: `.5px solid ${T.border}`, zIndex: 100, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `.5px solid ${T.border}` }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: T.t1 }}>Notifications</p>
-            {totalUnread > 0 && <button onClick={() => { createdTrips.forEach(t => markTripSeen(t.id)); }} style={{ background: "none", border: "none", fontSize: 11, color: T.a, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>Mark all read</button>}
-          </div>
-          <div style={{ flex: 1, overflowY: "auto", maxHeight: 360 }}>
-            {allRecentActivity.length === 0 && (
-              <div style={{ textAlign: "center", padding: "32px 16px", color: T.t3 }}>
-                <div style={{ fontSize: 24, marginBottom: 6 }}>🔕</div>
-                <p style={{ fontSize: 13, color: T.t2 }}>No notifications yet</p>
-                <p style={{ fontSize: 11 }}>Activity from your trips will appear here.</p>
-              </div>
-            )}
-            {allRecentActivity.map((a) => {
-              const isUnread = new Date(a.time).getTime() > (lastSeenActivity[a.tripId] || 0);
-              const diff = Date.now() - new Date(a.time).getTime();
-              const ago = diff < 60000 ? "Just now" : diff < 3600000 ? `${Math.floor(diff / 60000)}m` : diff < 86400000 ? `${Math.floor(diff / 3600000)}h` : `${Math.floor(diff / 86400000)}d`;
-              return (
-                <div key={a.id} onClick={() => { const trip = createdTrips.find(t => t.id === a.tripId); if (trip) { viewCreatedTrip(trip); setTripDetailTab("activity"); markTripSeen(a.tripId); } setShowNotifications(false); }}
-                  style={{ display: "flex", gap: 10, padding: "10px 16px", cursor: "pointer", background: isUnread ? T.al + "40" : "transparent", borderBottom: `.5px solid ${T.border}`, transition: "background .15s" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: a.type === "milestone" ? T.al : a.type === "poll" ? T.purpleL : a.type === "expense" ? T.amberL : a.type === "photo" ? T.coralL : T.blueL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{a.icon}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: T.a, marginBottom: 2 }}>{a.tripName}</p>
-                    <p style={{ fontSize: 12, color: T.t1, lineHeight: 1.4 }}>{a.text}</p>
-                    <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{a.by} · {ago}</p>
-                  </div>
-                  {isUnread && <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.a, flexShrink: 0, marginTop: 12 }} />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </>}
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Your upcoming adventures</p>
-
-        {createdTrips.map(trip => (
-          <div key={trip.id} style={{ ...css.card, position: "relative", overflow: "hidden", marginBottom: 12, cursor: "pointer" }} onClick={() => viewCreatedTrip(trip)}>
-            <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${trip.status === "live" ? T.al : T.blueL} 0%, transparent 70%)`, pointerEvents: "none" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <div>
-                <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{trip.name}</h3>
-                <p style={{ fontSize: 12, color: T.t2 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {getUnreadCount(trip.id) > 0 && <Tag bg={T.coralL} color={T.coral}>{getUnreadCount(trip.id)} new</Tag>}
-                {trip.status === "live" ? <Tag bg={T.al} color={T.ad}>Live</Tag> : <Tag bg={T.blueL} color={T.blue}>New</Tag>}
-              </div>
-            </div>
-            {trip.brief && <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>{trip.brief}</p>}
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-              {trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
-              {trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}
-              {trip.travellers.adults.length > 0 && <Tag bg={T.coralL} color={T.coral}>{trip.travellers.adults.length} adult{trip.travellers.adults.length > 1 ? "s" : ""}</Tag>}
-              {trip.travellers.olderKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.olderKids.length} older kid{trip.travellers.olderKids.length > 1 ? "s" : ""}</Tag>}
-              {trip.travellers.youngerKids.length > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.youngerKids.length} younger kid{trip.travellers.youngerKids.length > 1 ? "s" : ""}</Tag>}
-              {trip.stayNames.length > 0 && <Tag bg={T.amberL} color={T.amber}>{trip.stayNames.length} stay{trip.stayNames.length > 1 ? "s" : ""}</Tag>}
-              {trip.budget && <Tag bg={T.greenL} color={T.green}>{trip.budget}</Tag>}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {trip.status !== "live" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 12 }}>Activate trip</button>}
-              <button onClick={e => { e.stopPropagation(); if (window.confirm(`Remove "${trip.name}"? This cannot be undone.`)) deleteCreatedTrip(trip.id); }}
-                style={{ ...css.btn, ...css.btnSm, fontSize: 12, color: T.red, borderColor: "rgba(200,50,50,.2)" }}>Remove</button>
-            </div>
-          </div>
-        ))}
-
-        <div style={{ ...css.card, cursor: "pointer", position: "relative", overflow: "hidden" }} onClick={() => { setSelectedDay(1); navigate("trip"); }}>
-          <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${T.al} 0%, transparent 70%)`, pointerEvents: "none" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-            <div>
-              <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{TRIP.name}</h3>
-              <p style={{ fontSize: 12, color: T.t2 }}>{TRIP.start} - {TRIP.end} {TRIP.year}</p>
-            </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <Tag bg={T.amberL} color={T.amber}>Demo</Tag>
-              <Tag bg={T.al} color={T.ad}>Live</Tag>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <p style={{ fontSize: 11, color: T.t3, fontStyle: "italic" }}>Sample trip — tap to explore</p>
-            <button onClick={e => { e.stopPropagation(); setShowDemo(true); setDemoSlide(0); }} style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", gap: 4 }}>▶ Watch demo</button>
-          </div>
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-            <Tag bg={T.blueL} color={T.blue}>EV road trip</Tag>
-            <Tag bg={T.coralL} color={T.coral}>Mixed diet</Tag>
-            <Tag bg={T.pinkL} color={T.pink}>2 kids</Tag>
-            <Tag bg={T.purpleL} color={T.purple}>2 stays</Tag>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex" }}>
-              {[["You", T.a], ["JM", T.coral], ["SP", T.blue], ["+1", T.amber]].map(([l, c], i) => (
-                <Avatar key={i} bg={c} label={l} size={28} style={{ marginLeft: i ? -6 : 0, border: `2px solid ${T.s}` }} />
-              ))}
-            </div>
-            <span style={{ fontSize: 12, color: T.t3 }}>4 adults · 2 children</span>
-          </div>
-        </div>
-        <div style={{ ...css.card, border: `1.5px dashed ${T.border}`, background: "none", textAlign: "center", padding: "36px 20px", cursor: "pointer", boxShadow: "none" }} onClick={() => { resetWizard(); navigate("create"); }}>
-          <div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>+</div>
-          <p style={{ fontSize: 14, fontWeight: 500, color: T.t2 }}>Plan your next adventure</p>
-          <p style={{ fontSize: 12, color: T.t3, marginTop: 4 }}>Create from scratch or use a template</p>
-        </div>
-
-        <div style={{ ...css.card, marginTop: 16, background: T.al, borderColor: T.a }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "start" }}>
-            <span style={{ fontSize: 20 }}>🤖</span>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: T.ad }}>Powered by intelligent routing</p>
-              <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>Trip With Me automatically connects to 18 travel services — maps, weather, bookings, EV chargers, and more — based on your trip needs.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <TabBar active="home" onNav={navigate} />
-    </div>
-  );
 
   // ─── Screen: Create (render function) ───
   const wizSteps = ["Details", "Travellers", "Stays", "Preferences", "Review"];
@@ -3988,35 +3854,6 @@ export default function TripWithMeApp() {
   };
 
   // ─── Screen: Share ───
-  const renderShareScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate("trip")}>Back</button>
-        <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Share trip</h2>
-        <div />
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        <p style={{ fontSize: 14, color: T.t2, marginBottom: 14 }}>Invite friends via link. They'll see timeline, chat, polls, and memories.</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: T.s2, borderRadius: T.rs, fontSize: 13, color: T.t2, marginBottom: 16 }}>
-          <code style={{ flex: 1, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>tripwithme.app/trip/easter-ld-2026</code>
-          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { navigator.clipboard?.writeText("https://tripwithme.app/trip/easter-ld-2026"); alert("Link copied!"); }}>Copy</button>
-        </div>
-        {[["You", T.a, "Lead traveller", "Admin"], ["James M. + Ella (8)", T.coral, "Joined 2 days ago"], ["Sarah P. + Max (12)", T.blue, "Joined yesterday"], ["Raj K.", T.amber, "Joined yesterday"]].map(([name, color, sub, badge], i) => (
-          <div key={i} style={{ ...css.card, display: "flex", alignItems: "center", gap: 12 }}>
-            <Avatar bg={color} label={name.slice(0, 2)} />
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: 14, fontWeight: 500 }}>{name}</p>
-              <p style={{ fontSize: 12, color: T.t3 }}>{sub}</p>
-            </div>
-            {badge && <Tag bg={T.al} color={T.ad}>{badge}</Tag>}
-          </div>
-        ))}
-      </div>
-      <TabBar active="trip" onNav={navigate} />
-    </div>
-  );
-
-  // ─── Screen: Explore ───
   // ─── Screen: Created Trip Detail ───
   const renderCreatedTripScreen = () => {
     const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
@@ -5290,82 +5127,6 @@ export default function TripWithMeApp() {
 
   // ─── Screen: Join Preview ───
   const [joinedSlot, setJoinedSlot] = useState(null);
-  const renderJoinPreviewScreen = () => {
-    const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
-    if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
-    const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
-    const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
-    return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { setJoinedSlot(null); navigate("createdTrip"); }}>Back</button>
-          <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Join preview</h2>
-          <div />
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-          <div style={{ textAlign: "center", marginBottom: 20, padding: "20px 16px", background: T.al, borderRadius: T.r }}>
-            <p style={{ fontSize: 11, color: T.t3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>You have been invited to</p>
-            <h3 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginBottom: 4 }}>{trip.name}</h3>
-            <p style={{ fontSize: 13, color: T.t2 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
-            {trip.places.length > 0 && (
-              <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap", marginTop: 8 }}>
-                {trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
-              </div>
-            )}
-          </div>
-
-          <div style={css.sectionTitle}>Join as:</div>
-          {trip.travellers.adults.filter(a => !a.isLead).map((a, i) => {
-            const realIdx = i + 1;
-            const slotName = a.name || `Adult ${realIdx + 1}`;
-            const isJoined = joinedSlot === realIdx;
-            return (
-              <div key={realIdx} style={{ ...css.card, display: "flex", alignItems: "center", gap: 12 }}>
-                <Avatar bg={adultColors[realIdx % adultColors.length]} label={getInit(slotName)} size={32} />
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 14, fontWeight: 500 }}>{slotName}</p>
-                  <p style={{ fontSize: 11, color: T.t3 }}>Unclaimed slot</p>
-                </div>
-                {isJoined ? (
-                  <Tag bg={T.al} color={T.ad}>Joined ✓</Tag>
-                ) : (
-                  <button onClick={async () => {
-                    setJoinedSlot(realIdx);
-                    // Persist join to Supabase
-                    if (a.dbId && user && user.id !== 'demo') {
-                      const ok = await joinTripAsTraveller(trip.dbId || trip.id, a.dbId, user.user_metadata?.full_name || user.email || slotName);
-                      if (!ok) showToast("Failed to sync join — try again", "error");
-                    }
-                  }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 11 }}>Join</button>
-                )}
-              </div>
-            );
-          })}
-          {trip.travellers.adults.filter(a => !a.isLead).length === 0 && (
-            <p style={{ fontSize: 13, color: T.t3, textAlign: "center", padding: 16 }}>No unclaimed adult slots available.</p>
-          )}
-
-          {joinedSlot !== null && (
-            <div style={{ ...css.card, background: T.al, borderColor: T.a, textAlign: "center", marginTop: 12, padding: 16 }}>
-              <p style={{ fontSize: 14, fontWeight: 500, color: T.ad }}>Welcome to {trip.name}!</p>
-              <p style={{ fontSize: 12, color: T.t2, marginTop: 4 }}>You have joined this trip successfully. The organiser will be notified.</p>
-              <button onClick={() => {
-                // Add trip to createdTrips if not already there, then navigate
-                if (!createdTrips.find(t => t.id === trip.id)) {
-                  setCreatedTrips(prev => [...prev, { ...trip, isJoined: true }]);
-                }
-                setSelectedCreatedTrip(trip);
-                setJoinedSlot(null);
-                navigate("createdTrip");
-              }} style={{ ...css.btn, ...css.btnP, width: "100%", marginTop: 12, padding: "10px 16px", justifyContent: "center", fontSize: 13, fontWeight: 500, gap: 6 }}>
-                📋 View full itinerary
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
 
   // ─── Render ───
@@ -5400,17 +5161,17 @@ export default function TripWithMeApp() {
     <div className="w-app" style={phoneStyle}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Instrument+Serif&display=swap');@keyframes spin{to{transform:rotate(360deg)}}@keyframes kb1{from{transform:scale(1)}to{transform:scale(1.15)}}@keyframes kb2{from{transform:scale(1.15)}to{transform:scale(1)}}@keyframes kb3{from{transform:scale(1) translateX(0)}to{transform:scale(1.1) translateX(-3%)}}@keyframes kb4{from{transform:scale(1.1) translateY(-2%)}to{transform:scale(1) translateY(0)}}@keyframes reelFadeIn{from{opacity:0}to{opacity:1}}@keyframes reelProgress{from{width:0%}to{width:100%}}@keyframes reelEnergetic{0%{transform:scale(1) rotate(0deg);opacity:0}10%{opacity:1}100%{transform:scale(1.15) rotate(1.5deg);opacity:1}}@keyframes demoPop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@keyframes demoSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes demoPulse{0%,100%{opacity:.3}50%{opacity:1}}@keyframes demoBounce{0%{transform:translateY(-16px);opacity:0}65%{transform:translateY(3px)}100%{transform:translateY(0);opacity:1}}@keyframes demoFadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}@keyframes demoType{from{width:0}to{width:100%}}@keyframes demoGrow{from{width:0%}to{width:var(--target-width)}}@keyframes typingDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}.w-app input:focus-visible,.w-app textarea:focus-visible,.w-app select:focus-visible{border-color:#4a6f60!important;box-shadow:0 0 0 2px rgba(74,111,96,.15)}.w-app button:focus-visible{outline:2px solid #4a6f60;outline-offset:2px}.w-app input[type="date"]{cursor:pointer}.w-app input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;padding:4px;opacity:.6}.w-app button{transition:all .15s}.w-app button:hover{filter:brightness(.96)}.w-app button:active{filter:brightness(.9);transition:all 60ms}.w-pri:hover{filter:brightness(1.08)!important;box-shadow:0 2px 8px rgba(74,111,96,.25)}.w-pri:active{filter:brightness(.9)!important;transform:scale(.97)}.w-chip:hover{border-color:rgba(74,111,96,.4)!important;background:rgba(74,111,96,.06)!important}.w-chip:active{transform:scale(.96)}.w-tab:hover{color:#4a6f60!important}.w-expand{cursor:pointer;transition:all .15s}.w-expand:hover{background:rgba(0,0,0,.02)}.w-expand:active{background:rgba(0,0,0,.04)}html,body,#root{height:100%;margin:0;background:#f5f3f0}@media(min-width:601px){.w-app{border-radius:22px!important;max-height:900px!important;min-height:0!important;height:900px!important;border:.5px solid rgba(0,0,0,.08)!important;box-shadow:0 8px 40px rgba(0,0,0,.08)!important;margin-top:20px!important;zoom:0.85}}@media(max-width:600px){.w-app{border-radius:0!important;max-height:none!important;height:100dvh!important;border:none!important;box-shadow:none!important;margin:0!important;font-size:14px}}`}</style>
       <div style={{ height: "100%" }}>
-        {screen === "home" && renderHomeScreen()}
+        {screen === "home" && <HomeScreen navigate={navigate} resetWizard={resetWizard} createdTrips={createdTrips} viewCreatedTrip={viewCreatedTrip} makeTripLive={makeTripLive} deleteCreatedTrip={deleteCreatedTrip} showNotifications={showNotifications} setShowNotifications={setShowNotifications} totalUnread={totalUnread} lastSeenActivity={lastSeenActivity} allRecentActivity={allRecentActivity} getUnreadCount={getUnreadCount} markTripSeen={markTripSeen} setSelectedDay={setSelectedDay} setShowDemo={setShowDemo} setDemoSlide={setDemoSlide} setTripDetailTab={setTripDetailTab} />}
         {screen === "create" && renderCreateScreen()}
         {screen === "createdTrip" && renderCreatedTripScreen()}
         {screen === "trip" && renderTripScreen()}
         {screen === "chat" && renderChatScreen()}
         {screen === "vote" && renderVoteScreen()}
         {screen === "memories" && renderMemoriesScreen()}
-        {screen === "share" && renderShareScreen()}
+        {screen === "share" && <ShareScreen navigate={navigate} />}
         {screen === "explore" && <ExploreScreen selectedCreatedTrip={selectedCreatedTrip} createdTrips={createdTrips} selectedDay={selectedDay} navigate={navigate} />}
         {screen === "settings" && <SettingsScreen user={user} navigate={navigate} signOut={signOut} selectedCreatedTrip={selectedCreatedTrip} syncing={syncing} settingsToggles={settingsToggles} setSettingsToggles={setSettingsToggles} />}
-        {screen === "joinPreview" && renderJoinPreviewScreen()}
+        {screen === "joinPreview" && <JoinPreviewScreen selectedCreatedTrip={selectedCreatedTrip} createdTrips={createdTrips} setCreatedTrips={setCreatedTrips} setSelectedCreatedTrip={setSelectedCreatedTrip} navigate={navigate} joinedSlot={joinedSlot} setJoinedSlot={setJoinedSlot} joinTripAsTraveller={joinTripAsTraveller} user={user} showToast={showToast} />}
       </div>
       {/* ── Activation Preferences Modal (global, works from any screen) ── */}
       {showActivationModal && (() => {
