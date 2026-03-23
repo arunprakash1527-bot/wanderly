@@ -2969,7 +2969,7 @@ export default function TripWithMeApp() {
         <button className="w-btn w-btnP" style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => {
           // Mandatory field validation on step 0
           if (wizStep === 0) {
-            if (!wizTrip.places.length) { setWizShowErrors(true); showToast("Add at least one destination", "error"); return; }
+            if (!wizTrip.name.trim() || !wizTrip.places.length) { setWizShowErrors(true); showToast(!wizTrip.name.trim() ? "Give your trip a name" : "Add at least one destination", "error"); return; }
             if (wizTrip.start && wizTrip.end) {
               if (wizTrip.end < wizTrip.start) { alert("End date must be after start date."); return; }
               const days = Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1;
@@ -3022,7 +3022,7 @@ export default function TripWithMeApp() {
     const tripDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1) : null;
     return (
       <>
-        <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" icon="✏️" />
+        <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" icon="✏️" required error={wizShowErrors && !wizTrip.name.trim() ? "Give your trip a name" : undefined} />
         <ControlledField label="Brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="Describe your trip — who's going, what kind of experience you want..." hint="Optional — helps the AI personalise your itinerary" />
         <div style={{ display: "flex", gap: 10 }}>
           <ControlledField label="Start date" type="date" value={wizTrip.start} onChange={v => setWizTrip(prev => ({ ...prev, start: v }))} style={{ flex: 1 }} hint={!wizTrip.start ? "Recommended" : undefined} />
