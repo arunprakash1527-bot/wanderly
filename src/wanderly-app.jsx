@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { createClient } from '@supabase/supabase-js';
 
 // ─── Extracted Modules ───
+import { supabase } from './supabaseClient';
 import { T } from './styles/tokens';
 import { css } from './styles/shared';
 import { CONNECTORS } from './constants/connectors';
@@ -12,17 +12,12 @@ import { EXPENSE_CATEGORIES, getCatInfo } from './constants/expenses';
 import { getLocationVibes, getRegion, estimateTravelHours, getLocationActivities, generateLocalAccommodations } from './utils/locationHelpers';
 import { sanitizeForHtml, renderChatHtml } from './utils/chatHelpers';
 import { GOOGLE_MAPS_KEY, loadGoogleMaps, decodePolyline } from './utils/maps';
+import { mapTripFromDB, mapTripForInsert, mapTravellersForInsert, mapStaysForInsert, mapPrefsForInsert } from './utils/tripMappers';
 import { Avatar } from './components/common/Avatar';
 import { Tag, GroupTag } from './components/common/Tag';
 import { Collapsible } from './components/common/Collapsible';
 import { ControlledField } from './components/common/ControlledField';
 import { TripMap } from './components/map/TripMap';
-
-// ─── Supabase Client ───
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
 
 
 function TabBar({ active, onNav }) {
@@ -205,29 +200,7 @@ export default function TripWithMeApp() {
       // Fetch trip by share code from Supabase
       lookupTripByShareCode(joinCode).then(data => {
         if (data) {
-          const mapped = {
-            id: data.id, dbId: data.id, name: data.name, brief: data.brief,
-            start: data.start_date, end: data.end_date, rawStart: data.start_date, rawEnd: data.end_date,
-            places: data.places || [], travel: data.travel_modes || [], status: data.status,
-            shareCode: data.share_code,
-            year: data.start_date ? new Date(data.start_date).getFullYear() : new Date().getFullYear(),
-            travellers: {
-              adults: (data.trip_travellers || []).filter(tr => tr.role === 'lead' || tr.role === 'adult').map(tr => ({
-                name: tr.name, email: tr.email || "", isLead: tr.role === 'lead', dbId: tr.id, isClaimed: tr.is_claimed
-              })),
-              olderKids: (data.trip_travellers || []).filter(tr => tr.role === 'child_older').map(tr => ({ name: tr.name, age: tr.age || 10, dbId: tr.id })),
-              youngerKids: (data.trip_travellers || []).filter(tr => tr.role === 'child_younger').map(tr => ({ name: tr.name, age: tr.age || 5, dbId: tr.id })),
-            },
-            stays: (data.trip_stays || []).map(s => ({ name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, checkIn: s.check_in, checkOut: s.check_out, cost: s.cost ? String(s.cost) : "", bookingRef: s.booking_ref || "", address: s.address || "", dbId: s.id })),
-            stayNames: (data.trip_stays || []).map(s => s.name),
-            prefs: data.trip_preferences?.[0] ? {
-              food: data.trip_preferences[0].food_prefs || [], adultActs: data.trip_preferences[0].adult_activities || [],
-              olderActs: data.trip_preferences[0].older_kid_activities || [], youngerActs: data.trip_preferences[0].younger_kid_activities || [],
-              instructions: data.trip_preferences[0].instructions || "",
-              activities: [...(data.trip_preferences[0].adult_activities || []), ...(data.trip_preferences[0].older_kid_activities || []), ...(data.trip_preferences[0].younger_kid_activities || [])],
-            } : { food: [], adultActs: [], olderActs: [], youngerActs: [], instructions: "", activities: [] },
-            timeline: [],
-          };
+          const mapped = mapTripFromDB(data);
           setSelectedCreatedTrip(mapped);
           setScreen('joinPreview');
         } else {
@@ -561,44 +534,7 @@ export default function TripWithMeApp() {
       if (error) throw error;
 
       if (trips && trips.length > 0) {
-        const mapped = trips.map(t => ({
-          id: t.id,
-          name: t.name,
-          brief: t.brief,
-          start: t.start_date,
-          end: t.end_date,
-          places: t.places || [],
-          travel: t.travel_modes || [],
-          status: t.status,
-          shareCode: t.share_code,
-          travellers: {
-            adults: (t.trip_travellers || []).filter(tr => tr.role === 'lead' || tr.role === 'adult').map(tr => ({
-              name: tr.name, email: tr.email || "", isLead: tr.role === 'lead', dbId: tr.id, isClaimed: tr.is_claimed
-            })),
-            olderKids: (t.trip_travellers || []).filter(tr => tr.role === 'child_older').map(tr => ({
-              name: tr.name, age: tr.age || 10, dbId: tr.id
-            })),
-            youngerKids: (t.trip_travellers || []).filter(tr => tr.role === 'child_younger').map(tr => ({
-              name: tr.name, age: tr.age || 5, dbId: tr.id
-            })),
-          },
-          stays: (t.trip_stays || []).map(s => ({
-            name: s.name, type: s.type, tags: s.tags || [], rating: s.rating, price: s.price, location: s.location, checkIn: s.check_in, checkOut: s.check_out, cost: s.cost ? String(s.cost) : "", bookingRef: s.booking_ref || "", address: s.address || "", dbId: s.id
-          })),
-          stayNames: (t.trip_stays || []).map(s => s.name),
-          prefs: t.trip_preferences && t.trip_preferences.length > 0 ? {
-            food: t.trip_preferences[0].food_prefs || [],
-            adultActs: t.trip_preferences[0].adult_activities || [],
-            olderActs: t.trip_preferences[0].older_kid_activities || [],
-            youngerActs: t.trip_preferences[0].younger_kid_activities || [],
-            instructions: t.trip_preferences[0].instructions || "",
-            activities: [...(t.trip_preferences[0].adult_activities || []), ...(t.trip_preferences[0].older_kid_activities || []), ...(t.trip_preferences[0].younger_kid_activities || [])],
-          } : { food: [], adultActs: [], olderActs: [], youngerActs: [], instructions: "", activities: [] },
-          createdAt: t.created_at,
-          dbId: t.id,
-          year: t.start_date ? new Date(t.start_date).getFullYear() : new Date().getFullYear(),
-          timeline: [],
-        }));
+        const mapped = trips.map(t => mapTripFromDB(t));
         setCreatedTrips(mapped);
       }
     } catch (err) {
@@ -615,85 +551,25 @@ export default function TripWithMeApp() {
     try {
       const { data: trip, error: tripError } = await supabase
         .from('trips')
-        .insert({
-          name: tripData.name,
-          brief: tripData.brief,
-          start_date: tripData.rawStart || null,
-          end_date: tripData.rawEnd || null,
-          places: tripData.places,
-          travel_modes: Array.from(tripData.travel || []),
-          status: 'draft',
-          lead_user_id: user.id,
-        })
+        .insert(mapTripForInsert(tripData, user.id))
         .select()
         .single();
 
       if (tripError) throw tripError;
 
-      const travellerRows = [];
-      if (tripData.travellers?.adults) {
-        tripData.travellers.adults.forEach(a => {
-          travellerRows.push({
-            trip_id: trip.id,
-            user_id: a.isLead ? user.id : null,
-            name: a.name || 'Adult',
-            email: a.email || null,
-            role: a.isLead ? 'lead' : 'adult',
-            is_claimed: a.isLead,
-          });
-        });
-      }
-      if (tripData.travellers?.olderKids) {
-        tripData.travellers.olderKids.forEach(c => {
-          travellerRows.push({
-            trip_id: trip.id,
-            name: c.name || 'Child',
-            role: 'child_older',
-            age: c.age,
-          });
-        });
-      }
-      if (tripData.travellers?.youngerKids) {
-        tripData.travellers.youngerKids.forEach(c => {
-          travellerRows.push({
-            trip_id: trip.id,
-            name: c.name || 'Child',
-            role: 'child_younger',
-            age: c.age,
-          });
-        });
-      }
+      const travellerRows = mapTravellersForInsert(tripData, trip.id, user.id);
       if (travellerRows.length > 0) {
         await supabase.from('trip_travellers').insert(travellerRows);
       }
 
-      if (tripData.stays && tripData.stays.length > 0) {
-        const stayRows = tripData.stays.map(s => ({
-          trip_id: trip.id,
-          name: s.name,
-          type: s.type,
-          tags: s.tags || [],
-          rating: s.rating,
-          price: s.price,
-          location: s.location,
-          check_in: s.checkIn || null,
-          check_out: s.checkOut || null,
-          cost: s.cost ? parseFloat(s.cost) : null,
-          booking_ref: s.bookingRef || null,
-          address: s.address || null,
-        }));
+      const stayRows = mapStaysForInsert(tripData.stays, trip.id);
+      if (stayRows.length > 0) {
         await supabase.from('trip_stays').insert(stayRows);
       }
 
-      if (tripData.prefs) {
-        await supabase.from('trip_preferences').insert({
-          trip_id: trip.id,
-          food_prefs: Array.from(tripData.prefs.food || []),
-          adult_activities: Array.from(tripData.prefs.adultActs || tripData.prefs.activities || []),
-          older_kid_activities: Array.from(tripData.prefs.olderActs || []),
-          younger_kid_activities: Array.from(tripData.prefs.youngerActs || []),
-          instructions: tripData.prefs.instructions || "",
-        });
+      const prefsRow = mapPrefsForInsert(tripData.prefs, trip.id);
+      if (prefsRow) {
+        await supabase.from('trip_preferences').insert(prefsRow);
       }
 
       return { ...tripData, id: trip.id, shareCode: trip.share_code, dbId: trip.id };
