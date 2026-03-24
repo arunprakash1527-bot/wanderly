@@ -16,6 +16,7 @@ import { useExpenses } from '../../contexts/ExpenseContext';
 import { useMemories } from '../../contexts/MemoriesContext';
 import { curateReelPhotos } from '../../utils/reelCurator';
 import { REEL_TRACKS } from '../../utils/reelMusic';
+import { detectMood, generateAutoCaption, buildMemoryTimeline } from '../../utils/aiMemories';
 
 const fmtDate = (iso) => {
   if (!iso) return "";
@@ -30,7 +31,7 @@ export function CreatedTripScreen() {
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
   const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
-  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
+  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, wrappedPlaying, setWrappedPlaying, memoriesView, setMemoriesView, autoOrderEnabled, setAutoOrderEnabled, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
 
   const [confirmingEnd, setConfirmingEnd] = useState(false);
 
@@ -286,6 +287,12 @@ export function CreatedTripScreen() {
                 <p style={{ fontSize: 14, fontWeight: 500, color: T.t }}>{uploadedPhotos.length}</p>
               </div>
             </div>
+            {/* Trip Wrapped button */}
+            <button onClick={() => setWrappedPlaying(true)}
+              style={{ width: "100%", marginTop: 12, padding: "12px 16px", borderRadius: T.rs, border: `1.5px solid ${T.purple}`, background: `linear-gradient(135deg, ${T.purpleL}, #E0DBF5)`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: T.font, transition: "all .15s" }}>
+              <span style={{ fontSize: 18 }}>✨</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.purple }}>View Trip Wrapped</span>
+            </button>
           </div>
         </div>
       )}
@@ -1166,20 +1173,39 @@ export function CreatedTripScreen() {
             const totalPhotos = uploadedPhotos.length;
             const likedCount = uploadedPhotos.filter(p => p.liked).length;
 
-            const renderThumb = (p, idx) => (
+            const renderThumb = (p, idx) => {
+              const mood = detectMood(p, trip.timeline);
+              return (
               <div key={idx} style={{ position: "relative" }}>
                 <div style={{ aspectRatio: "1", borderRadius: T.rs, overflow: "hidden", cursor: "pointer", position: "relative", border: p.liked ? `2px solid ${T.red}` : "none" }} onClick={() => setViewingPhoto(p)}>
                   <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   <span onClick={(e) => { e.stopPropagation(); const updated = uploadedPhotos.map(ph => ph.id === p.id ? { ...ph, liked: !ph.liked } : ph); setUploadedPhotos(updated); updatePhotoInSupabase(p.id, { liked: !p.liked }); }} style={{ position: "absolute", top: 4, left: 4, fontSize: 14, cursor: "pointer", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}>{p.liked ? "\u2764\uFE0F" : "\uD83E\uDD0D"}</span>
                   <span onClick={(e) => { e.stopPropagation(); setUploadedPhotos(prev => prev.filter(ph => ph.id !== p.id)); deletePhotoFromSupabase(p); }} style={{ position: "absolute", top: 2, right: 4, fontSize: 14, cursor: "pointer", color: "#fff", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,.6)", lineHeight: 1 }}>&times;</span>
+                  {/* Mood tag */}
+                  {mood && (
+                    <span style={{ position: "absolute", bottom: 4, left: 4, padding: "2px 6px", borderRadius: 8, background: mood.bg, color: mood.color, fontSize: 9, fontWeight: 600, display: "flex", alignItems: "center", gap: 2 }}>
+                      {mood.icon} {mood.label}
+                    </span>
+                  )}
+                  {/* AI caption button */}
+                  {!p.caption && (
+                    <span onClick={(e) => { e.stopPropagation(); const caption = generateAutoCaption(p, trip.timeline, trip); setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, caption } : ph)); updatePhotoInSupabase(p.id, { caption }); }}
+                      style={{ position: "absolute", bottom: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.5)", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(2px)" }}
+                      title="AI caption">AI</span>
+                  )}
                 </div>
+                {/* Caption display */}
+                {p.caption && (
+                  <p style={{ fontSize: 9, color: T.t2, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.caption}</p>
+                )}
                 <select value={p.day} onChange={(e) => { const newDay = e.target.value; setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, day: newDay } : ph)); updatePhotoInSupabase(p.id, { day_tag: newDay }); }}
                   style={{ width: "100%", padding: "3px 4px", fontSize: 10, border: `.5px solid ${T.border}`, borderRadius: 4, background: T.s2, color: T.t2, marginTop: 3, fontFamily: T.font, cursor: "pointer" }}>
                   <option value="Untagged">Untagged</option>
                   {dayGroups.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
-            );
+              );
+            };
             const uploadBox = (dayLabel) => (
               <div onClick={() => { uploadDayTagRef.current = dayLabel || "Untagged"; photoInputRef.current?.click(); }} style={{ aspectRatio: "1", borderRadius: T.rs, background: T.s2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: T.t3, flexDirection: "column", gap: 2 }}>{"📷"}<span style={{ fontSize: 10 }}>Add</span></div>
             );
@@ -1187,14 +1213,32 @@ export function CreatedTripScreen() {
             return (
             <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
               <input type="file" accept="image/*" multiple ref={photoInputRef} style={{ display: "none" }} onChange={handlePhotoUpload} />
-              {/* Stats */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              {/* Stats + View toggle */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", gap: 12, fontSize: 12, color: T.t2 }}>
                   <span>📸 {totalPhotos}</span>
                   <span>❤️ {likedCount}</span>
                 </div>
                 <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => photoInputRef.current?.click()}>+ Upload</button>
               </div>
+              {/* View mode + AI tools */}
+              {totalPhotos > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
+                  <button onClick={() => setMemoriesView("grid")}
+                    style={{ padding: "5px 12px", borderRadius: 16, fontSize: 11, fontWeight: memoriesView === "grid" ? 600 : 400, border: `.5px solid ${memoriesView === "grid" ? T.a : T.border}`, background: memoriesView === "grid" ? T.al : "transparent", color: memoriesView === "grid" ? T.ad : T.t3, cursor: "pointer", fontFamily: T.font }}>
+                    📷 Grid
+                  </button>
+                  <button onClick={() => setMemoriesView("timeline")}
+                    style={{ padding: "5px 12px", borderRadius: 16, fontSize: 11, fontWeight: memoriesView === "timeline" ? 600 : 400, border: `.5px solid ${memoriesView === "timeline" ? T.a : T.border}`, background: memoriesView === "timeline" ? T.al : "transparent", color: memoriesView === "timeline" ? T.ad : T.t3, cursor: "pointer", fontFamily: T.font }}>
+                    📖 Timeline
+                  </button>
+                  <div style={{ flex: 1 }} />
+                  <button onClick={() => { uploadedPhotos.forEach(p => { if (!p.caption) { const caption = generateAutoCaption(p, trip.timeline, trip); setUploadedPhotos(prev => prev.map(ph => ph.id === p.id ? { ...ph, caption } : ph)); updatePhotoInSupabase(p.id, { caption }); }}); }}
+                    style={{ padding: "5px 10px", borderRadius: 16, fontSize: 10, fontWeight: 500, border: `.5px solid ${T.purple}`, background: T.purpleL, color: T.purple, cursor: "pointer", fontFamily: T.font, display: "flex", alignItems: "center", gap: 3 }}>
+                    ✨ AI Captions
+                  </button>
+                </div>
+              )}
 
               {/* Highlight reel */}
               {totalPhotos > 0 && (() => {
@@ -1250,13 +1294,65 @@ export function CreatedTripScreen() {
                 </>);
               })()}
 
-              {/* Day-grouped photos */}
-              {dayGroups.map(dayLabel => {
+              {/* ─── TIMELINE VIEW ─── */}
+              {memoriesView === "timeline" && totalPhotos > 0 && (() => {
+                const memTimeline = buildMemoryTimeline(uploadedPhotos, trip.timeline, trip);
+                return (
+                  <div style={{ position: "relative", paddingLeft: 24 }}>
+                    {/* Vertical line */}
+                    <div style={{ position: "absolute", left: 10, top: 0, bottom: 0, width: 2, background: T.border }} />
+                    {memTimeline.filter(d => d.photoCount > 0 || d.activities.length > 0).map((entry, i) => (
+                      <div key={i} style={{ position: "relative", marginBottom: 24 }}>
+                        {/* Dot */}
+                        <div style={{ position: "absolute", left: -20, top: 4, width: 12, height: 12, borderRadius: "50%", background: entry.mood ? entry.mood.bg : T.s2, border: `2px solid ${entry.mood ? entry.mood.color : T.border}`, zIndex: 1 }} />
+                        {/* Header */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>{entry.dayLabel}</p>
+                          {entry.date && <span style={{ fontSize: 11, color: T.t3 }}>{entry.date}</span>}
+                          {entry.location && <span style={{ fontSize: 11, color: T.a, fontWeight: 500 }}>📍 {entry.location}</span>}
+                          {entry.mood && <span style={{ padding: "2px 8px", borderRadius: 10, background: entry.mood.bg, color: entry.mood.color, fontSize: 10, fontWeight: 600 }}>{entry.mood.icon} {entry.mood.label}</span>}
+                        </div>
+                        {/* Activities context */}
+                        {entry.activities.length > 0 && (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                            {entry.activities.map((act, ai) => (
+                              <span key={ai} style={{ padding: "3px 8px", borderRadius: 8, background: T.s2, fontSize: 10, color: T.t2 }}>
+                                {act.time && <span style={{ color: T.t3 }}>{act.time} </span>}{act.title}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Photos */}
+                        {entry.photos.length > 0 && (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                            {entry.photos.map((p, pi) => renderThumb(p, pi))}
+                            {uploadBox(entry.dayLabel)}
+                          </div>
+                        )}
+                        {entry.photos.length === 0 && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div onClick={() => { uploadDayTagRef.current = entry.dayLabel; photoInputRef.current?.click(); }}
+                              style={{ padding: "8px 14px", borderRadius: T.rs, border: `1px dashed ${T.border}`, cursor: "pointer", fontSize: 11, color: T.t3 }}>
+                              📷 Add photos for {entry.dayLabel}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* ─── GRID VIEW ─── */}
+              {memoriesView === "grid" && dayGroups.map(dayLabel => {
                 const dayPhotos = taggedByDay[dayLabel];
                 return (
                   <div key={dayLabel} style={{ marginBottom: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>{dayLabel}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>{dayLabel}</p>
+                        {(() => { const mood = dayPhotos.length > 0 ? detectMood(dayPhotos[0], trip.timeline) : null; return mood ? <span style={{ padding: "1px 6px", borderRadius: 8, background: mood.bg, color: mood.color, fontSize: 9, fontWeight: 600 }}>{mood.icon} {mood.label}</span> : null; })()}
+                      </div>
                       <span style={{ fontSize: 11, color: T.t3 }}>{dayPhotos.length === 0 ? "No photos yet" : `${dayPhotos.length} photo${dayPhotos.length !== 1 ? "s" : ""}`}</span>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
@@ -1268,7 +1364,7 @@ export function CreatedTripScreen() {
               })}
 
               {/* Untagged */}
-              {untaggedPhotos.length > 0 && (
+              {memoriesView === "grid" && untaggedPhotos.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Untagged</p>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>

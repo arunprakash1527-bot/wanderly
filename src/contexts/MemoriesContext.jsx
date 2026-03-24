@@ -23,6 +23,13 @@ export function MemoriesProvider({ children }) {
   const [reelTrack, setReelTrack] = useState("ambient"); // music track id
   const [reelPhotos, setReelPhotos] = useState([]); // curated photos for reel
 
+  // ─── Trip Wrapped State ───
+  const [wrappedPlaying, setWrappedPlaying] = useState(false);
+
+  // ─── AI Memories State ───
+  const [memoriesView, setMemoriesView] = useState("grid"); // "grid" | "timeline"
+  const [autoOrderEnabled, setAutoOrderEnabled] = useState(false);
+
   // ─── Refs ───
   const photoInputRef = useRef(null);
   const reelTimerRef = useRef(null);
@@ -118,6 +125,9 @@ export function MemoriesProvider({ children }) {
     reelStyle, setReelStyle,
     reelTrack, setReelTrack,
     reelPhotos, setReelPhotos,
+    wrappedPlaying, setWrappedPlaying,
+    memoriesView, setMemoriesView,
+    autoOrderEnabled, setAutoOrderEnabled,
     photoInputRef,
     reelTimerRef,
     reelMusicRef,

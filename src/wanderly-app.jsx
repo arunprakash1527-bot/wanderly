@@ -19,6 +19,7 @@ import { JoinPreviewScreen } from './components/screens/JoinPreviewScreen';
 // Overlay components
 import { ActivationModal } from './components/overlays/ActivationModal';
 import { ReelOverlay } from './components/overlays/ReelOverlay';
+import { TripWrapped } from './components/overlays/TripWrapped';
 import { WelcomeModal } from './components/overlays/WelcomeModal';
 import { DemoOverlay } from './components/overlays/DemoOverlay';
 import { PhotoViewer } from './components/overlays/PhotoViewer';
@@ -108,6 +109,7 @@ function AppShell() {
       </main>
       <ActivationModal />
       <ReelOverlay />
+      <TripWrapped />
       <WelcomeModal />
       <DemoOverlay />
       <PhotoViewer />
