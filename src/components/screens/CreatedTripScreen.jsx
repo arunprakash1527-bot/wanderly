@@ -57,6 +57,8 @@ export function CreatedTripScreen() {
   const [conflicts, setConflicts] = useState([]);
   const [showConflicts, setShowConflicts] = useState(false);
 
+  const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
+
   // Load trip data from Supabase when selected trip changes
   const tripDbId = selectedCreatedTrip?.dbId || selectedCreatedTrip?.id;
   useEffect(() => {
@@ -73,8 +75,6 @@ export function CreatedTripScreen() {
       setConflicts(detectConflicts(trip));
     }
   }, [trip?.timeline, selectedDay]); // eslint-disable-line
-
-  const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const isLive = trip.status === "live";
   const isCompleted = trip.status === "completed";
