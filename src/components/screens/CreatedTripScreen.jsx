@@ -1309,8 +1309,8 @@ export function CreatedTripScreen() {
                   {(trip.travellers?.adults || []).map((a, i) => {
                     const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
                     const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
-                    const status = a.isLead ? "Organiser" : a.email ? "Invited" : "Pending";
-                    const statusColor = a.isLead ? T.ad : a.email ? T.blue : T.t3;
+                    const status = a.isLead ? "Organiser" : a.dbId ? "Joined" : "Pending";
+                    const statusColor = a.isLead ? T.ad : a.dbId ? T.blue : T.t3;
                     return (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < (trip.travellers?.adults?.length || 0) - 1 ? `.5px solid ${T.border}` : "none" }}>
                         <Avatar bg={adultColors[i % adultColors.length]} label={getInit(a.name)} size={24} />

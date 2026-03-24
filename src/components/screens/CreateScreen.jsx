@@ -200,14 +200,10 @@ export function CreateScreen() {
             {wizTravellers.adults.map((a, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < wizTravellers.adults.length - 1 ? `.5px solid ${T.border}` : "none" }}>
                 <Avatar bg={adultColors[i % adultColors.length]} label={getInitials(a.name)} size={32} />
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
                     <input value={a.name} onChange={e => updateAdult(i, "name", e.target.value)} placeholder={a.isLead ? "Your name" : "Name"}
                       style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
                     {a.isLead && <span style={{ ...css.tag(T.al, T.ad), fontSize: 9, padding: "2px 6px", whiteSpace: "nowrap" }}>Lead</span>}
-                  </div>
-                  <input value={a.email} onChange={e => updateAdult(i, "email", e.target.value)} placeholder="Email for invite link"
-                    style={{ padding: "5px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s2, outline: "none", color: T.t2 }} />
                 </div>
                 {!a.isLead && <span onClick={() => removeAdult(i)} style={{ cursor: "pointer", color: T.red, fontSize: 16, flexShrink: 0 }}>×</span>}
               </div>
