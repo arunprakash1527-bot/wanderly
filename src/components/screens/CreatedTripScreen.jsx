@@ -192,6 +192,29 @@ export function CreatedTripScreen() {
               <button onClick={() => makeTripLive(trip.id)} style={{ ...css.btn, ...css.btnP, justifyContent: "center", width: "100%", padding: "14px 16px", fontSize: 15, fontWeight: 600, borderRadius: T.r, boxShadow: "0 2px 8px rgba(27,143,106,.25)" }}>Activate trip</button>
             </div>
 
+            {/* ── What you'll unlock ── */}
+            <div style={{ ...css.card, marginBottom: 16, padding: 16 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: T.t, marginBottom: 12 }}>What activating unlocks</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[
+                  { icon: "📋", label: "AI Itinerary", desc: "Day-by-day activities, food & routes", color: T.a },
+                  { icon: "💬", label: "AI Chat", desc: "Refine plans with your concierge", color: T.blue },
+                  { icon: "💷", label: "Expenses", desc: "Track & split costs with your group", color: T.coral },
+                  { icon: "📊", label: "Group Polls", desc: "Vote on restaurants, activities & more", color: T.purple },
+                  { icon: "🎒", label: "Packing List", desc: "Smart suggestions based on your trip", color: T.amber },
+                  { icon: "📸", label: "Memories", desc: "Upload photos & create trip reels", color: T.pink },
+                ].map(f => (
+                  <div key={f.label} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: T.s2, borderRadius: T.rs }}>
+                    <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{f.icon}</span>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: f.color }}>{f.label}</p>
+                      <p style={{ fontSize: 10, color: T.t3, lineHeight: 1.3, marginTop: 2 }}>{f.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* ── Trip readiness ── */}
             <div style={{ ...css.card, marginBottom: 12, padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>

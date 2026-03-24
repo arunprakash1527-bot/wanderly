@@ -384,6 +384,26 @@ export function CreateScreen() {
             {wizTravellers.infants.length > 0 ? ` · ${wizTravellers.infants.length} infant${wizTravellers.infants.length > 1 ? "s" : ""}` : ""}
           </span>
         </div>
+
+        {/* Contextual nudges based on group composition */}
+        {wizTravellers.adults.length >= 2 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: `${T.a}08`, border: `.5px solid ${T.a}20`, borderRadius: T.r, marginTop: 10 }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>💷</span>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 500, color: T.t1 }}>Split expenses easily</p>
+              <p style={{ fontSize: 11, color: T.t3, lineHeight: 1.4 }}>Track who paid what and settle up automatically — available once your trip is live</p>
+            </div>
+          </div>
+        )}
+        {(wizTravellers.youngerKids.length > 0 || wizTravellers.infants.length > 0) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: `${T.pink}08`, border: `.5px solid ${T.pink}20`, borderRadius: T.r, marginTop: 10 }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>🎯</span>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 500, color: T.t1 }}>Kid-friendly activities included</p>
+              <p style={{ fontSize: 11, color: T.t3, lineHeight: 1.4 }}>Your itinerary will feature age-appropriate activities alongside adult plans</p>
+            </div>
+          </div>
+        )}
       </>
     );
   };
@@ -787,6 +807,26 @@ export function CreateScreen() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* What happens next — feature preview */}
+        <div style={{ background: `linear-gradient(135deg, ${T.al}60, ${T.al})`, border: `.5px solid ${T.a}30`, borderRadius: T.rs, padding: 14, marginTop: 14 }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: T.ad, marginBottom: 10 }}>What happens after you create this trip</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              { icon: "📋", text: "AI builds a personalised day-by-day itinerary" },
+              { icon: "💬", text: "Chat with your concierge to refine the plan" },
+              ...(wizTravellers.adults.length >= 2 ? [{ icon: "💷", text: `Split expenses across ${wizTravellers.adults.length} travellers` }] : []),
+              ...(wizTravellers.adults.length >= 2 ? [{ icon: "📊", text: "Create polls for group decisions" }] : []),
+              { icon: "🎒", text: "Get a smart packing list for your trip" },
+              { icon: "📸", text: "Capture memories & create trip reels" },
+            ].map((item, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14 }}>{item.icon}</span>
+                <p style={{ fontSize: 11, color: T.t2, lineHeight: 1.3 }}>{item.text}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </>
     );

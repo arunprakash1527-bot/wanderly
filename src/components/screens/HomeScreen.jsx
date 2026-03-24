@@ -115,6 +115,32 @@ export function HomeScreen() {
               {trip.stayNames.length > 0 && <Tag bg={T.amberL} color={T.amber}>{trip.stayNames.length} stay{trip.stayNames.length > 1 ? "s" : ""}</Tag>}
               {trip.budget && <Tag bg={T.greenL} color={T.green}>{trip.budget}</Tag>}
             </div>
+            {/* Feature icons strip */}
+            {trip.status === "live" && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+                {[
+                  { icon: "📋", label: "Itinerary", tab: "itinerary" },
+                  { icon: "💬", label: "Chat", tab: "chat" },
+                  { icon: "💷", label: "Expenses", tab: "expenses" },
+                  { icon: "📊", label: "Polls", tab: "polls" },
+                  { icon: "🎒", label: "Packing", tab: "packing" },
+                  { icon: "📸", label: "Memories", tab: "memories" },
+                ].map(f => (
+                  <span key={f.tab} onClick={e => { e.stopPropagation(); viewCreatedTrip(trip); setTripDetailTab(f.tab); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, color: T.t2, background: T.s2, padding: "3px 8px", borderRadius: 10, cursor: "pointer", fontFamily: T.font, transition: "all .15s" }}>
+                    {f.icon} {f.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            {trip.status !== "live" && trip.status !== "completed" && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10, opacity: 0.5 }}>
+                {["📋 Itinerary", "💬 AI Chat", "💷 Expenses", "📊 Polls", "🎒 Packing", "📸 Memories"].map(f => (
+                  <span key={f} style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "3px 8px", borderRadius: 10, fontFamily: T.font }}>{f}</span>
+                ))}
+                <span style={{ fontSize: 10, color: T.a, fontWeight: 500, padding: "3px 0", fontFamily: T.font }}>Activate to unlock</span>
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {trip.status !== "live" && trip.status !== "completed" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 12 }}>Activate trip</button>}
               <button onClick={e => { e.stopPropagation(); if (window.confirm(`Remove "${trip.name}"? This cannot be undone.`)) deleteCreatedTrip(trip.id); }}
