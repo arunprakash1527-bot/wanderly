@@ -396,10 +396,11 @@ function AppShell() {
   };
 
   const phoneStyle = { maxWidth: isDesktop ? "none" : 600, width: "100%", margin: "0 auto", minHeight: "100dvh", height: "100dvh", background: T.bg, overflow: "hidden", fontFamily: T.font, color: T.t1 };
+  const centeredStyle = { maxWidth: 600, width: "100%", margin: "0 auto", minHeight: "100dvh", height: "100dvh", background: T.bg, overflow: "hidden", fontFamily: T.font, color: T.t1 };
 
   if (authLoading) {
     return (
-      <div className="w-app" style={phoneStyle}>
+      <div className="w-app" style={centeredStyle}>
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400 }}>Trip With Me</h1>
@@ -412,7 +413,7 @@ function AppShell() {
 
   if (!user) {
     return (
-      <div className="w-app" style={phoneStyle}>
+      <div className="w-app" style={centeredStyle}>
         <div style={{ height: "100%" }}>
           <AuthScreen />
         </div>
