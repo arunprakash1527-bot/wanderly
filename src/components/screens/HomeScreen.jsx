@@ -9,6 +9,12 @@ import { useNavigation } from '../../contexts/NavigationContext';
 import { useTrip } from '../../contexts/TripContext';
 import { useWizard } from '../../contexts/WizardContext';
 
+const fmtDate = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso + "T12:00:00");
+  return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
+};
+
 export function HomeScreen() {
   const { navigate, setShowDemo, setDemoSlide } = useNavigation();
   const { createdTrips, viewCreatedTrip, makeTripLive, deleteCreatedTrip, showNotifications, setShowNotifications, totalUnread, lastSeenActivity, allRecentActivity, getUnreadCount, markTripSeen, setSelectedDay, setTripDetailTab } = useTrip();
@@ -18,7 +24,7 @@ export function HomeScreen() {
       <div style={{ padding: "16px 20px 12px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <h1 style={{ fontFamily: T.fontD, fontSize: 24, fontWeight: 400, color: T.t1 }}>Trip With Me</h1>
-          <span style={{ fontSize: 11, color: T.t3, fontWeight: 500, letterSpacing: 0.5 }}>TRAVEL CONCIERGE</span>
+          <span style={{ fontSize: 10, color: T.t3, fontWeight: 400, letterSpacing: 0.3, textTransform: "lowercase", fontStyle: "italic" }}>travel concierge</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button style={{ position: "relative", background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 4 }} onClick={() => setShowNotifications(prev => !prev)} title="Notifications" aria-label={`Notifications${totalUnread > 0 ? `, ${totalUnread} unread` : ""}`}>
@@ -81,7 +87,7 @@ export function HomeScreen() {
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
               <div>
                 <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{trip.name}</h3>
-                <p style={{ fontSize: 12, color: T.t2 }}>{trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}</p>
+                <p style={{ fontSize: 12, color: T.t2 }}>{trip.rawStart && trip.rawEnd ? `${fmtDate(trip.rawStart)} – ${fmtDate(trip.rawEnd)} ${new Date(trip.rawEnd + "T12:00:00").getFullYear()}` : (trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC")}</p>
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {getUnreadCount(trip.id) > 0 && <Tag bg={T.coralL} color={T.coral}>{getUnreadCount(trip.id)} new</Tag>}
@@ -144,15 +150,7 @@ export function HomeScreen() {
           <p style={{ fontSize: 12, color: T.t3, marginTop: 4 }}>Start planning in under a minute</p>
         </div>
 
-        <div style={{ ...css.card, marginTop: 16, background: T.al, borderColor: T.a }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "start" }}>
-            <span style={{ fontSize: 20 }}>🤖</span>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: T.ad }}>Powered by intelligent routing</p>
-              <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>Trip With Me automatically connects to 18 travel services — maps, weather, bookings, EV chargers, and more — based on your trip needs.</p>
-            </div>
-          </div>
-        </div>
+        <p style={{ textAlign: "center", fontSize: 10, color: T.t3, marginTop: 20, opacity: 0.6 }}>✨ Powered by intelligent routing · 18 connected services</p>
       </div>
       <TabBar active="home" onNav={navigate} />
     </div>

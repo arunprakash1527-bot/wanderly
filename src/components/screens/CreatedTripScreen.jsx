@@ -15,6 +15,12 @@ import { useChat } from '../../contexts/ChatContext';
 import { useExpenses } from '../../contexts/ExpenseContext';
 import { useMemories } from '../../contexts/MemoriesContext';
 
+const fmtDate = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso + "T12:00:00");
+  return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
+};
+
 export function CreatedTripScreen() {
   const { user } = useAuth();
   const { navigate, showToast } = useNavigation();
@@ -71,11 +77,13 @@ export function CreatedTripScreen() {
     navigate("create");
   };
 
-  // Tab bar for live trips
+  // Tab bar for live trips — pill chip style
   const tripTabStyle = (tab) => ({
-    flex: 1, padding: "10px 0", textAlign: "center", fontSize: 12, fontWeight: tripDetailTab === tab ? 600 : 400,
-    color: tripDetailTab === tab ? T.a : T.t3, cursor: "pointer", border: "none", background: "none",
-    fontFamily: T.font, borderBottom: tripDetailTab === tab ? `2px solid ${T.a}` : "2px solid transparent", transition: "all .15s"
+    padding: "6px 16px", fontSize: 12, fontWeight: tripDetailTab === tab ? 600 : 400,
+    color: tripDetailTab === tab ? T.ad : T.t3, cursor: "pointer",
+    border: `1px solid ${tripDetailTab === tab ? T.a : T.border}`,
+    background: tripDetailTab === tab ? T.al : "transparent",
+    fontFamily: T.font, borderRadius: 20, whiteSpace: "nowrap", transition: "all .15s"
   });
 
   return (
@@ -105,7 +113,7 @@ export function CreatedTripScreen() {
         </div>
         <h2 style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400 }}>{trip.name}</h2>
         <p style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>
-          {trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC"}
+          {trip.rawStart && trip.rawEnd ? `${fmtDate(trip.rawStart)} – ${fmtDate(trip.rawEnd)} ${new Date(trip.rawEnd + "T12:00:00").getFullYear()}` : (trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC")}
           {` · ${trip.places.join(", ") || "No locations"} · ${totalTravellers} traveller${totalTravellers > 1 ? "s" : ""}`}
         </p>
       </div>
@@ -284,7 +292,7 @@ export function CreatedTripScreen() {
       {(isLive || isCompleted) && (
         <>
           {/* Tab bar */}
-          <div style={{ display: "flex", background: T.s, borderBottom: `.5px solid ${T.border}`, position: "sticky", top: 0, zIndex: 10 }}>
+          <div style={{ display: "flex", overflowX: "auto", gap: 8, padding: "10px 16px", background: T.s, borderBottom: `1px solid ${T.border}08`, position: "sticky", top: 0, zIndex: 10, WebkitOverflowScrolling: "touch" }}>
             <button className="w-tab" style={tripTabStyle("itinerary")} onClick={() => setTripDetailTab("itinerary")}>Itinerary</button>
             <button className="w-tab" style={tripTabStyle("chat")} onClick={() => setTripDetailTab("chat")}>Chat</button>
             <button className="w-tab" style={tripTabStyle("polls")} onClick={() => setTripDetailTab("polls")}>Polls</button>
@@ -292,7 +300,7 @@ export function CreatedTripScreen() {
             <button className="w-tab" style={tripTabStyle("memories")} onClick={() => setTripDetailTab("memories")}>Memories</button>
             <button className="w-tab" style={{ ...tripTabStyle("activity"), position: "relative" }} onClick={() => { setTripDetailTab("activity"); markTripSeen(trip.id); }}>
               Activity
-              {getUnreadCount(trip.id) > 0 && tripDetailTab !== "activity" && <span style={{ position: "absolute", top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, background: T.coral, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{getUnreadCount(trip.id)}</span>}
+              {getUnreadCount(trip.id) > 0 && tripDetailTab !== "activity" && <span style={{ position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, background: T.coral, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{getUnreadCount(trip.id)}</span>}
             </button>
           </div>
 
@@ -302,9 +310,9 @@ export function CreatedTripScreen() {
               {!tripHasTimeline && (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>✨</div>
+                    <div style={{ fontSize: 36, marginBottom: 8 }}>✨</div>
                     <p style={{ fontSize: 14, fontWeight: 500, color: T.ad, marginBottom: 4 }}>Your itinerary is being prepared</p>
-                    <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.5, marginBottom: 12 }}>Generate your plan or add activities manually.</p>
+                    <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.5, marginBottom: 12, fontStyle: "italic" }}>Your adventure starts here -- generate a plan or add activities manually.</p>
                     <button onClick={() => { generateAndSetTimeline(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm }}>Generate itinerary</button>
                   </div>
                 </div>
@@ -1103,10 +1111,10 @@ export function CreatedTripScreen() {
 
                 {/* Expense list */}
                 {expenses.length === 0 && stayCosts.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
-                    <div style={{ fontSize: 36, marginBottom: 8 }}>{"💷"}</div>
+                  <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3, background: T.amberL, borderRadius: T.rs, margin: "12px 0" }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>{"💷"}</div>
                     <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>No expenses yet</p>
-                    <p style={{ fontSize: 12, lineHeight: 1.5 }}>Tap <b>+ Add</b> to log group expenses and track who owes what.</p>
+                    <p style={{ fontSize: 12, lineHeight: 1.5, fontStyle: "italic" }}>Track group spending and split costs</p>
                   </div>
                 )}
                 {expenses.length === 0 && stayCosts.length > 0 && (
@@ -1171,7 +1179,7 @@ export function CreatedTripScreen() {
               </div>
             );
             const uploadBox = () => (
-              <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 24, color: T.t3 }}>+</div>
+              <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, background: T.s2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: T.t3, flexDirection: "column", gap: 2 }}>{"📷"}<span style={{ fontSize: 10 }}>Add</span></div>
             );
 
             return (
@@ -1231,7 +1239,7 @@ export function CreatedTripScreen() {
                   <div key={dayLabel} style={{ marginBottom: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <p style={{ fontSize: 12, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>{dayLabel}</p>
-                      <span style={{ fontSize: 11, color: T.t3 }}>{dayPhotos.length} photo{dayPhotos.length !== 1 ? "s" : ""}</span>
+                      <span style={{ fontSize: 11, color: T.t3 }}>{dayPhotos.length === 0 ? "No photos yet" : `${dayPhotos.length} photo${dayPhotos.length !== 1 ? "s" : ""}`}</span>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
                       {dayPhotos.map((p, i) => renderThumb(p, i))}
