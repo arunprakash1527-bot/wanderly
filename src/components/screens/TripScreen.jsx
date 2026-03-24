@@ -17,7 +17,7 @@ const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, o
       <div style={{ fontSize: 11, color: T.t3 }}>{item.time}</div>
       <div style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</div>
       <div style={{ fontSize: 12, color: T.t2 }}>{item.desc}</div>
-      {item.for && <div style={{ marginTop: 3 }}><GroupTag type={item.for}>{forMap[item.for]}</GroupTag></div>}
+      {item.for && item.for !== "all" && <div style={{ marginTop: 3 }}><GroupTag type={item.for}>{forMap[item.for]}</GroupTag></div>}
 
       {/* Booking status tracking */}
       {item.needsBooking && !bookingState && (
@@ -95,7 +95,7 @@ export function TripScreen() {
         <div style={{ display: "flex", gap: 6, padding: "8px 0", overflowX: "auto" }}>
           {DAYS.map(d => (
             <button key={d.day} onClick={() => { setSelectedDay(d.day); setExpandedItem(null); }}
-              style={{ ...css.chip, ...(selectedDay === d.day ? { background: T.a, color: "#fff", borderColor: T.ad } : {}), minWidth: 56, textAlign: "center", padding: "8px 12px", flexShrink: 0 }}>
+              style={{ ...css.chip, ...(selectedDay === d.day ? { background: T.a, color: "#fff", borderColor: T.ad } : { background: T.s, borderColor: T.border, color: T.t2 }), minWidth: 56, textAlign: "center", padding: "8px 12px", flexShrink: 0 }}>
               <div style={{ fontWeight: 500, fontSize: 12 }}>Day {d.day}</div>
               <div style={{ fontSize: 10, opacity: 0.7 }}>{d.date}</div>
             </button>
