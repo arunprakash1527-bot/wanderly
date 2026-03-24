@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { T } from './styles/tokens';
 import './styles/global.css';
 
@@ -61,6 +61,44 @@ function AppShell() {
   const { user, authLoading } = useAuth();
   const { screen, toast } = useNavigation();
 
+  // PWA install prompt
+  const deferredPromptRef = useRef(null);
+  const [showInstall, setShowInstall] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      deferredPromptRef.current = e;
+      // Only show if user hasn't dismissed before
+      if (!localStorage.getItem('twm_pwa_dismissed')) {
+        setShowInstall(true);
+      }
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    // Hide if already installed
+    window.addEventListener('appinstalled', () => setShowInstall(false));
+    // Check if running as PWA
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setShowInstall(false);
+    }
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPromptRef.current) return;
+    deferredPromptRef.current.prompt();
+    const result = await deferredPromptRef.current.userChoice;
+    if (result.outcome === 'accepted') {
+      setShowInstall(false);
+    }
+    deferredPromptRef.current = null;
+  };
+
+  const dismissInstall = () => {
+    setShowInstall(false);
+    localStorage.setItem('twm_pwa_dismissed', '1');
+  };
+
   const phoneStyle = { maxWidth: 600, width: "100%", margin: "0 auto", minHeight: "100dvh", height: "100dvh", background: T.bg, overflow: "hidden", fontFamily: T.font, color: T.t1 };
 
   if (authLoading) {
@@ -113,8 +151,24 @@ function AppShell() {
       <WelcomeModal />
       <DemoOverlay />
       <PhotoViewer />
+      {/* PWA install banner */}
+      {showInstall && (
+        <div style={{ position: "fixed", bottom: 70, left: "50%", transform: "translateX(-50%)", zIndex: 9997, width: "calc(100% - 32px)", maxWidth: 360, padding: "14px 16px", borderRadius: 16, background: T.s, boxShadow: "0 8px 32px rgba(0,0,0,.15), 0 2px 8px rgba(0,0,0,.08)", border: `.5px solid ${T.border}`, fontFamily: T.font, display: "flex", alignItems: "center", gap: 12, animation: "demoSlideUp .3s ease-out" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: `linear-gradient(135deg, ${T.ad}, ${T.a})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>Install Trip With Me</p>
+            <p style={{ fontSize: 11, color: T.t3 }}>Add to your home screen for the full experience</p>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <button onClick={dismissInstall} style={{ background: "none", border: "none", fontSize: 11, color: T.t3, cursor: "pointer", padding: "6px", fontFamily: T.font }}>Later</button>
+            <button onClick={handleInstall} style={{ padding: "6px 14px", borderRadius: 20, background: T.a, color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>Install</button>
+          </div>
+        </div>
+      )}
       {toast && (
-        <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 9998, padding: "10px 20px", borderRadius: 20, background: toast.type === "error" ? T.red : T.ad, color: "#fff", fontSize: 13, fontFamily: T.font, boxShadow: "0 4px 12px rgba(0,0,0,.15)", animation: "reelFadeIn .3s ease" }}>
+        <div style={{ position: "fixed", bottom: showInstall ? 150 : 80, left: "50%", transform: "translateX(-50%)", zIndex: 9998, padding: "10px 20px", borderRadius: 20, background: toast.type === "error" ? T.red : T.ad, color: "#fff", fontSize: 13, fontFamily: T.font, boxShadow: "0 4px 12px rgba(0,0,0,.15)", animation: "reelFadeIn .3s ease" }}>
           {toast.type === "success" ? "\u2713 " : "\u26A0 "}{toast.message}
         </div>
       )}
