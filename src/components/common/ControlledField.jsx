@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
 import { T } from '../../styles/tokens';
 
-export function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max, onKeyDown, required, error, hint, icon }) {
+export function ControlledField({ label, type = "text", value, onChange, placeholder, style: wrapStyle, min, max, onKeyDown, required, error, hint, icon, inputStyle: inputStyleOverride }) {
   const hasError = error && !value;
-  const inputStyle = { width: "100%", padding: icon ? "10px 12px 10px 36px" : "10px 12px", border: `.5px solid ${hasError ? T.red + "80" : T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: hasError ? T.red + "06" : T.s, outline: "none", transition: "border-color .2s, background .2s" };
+  const inputStyle = { width: "100%", padding: icon ? "10px 12px 10px 36px" : "10px 12px", border: `.5px solid ${hasError ? T.red + "80" : T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: hasError ? T.red + "06" : T.s, outline: "none", transition: "border-color .2s, background .2s", ...inputStyleOverride };
   const dateRef = useRef(null);
   return (
     <div style={{ marginBottom: 14, ...wrapStyle }}>

@@ -74,7 +74,7 @@ function DesktopSidePanel({ screen }) {
   const { wizTrip, wizTravellers, wizStays, wizStep } = useWizard();
   const { selectedCreatedTrip, createdTrips } = useTrip();
 
-  const WIZARD_STEPS = ["Details", "Travellers", "Stays", "Preferences", "Review"];
+  const WIZARD_STEPS = ["Destination", "Dates & Travel", "Travellers", "Stays", "Preferences", "Review"];
 
   // Wizard preview content
   if (screen === "create") {

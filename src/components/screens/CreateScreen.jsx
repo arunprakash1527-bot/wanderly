@@ -14,10 +14,18 @@ export function CreateScreen() {
   const { navigate, showToast } = useNavigation();
   const { createTrip } = useTrip();
   const { wizStep, setWizStep, wizTrip, setWizTrip, wizShowErrors, setWizShowErrors, wizTravellers, setWizTravellers, wizStays, setWizStays, wizPrefs, setWizPrefs, placeInput, setPlaceInput, placeSuggestionsOpen, setPlaceSuggestionsOpen, staySearch, setStaySearch, staySearchOpen, setStaySearchOpen, stayPlacesResults, setStayPlacesResults, staySearching, handleStaySearchChange, foodSearch, setFoodSearch, adultActSearch, setAdultActSearch, olderActSearch, setOlderActSearch, youngerActSearch, setYoungerActSearch, expandedPrefSections, setExpandedPrefSections, placesFood, placesActivities, REGION_SUGGESTIONS, editingTripId, setEditingTripId } = useWizard();
-  const wizSteps = ["Details", "Travellers", "Stays", "Preferences", "Review"];
+  const wizSteps = ["Destination", "Dates & Travel", "Travellers", "Stays", "Preferences", "Review"];
 
-  // ─── Wizard Step: Details ───
-  const renderWizDetails = () => {
+  // ─── Shared wizard styles ───
+  const cardStyle = { background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, padding: 18, marginBottom: 14 };
+  const sectionLabel = (text, required) => (
+    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 600, color: T.t2, marginBottom: 10, textTransform: "uppercase", letterSpacing: .5 }}>
+      {text}{required && <span style={{ color: T.red, fontSize: 14 }}>*</span>}
+    </label>
+  );
+
+  // ─── Wizard Step 0: Destination ───
+  const renderWizDestination = () => {
     const addPlace = (p) => {
       const place = (p || placeInput).trim();
       if (!place) { setPlaceInput(""); setPlaceSuggestionsOpen(false); return; }
@@ -32,7 +40,6 @@ export function CreateScreen() {
       setPlaceSuggestionsOpen(false);
     };
     const removePlace = (place) => setWizTrip(prev => ({ ...prev, places: prev.places.filter(p => p !== place) }));
-    const travelOpts = ["Flight", "EV vehicle", "Non-EV vehicle", "Train", "Walking", "Bicycle"];
     const filteredPlaces = placeInput.trim().length > 0
       ? (() => {
           const q = placeInput.trim().toLowerCase();
@@ -42,100 +49,127 @@ export function CreateScreen() {
           return [...startsWith, ...contains].slice(0, 8);
         })()
       : [];
-    const tripDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1) : null;
-    const hasDrivingMode = wizTrip.travel.has("EV vehicle") || wizTrip.travel.has("Non-EV vehicle");
-    const cardStyle = { background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 12 };
-    const sectionLabel = (text, required) => (
-      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>
-        {text}{required && <span style={{ color: T.red, fontSize: 13 }}>*</span>}
-      </label>
-    );
     return (
       <>
-        {/* ── Where ── */}
+        <div style={{ textAlign: "center", padding: "8px 0 20px" }}>
+          <span style={{ fontSize: 36 }}>✈️</span>
+          <h3 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginTop: 8 }}>Where are you going?</h3>
+          <p style={{ fontSize: 14, color: T.t3, marginTop: 4 }}>Give your trip a name and add your destinations</p>
+        </div>
+
         <div style={cardStyle}>
-          <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" required error={wizShowErrors && !wizTrip.name.trim() ? "Give your trip a name" : undefined} />
-          <div style={{ position: "relative", marginBottom: 14 }}>
-            {sectionLabel("Where to", true)}
-            {wizTrip.places.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                {wizTrip.places.map(p => (
-                  <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px 6px 12px", borderRadius: 20, fontSize: 13, background: T.al, color: T.ad, fontWeight: 500, fontFamily: T.font }}>
-                    {p} <span onClick={() => removePlace(p)} style={{ width: 18, height: 18, borderRadius: "50%", background: T.ad + "20", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 11, lineHeight: 1 }}>×</span>
-                  </span>
-                ))}
-              </div>
-            )}
-            <input value={placeInput}
-              onChange={e => { setPlaceInput(e.target.value); setPlaceSuggestionsOpen(true); }}
-              onKeyDown={e => { if (e.key === "Enter" || e.key === "Tab") { if (placeInput.trim()) { e.preventDefault(); addPlace(); } } }}
-              onFocus={() => { if (placeInput.trim()) setPlaceSuggestionsOpen(true); }}
-              onBlur={() => setTimeout(() => setPlaceSuggestionsOpen(false), 200)}
-              style={{ width: "100%", padding: "9px 12px", border: `.5px solid ${wizShowErrors && !wizTrip.places.length ? T.red + "80" : T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none", minHeight: 40, transition: "border-color .2s" }}
-              placeholder="Search destinations..." />
-            {wizShowErrors && !wizTrip.places.length && <p style={{ fontSize: 11, color: T.red, marginTop: 4 }}>Add at least one destination</p>}
-            {placeSuggestionsOpen && filteredPlaces.length > 0 && (
-              <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", maxHeight: 200, overflowY: "auto", marginTop: 2 }}>
-                {filteredPlaces.map(loc => (
-                  <div key={loc} onMouseDown={e => e.preventDefault()} onClick={() => addPlace(loc)}
-                    style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", borderBottom: `.5px solid ${T.border}`, fontFamily: T.font, transition: "background .1s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = T.s2}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    {loc}
-                  </div>
-                ))}
-              </div>
-            )}
-            {placeSuggestionsOpen && placeInput.trim().length > 0 && filteredPlaces.length === 0 && (
-              <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", marginTop: 2 }}>
-                <div onMouseDown={e => e.preventDefault()} onClick={() => addPlace()}
-                  style={{ padding: "9px 12px", fontSize: 13, cursor: "pointer", fontFamily: T.font, color: T.a }}
+          <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" required error={wizShowErrors && !wizTrip.name.trim() ? "Give your trip a name" : undefined} inputStyle={{ fontSize: 15, padding: "12px 14px", minHeight: 44 }} />
+        </div>
+
+        <div style={{ ...cardStyle, position: "relative" }}>
+          {sectionLabel("Destinations", true)}
+          {wizTrip.places.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+              {wizTrip.places.map(p => (
+                <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px 8px 14px", borderRadius: 22, fontSize: 14, background: T.al, color: T.ad, fontWeight: 500, fontFamily: T.font }}>
+                  {p} <span onClick={() => removePlace(p)} style={{ width: 20, height: 20, borderRadius: "50%", background: T.ad + "20", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>×</span>
+                </span>
+              ))}
+            </div>
+          )}
+          <input value={placeInput}
+            onChange={e => { setPlaceInput(e.target.value); setPlaceSuggestionsOpen(true); }}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === "Tab") { if (placeInput.trim()) { e.preventDefault(); addPlace(); } } }}
+            onFocus={() => { if (placeInput.trim()) setPlaceSuggestionsOpen(true); }}
+            onBlur={() => setTimeout(() => setPlaceSuggestionsOpen(false), 200)}
+            style={{ width: "100%", padding: "12px 14px", border: `.5px solid ${wizShowErrors && !wizTrip.places.length ? T.red + "80" : T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 15, background: T.s2, outline: "none", minHeight: 44, transition: "border-color .2s" }}
+            placeholder="Search destinations..." />
+          {wizShowErrors && !wizTrip.places.length && <p style={{ fontSize: 12, color: T.red, marginTop: 6 }}>Add at least one destination</p>}
+          {placeSuggestionsOpen && filteredPlaces.length > 0 && (
+            <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", maxHeight: 220, overflowY: "auto", marginTop: 2 }}>
+              {filteredPlaces.map(loc => (
+                <div key={loc} onMouseDown={e => e.preventDefault()} onClick={() => addPlace(loc)}
+                  style={{ padding: "12px 14px", fontSize: 14, cursor: "pointer", borderBottom: `.5px solid ${T.border}`, fontFamily: T.font, transition: "background .1s" }}
                   onMouseEnter={e => e.currentTarget.style.background = T.s2}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  + Add "{placeInput.trim()}"
+                  {loc}
                 </div>
+              ))}
+            </div>
+          )}
+          {placeSuggestionsOpen && placeInput.trim().length > 0 && filteredPlaces.length === 0 && (
+            <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 20, background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.rs, boxShadow: "0 4px 16px rgba(0,0,0,.1)", marginTop: 2 }}>
+              <div onMouseDown={e => e.preventDefault()} onClick={() => addPlace()}
+                style={{ padding: "12px 14px", fontSize: 14, cursor: "pointer", fontFamily: T.font, color: T.a }}
+                onMouseEnter={e => e.currentTarget.style.background = T.s2}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                + Add "{placeInput.trim()}"
               </div>
-            )}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
+
+  // ─── Wizard Step 1: Dates & Travel ───
+  const renderWizDatesTravel = () => {
+    const tripDays = wizTrip.start && wizTrip.end ? Math.max(1, Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1) : null;
+    return (
+      <>
+        {/* ── When ── */}
+        <div style={cardStyle}>
+          {sectionLabel("When are you going")}
+          <div style={{ display: "flex", gap: 10, marginBottom: 0 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.t2, marginBottom: 6 }}>From</label>
+              <input type="date" value={wizTrip.start} onChange={e => setWizTrip(prev => ({ ...prev, start: e.target.value }))}
+                onClick={e => e.target.showPicker?.()}
+                style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 15, background: T.s2, outline: "none", minHeight: 48, cursor: "pointer", colorScheme: "light" }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.t2, marginBottom: 6 }}>To</label>
+              <input type="date" value={wizTrip.end} onChange={e => setWizTrip(prev => ({ ...prev, end: e.target.value }))}
+                onClick={e => e.target.showPicker?.()}
+                min={wizTrip.start || undefined}
+                style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 15, background: T.s2, outline: "none", minHeight: 48, cursor: "pointer", colorScheme: "light" }} />
+            </div>
           </div>
-          {sectionLabel("When")}
-          <div style={{ display: "flex", gap: 8, marginBottom: 0 }}>
-            <ControlledField label="" type="date" value={wizTrip.start} onChange={v => setWizTrip(prev => ({ ...prev, start: v }))} style={{ flex: 1, marginBottom: 0 }} />
-            <span style={{ alignSelf: "center", color: T.t3, fontSize: 12, padding: "0 2px" }}>to</span>
-            <ControlledField label="" type="date" value={wizTrip.end} onChange={v => setWizTrip(prev => ({ ...prev, end: v }))} style={{ flex: 1, marginBottom: 0 }} min={wizTrip.start || undefined} />
-          </div>
-          {tripDays && <p style={{ fontSize: 12, color: T.ad, fontWeight: 500, marginTop: 6 }}>{tripDays} day{tripDays > 1 ? "s" : ""}</p>}
+          {tripDays && <p style={{ fontSize: 13, color: T.ad, fontWeight: 500, marginTop: 8 }}>{tripDays} day{tripDays > 1 ? "s" : ""}</p>}
+          <p style={{ fontSize: 12, color: T.t3, marginTop: 6 }}>Optional — you can add dates later</p>
         </div>
 
         {/* ── How ── */}
         <div style={cardStyle}>
           {sectionLabel("How are you getting there")}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             {[["Flight", "✈️"], ["EV vehicle", "⚡"], ["Non-EV vehicle", "🚗"], ["Train", "🚆"], ["Walking", "🚶"], ["Bicycle", "🚲"]].map(([o, icon]) => {
               const active = wizTrip.travel.has(o);
               return (
                 <div key={o} onClick={() => setWizTrip(prev => { const s = new Set(prev.travel); s.has(o) ? s.delete(o) : s.add(o); return { ...prev, travel: s }; })}
-                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 6px", borderRadius: T.rs, border: `.5px solid ${active ? T.a : T.border}`, background: active ? T.al : T.s2, cursor: "pointer", transition: "all .15s" }}>
-                  <span style={{ fontSize: 20 }}>{icon}</span>
-                  <span style={{ fontSize: 11, fontWeight: active ? 600 : 400, color: active ? T.ad : T.t2, fontFamily: T.font }}>{o}</span>
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 8px", borderRadius: T.rs, border: `.5px solid ${active ? T.a : T.border}`, background: active ? T.al : T.s2, cursor: "pointer", transition: "all .15s" }}>
+                  <span style={{ fontSize: 24 }}>{icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? T.ad : T.t2, fontFamily: T.font }}>{o}</span>
                 </div>
               );
             })}
           </div>
+        </div>
 
+        {/* ── Starting from ── */}
+        <div style={cardStyle}>
           <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
-            placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 departure" />
+            placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 departure" inputStyle={{ fontSize: 15, padding: "12px 14px", minHeight: 44 }} />
+        </div>
 
+        {/* ── Budget ── */}
+        <div style={cardStyle}>
           {sectionLabel("Budget")}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {[["Budget", "💰", "Keep it lean"], ["Mid-range", "💳", "Balanced spend"], ["Luxury", "💎", "Treat yourself"], ["No limit", "✨", "Sky's the limit"]].map(([o, icon, desc]) => {
               const active = wizTrip.budget === o;
               return (
                 <div key={o} onClick={() => setWizTrip(prev => ({ ...prev, budget: prev.budget === o ? "" : o }))}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: T.rs, border: `.5px solid ${active ? T.a : T.border}`, background: active ? T.al : T.s2, cursor: "pointer", transition: "all .15s" }}>
-                  <span style={{ fontSize: 18 }}>{icon}</span>
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: T.rs, border: `.5px solid ${active ? T.a : T.border}`, background: active ? T.al : T.s2, cursor: "pointer", transition: "all .15s" }}>
+                  <span style={{ fontSize: 22 }}>{icon}</span>
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? T.ad : T.t, fontFamily: T.font }}>{o}</p>
-                    <p style={{ fontSize: 10, color: T.t3, fontFamily: T.font }}>{desc}</p>
+                    <p style={{ fontSize: 14, fontWeight: active ? 600 : 400, color: active ? T.ad : T.t, fontFamily: T.font }}>{o}</p>
+                    <p style={{ fontSize: 11, color: T.t3, fontFamily: T.font }}>{desc}</p>
                   </div>
                 </div>
               );
@@ -146,14 +180,14 @@ export function CreateScreen() {
         {/* ── Optional brief ── */}
         {wizTrip.brief || wizTrip._showBrief ? (
           <div style={cardStyle}>
-            <ControlledField label="Trip brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="e.g. Family trip with 2 kids (ages 5 & 9). We love outdoor adventures, local food markets, and easy hikes. Prefer late morning starts — not early risers! Dog-friendly stops a bonus." hint="Helps the AI personalise your itinerary" />
+            <ControlledField label="Trip brief" type="textarea" value={wizTrip.brief} onChange={v => setWizTrip(prev => ({ ...prev, brief: v }))} placeholder="e.g. Family trip with 2 kids (ages 5 & 9). We love outdoor adventures, local food markets, and easy hikes. Prefer late morning starts — not early risers! Dog-friendly stops a bonus." hint="Helps the AI personalise your itinerary" inputStyle={{ fontSize: 15, padding: "12px 14px" }} />
           </div>
         ) : (
           <button onClick={() => setWizTrip(prev => ({ ...prev, _showBrief: true }))}
-            style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "12px 16px", background: T.s2, border: `.5px dashed ${T.border}`, borderRadius: T.r, cursor: "pointer", fontFamily: T.font, fontSize: 13, color: T.t2, marginBottom: 12, transition: "background .15s" }}
+            style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "14px 18px", background: T.s2, border: `.5px dashed ${T.border}`, borderRadius: T.r, cursor: "pointer", fontFamily: T.font, fontSize: 14, color: T.t2, marginBottom: 14, transition: "background .15s" }}
             onMouseEnter={e => e.currentTarget.style.background = T.s3}
             onMouseLeave={e => e.currentTarget.style.background = T.s2}>
-            + Add a trip description <span style={{ fontSize: 11, color: T.t3, marginLeft: "auto" }}>Optional</span>
+            + Add a trip description <span style={{ fontSize: 12, color: T.t3, marginLeft: "auto" }}>Optional</span>
           </button>
         )}
       </>
@@ -486,7 +520,7 @@ export function CreateScreen() {
 
         {!wizTrip.start && !wizTrip.end && wizStays.length > 0 && (
           <div style={{ marginTop: 8, padding: "8px 12px", background: T.amberL, borderRadius: T.rs, fontSize: 12, color: T.amber }}>
-            Set trip dates in Step 1 to constrain accommodation dates.
+            Set trip dates in "Dates & Travel" to constrain accommodation dates.
           </div>
         )}
       </>
@@ -549,10 +583,10 @@ export function CreateScreen() {
 
       return (
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: T.t2, marginBottom: 8, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>
           <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
             onKeyDown={e => { if ((e.key === "Enter" || e.key === "Tab") && searchVal.trim()) { e.preventDefault(); addCustomPref(key, searchVal, setSearchVal); } }}
-            style={{ width: "100%", padding: "8px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 12, background: T.s2, outline: "none", marginBottom: 6 }}
+            style={{ width: "100%", padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 14, background: T.s2, outline: "none", marginBottom: 8, minHeight: 44 }}
             placeholder={placeholder} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {visible.map(o => (
@@ -723,7 +757,7 @@ export function CreateScreen() {
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { if (editingTripId) { setEditingTripId(null); navigate("createdTrip"); } else navigate("home"); }}>Cancel</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>{editingTripId ? "Edit trip" : "New trip"}</h2>
-        <span style={{ fontSize: 11, color: T.t3 }}>Step {wizStep + 1} of 5</span>
+        <span style={{ fontSize: 11, color: T.t3 }}>Step {wizStep + 1} of {wizSteps.length}</span>
       </div>
       <div style={{ display: "flex", gap: 4, padding: "10px 20px", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
         {wizSteps.map((step, i) => (
@@ -732,7 +766,7 @@ export function CreateScreen() {
         ))}
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        {(() => { const stepSubs = ["Name, dates, and destinations", "Add your travel group", "Where you're staying", "Food and activities", "Review your trip summary"];
+        {(() => { const stepSubs = ["Name your trip and pick destinations", "Set dates, travel mode, and budget", "Add your travel group", "Where you're staying", "Food and activities", "Review your trip summary"];
         return wizStep > 0 ? (
           <div style={{ marginBottom: 14 }}>
             <h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 2 }}>{wizSteps[wizStep]}</h3>
@@ -747,35 +781,37 @@ export function CreateScreen() {
             {wizTrip.budget && <span style={{ fontSize: 11, color: T.t2 }}>{wizTrip.budget === "Budget" ? "💰" : wizTrip.budget === "Mid-range" ? "💳" : wizTrip.budget === "Luxury" ? "💎" : "🤑"} {wizTrip.budget}</span>}
           </div>
         )}
-        {wizStep === 0 && renderWizDetails()}
-        {wizStep === 1 && renderWizTravellers()}
-        {wizStep === 2 && renderWizStays()}
-        {wizStep === 3 && renderWizPrefs()}
-        {wizStep === 4 && renderWizReview()}
+        {wizStep === 0 && renderWizDestination()}
+        {wizStep === 1 && renderWizDatesTravel()}
+        {wizStep === 2 && renderWizTravellers()}
+        {wizStep === 3 && renderWizStays()}
+        {wizStep === 4 && renderWizPrefs()}
+        {wizStep === 5 && renderWizReview()}
       </div>
       <div style={{ display: "flex", gap: 8, padding: "16px 24px", background: T.s, borderTop: `.5px solid ${T.border}` }}>
         {wizStep > 0 && <button className="w-btn" style={{ ...css.btn, flex: 1, justifyContent: "center" }} onClick={() => setWizStep(wizStep - 1)}>Back</button>}
         <button className="w-btn w-btnP" style={{ ...css.btn, ...css.btnP, flex: 1, justifyContent: "center" }} onClick={() => {
-          // Mandatory field validation on step 0
+          // Mandatory field validation on step 0 (Destination)
           if (wizStep === 0) {
             if (!wizTrip.name.trim() || !wizTrip.places.length) { setWizShowErrors(true); showToast(!wizTrip.name.trim() ? "Give your trip a name" : "Add at least one destination", "error"); return; }
-            if (wizTrip.start && wizTrip.end) {
-              if (wizTrip.end < wizTrip.start) { alert("End date must be after start date."); return; }
-              const days = Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1;
-              if (days > 30) { alert(`Trip is ${days} days — max 30 days supported. Please adjust dates.`); return; }
-            }
           }
-          // Stay date validation on step 2
-          if (wizStep === 2 && wizStays.length > 0) {
+          // Date validation on step 1 (Dates & Travel)
+          if (wizStep === 1 && wizTrip.start && wizTrip.end) {
+            if (wizTrip.end < wizTrip.start) { alert("End date must be after start date."); return; }
+            const days = Math.round((new Date(wizTrip.end + "T12:00:00") - new Date(wizTrip.start + "T12:00:00")) / 86400000) + 1;
+            if (days > 30) { alert(`Trip is ${days} days — max 30 days supported. Please adjust dates.`); return; }
+          }
+          // Stay date validation on step 3 (Stays)
+          if (wizStep === 3 && wizStays.length > 0) {
             for (const s of wizStays) {
               if (s.checkIn && s.checkOut && s.checkOut <= s.checkIn) { alert(`"${s.name}" — check-out must be after check-in.`); return; }
               if (wizTrip.start && s.checkIn && s.checkIn < wizTrip.start) { alert(`"${s.name}" check-in (${s.checkIn}) is before trip start.`); return; }
             }
           }
           setWizShowErrors(false);
-          wizStep < 4 ? setWizStep(wizStep + 1) : createTrip({ wizTrip, wizTravellers, wizStays, wizPrefs, editingTripId });
+          wizStep < 5 ? setWizStep(wizStep + 1) : createTrip({ wizTrip, wizTravellers, wizStays, wizPrefs, editingTripId });
         }}>
-          {wizStep < 4 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
+          {wizStep < 5 ? `Next: ${wizSteps[wizStep + 1]}` : editingTripId ? "Save changes" : "Create trip"}
         </button>
       </div>
     </div>
