@@ -5,4 +5,7 @@ export const API = {
   DIRECTIONS: '/api/directions',
   GEOCODE: '/api/geocode',
   PLACE_PHOTO: '/api/place-photo',
+  WEATHER: '/api/weather',
+  CURRENCY: '/api/currency',
+  ENRICH: '/api/enrich',
 };

@@ -5,6 +5,7 @@ import { API } from "../constants/api";
 import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
+import { fetchTripIntelligence, buildSmartGreeting, buildSmartTips } from "../utils/tripIntelligence";
 
 const ChatContext = createContext(null);
 
@@ -30,10 +31,45 @@ export function ChatProvider({ children }) {
   const tripChatEndRef = useRef(null);
   const [tripChatTyping, setTripChatTyping] = useState(false);
 
+  // Trip Intelligence state
+  const [intelligence, setIntelligence] = useState(null);
+  const [smartTips, setSmartTips] = useState([]);
+  const intelligenceRef = useRef(null); // stable ref for use in handlers
+
   // Auto-scroll trip chat to bottom when messages change
   useEffect(() => {
     if (tripChatEndRef.current) tripChatEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [tripChatMessages, tripChatTyping]);
+
+  // ─── Fetch Trip Intelligence on day/trip change ───
+  useEffect(() => {
+    const trip = selectedCreatedTrip || createdTrips[0];
+    if (!trip || !selectedDay) return;
+
+    // Determine current location for this day
+    const stays = trip.stays || [];
+    const places = trip.places || [];
+    let currentLoc = places[0] || "your destination";
+    if (stays.length > 0 && trip.rawStart) {
+      const sorted = [...stays].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+      const tripStart = new Date(trip.rawStart + "T12:00:00");
+      const dayDateStr = new Date(tripStart.getTime() + (selectedDay - 1) * 86400000).toISOString().split("T")[0];
+      const matched = sorted.find(s => s.checkIn <= dayDateStr && s.checkOut > dayDateStr) || sorted.find(s => s.checkIn === dayDateStr) || (selectedDay === 1 ? sorted[0] : null);
+      if (matched?.location) currentLoc = matched.location;
+      else if (places.length > 0) currentLoc = places[(selectedDay - 1) % places.length];
+    } else if (places.length > 0) {
+      currentLoc = places[(selectedDay - 1) % places.length];
+    }
+
+    // Fetch intelligence in background
+    fetchTripIntelligence(trip, selectedDay, currentLoc).then(intel => {
+      if (intel) {
+        setIntelligence(intel);
+        intelligenceRef.current = intel;
+        setSmartTips(buildSmartTips(intel));
+      }
+    });
+  }, [selectedDay, selectedCreatedTrip, createdTrips]);
 
   // Auto-scroll chat to bottom when messages change
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight); }, [chatMessages]);
@@ -259,6 +295,7 @@ export function ChatProvider({ children }) {
             currentLocation: firstLoc,
             currentDay: selectedDay,
           },
+          intelligence: intelligenceRef.current, // Real-time signals from connectors
           chatHistory: tripChatMessages.slice(-8),
         }),
       });
@@ -440,6 +477,11 @@ export function ChatProvider({ children }) {
       if (trip.startLocation) msg += `**From:** ${trip.startLocation}\n`;
       if (currentStay) msg += `**Staying at:** ${currentStay.name}\n`;
       msg += `**Mode:** ${travelMode}\n`;
+
+      // Inject weather + intelligence for destination
+      const smartGreeting = buildSmartGreeting(intelligenceRef.current, dayNum, currentLocation, currentStay?.name);
+      if (smartGreeting) msg += `\n${smartGreeting}\n`;
+
       if (trip.startLocation) {
         msg += `\nAnyone to pick up along the way?`;
       } else {
@@ -465,6 +507,13 @@ export function ChatProvider({ children }) {
     if (currentStay) {
       msg += `\uD83C\uDFE8 Your base today: **${currentStay.name}**${currentStay.type ? ` (${currentStay.type})` : ""}\n\n`;
     }
+
+    // Inject real-time intelligence if available
+    const smartGreeting = buildSmartGreeting(intelligenceRef.current, dayNum, currentLocation, currentStay?.name);
+    if (smartGreeting) {
+      msg += smartGreeting + "\n\n";
+    }
+
     if (highlights) {
       msg += highlights + "\n";
     } else {
@@ -504,6 +553,8 @@ export function ChatProvider({ children }) {
     saveChatMessage,
     handleTripChat,
     buildDayGreeting,
+    intelligence,
+    smartTips,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

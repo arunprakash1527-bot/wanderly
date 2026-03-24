@@ -29,7 +29,7 @@ export function CreatedTripScreen() {
   const { navigate, showToast } = useNavigation();
   const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections, endTrip } = useTrip();
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
-  const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages } = useChat();
+  const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages, intelligence, smartTips } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
   const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, wrappedPlaying, setWrappedPlaying, memoriesView, setMemoriesView, autoOrderEnabled, setAutoOrderEnabled, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
 
@@ -347,6 +347,35 @@ export function CreatedTripScreen() {
                     })}
                   </div>
 
+                  {/* Smart Tips from Trip Intelligence */}
+                  {smartTips.length > 0 && (
+                    <div style={{ padding: "8px 20px 0" }}>
+                      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                        {smartTips.slice(0, 4).map((tip, i) => (
+                          <div key={i} style={{ minWidth: 220, maxWidth: 260, flexShrink: 0, padding: "10px 14px", borderRadius: 12,
+                            background: `linear-gradient(135deg, ${T.s}, ${T.s2})`, border: `.5px solid ${T.border}`,
+                            fontSize: 11, color: T.t2, lineHeight: 1.4, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                            <span style={{ fontSize: 16, flexShrink: 0 }}>{tip.icon}</span>
+                            <span>{tip.tip}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Weather signal bar */}
+                  {intelligence?.weather?.current && (
+                    <div style={{ margin: "8px 20px 0", padding: "8px 14px", borderRadius: 10, background: T.blueL,
+                      fontSize: 11, color: T.t2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      {intelligence.signals?.filter(s => s.type === "weather" || s.type === "directions" || s.type === "ev").map((s, i) => (
+                        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{s.icon} {s.label}</span>
+                      ))}
+                      {intelligence.currency?.rates && Object.entries(intelligence.currency.rates).slice(0, 1).map(([code, info]) => (
+                        <span key={code} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>💱 {info.example}</span>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Embedded Map */}
                   {showMap && trip.places?.length > 0 && (
                     <div style={{ padding: "10px 20px 0" }}>
@@ -507,7 +536,15 @@ export function CreatedTripScreen() {
                             <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
                               <div style={{ flex: 1 }}>
                                 <p style={{ fontSize: 11, color: T.t3, marginBottom: 2 }}>{item.time}</p>
-                                <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
+                                <p style={{ fontSize: 14, fontWeight: 500 }}>
+                                  {item.title}
+                                  {intelligence?.weather?.today && intelligence.weather.today.rainMm > 3 && /walk|hike|beach|park|garden|outdoor|kayak|cycling|bike|boat|cliff|trail|surf|swim/i.test(item.title + " " + (item.desc || "")) && (
+                                    <span style={{ marginLeft: 6, fontSize: 10, padding: "2px 6px", borderRadius: 8, background: T.amberL, color: T.amber, fontWeight: 500, verticalAlign: "middle" }}>🌧️ Rain expected</span>
+                                  )}
+                                  {intelligence?.weather?.today && intelligence.weather.today.high >= 35 && /walk|hike|outdoor|trail/i.test(item.title + " " + (item.desc || "")) && (
+                                    <span style={{ marginLeft: 6, fontSize: 10, padding: "2px 6px", borderRadius: 8, background: T.coralL, color: T.coral, fontWeight: 500, verticalAlign: "middle" }}>🔥 Very hot</span>
+                                  )}
+                                </p>
                                 <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
                                 <Tag bg={item.group === "Adults" ? T.blueL : item.group === "Kids" ? T.pinkL : item.group === "Note" ? T.amberL : T.al} color={item.group === "Adults" ? T.blue : item.group === "Kids" ? T.pink : item.group === "Note" ? T.amber : T.ad}>{item.group}</Tag>
                               </div>

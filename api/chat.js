@@ -39,12 +39,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, tripContext, chatHistory } = req.body;
+    const { message, tripContext, chatHistory, intelligence } = req.body;
 
     if (!message) return res.status(400).json({ error: "Message is required" });
 
-    // Build system prompt with trip context
-    const systemPrompt = buildSystemPrompt(tripContext);
+    // Build system prompt with trip context + real-time intelligence
+    const systemPrompt = buildSystemPrompt(tripContext, intelligence);
 
     // Build messages array from chat history
     const messages = [];
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
   }
 }
 
-function buildSystemPrompt(ctx) {
+function buildSystemPrompt(ctx, intel) {
   if (!ctx) {
     return `You are Trip With Me, a friendly and knowledgeable AI travel concierge.
 Help users plan trips, find restaurants, activities, and local recommendations.
@@ -113,6 +113,7 @@ Be warm, helpful, and specific with recommendations.`;
     if (t.adults?.length) ppl.push(`${t.adults.length} adults`);
     if (t.olderKids?.length) ppl.push(`${t.olderKids.length} older kids (${t.olderKids.map(k => `${k.name}, ${k.age}`).join("; ")})`);
     if (t.youngerKids?.length) ppl.push(`${t.youngerKids.length} younger kids (${t.youngerKids.map(k => `${k.name}, ${k.age}`).join("; ")})`);
+    if (t.infants?.length) ppl.push(`${t.infants.length} infants (${t.infants.map(k => `${k.name}, ${k.age}`).join("; ")})`);
     if (ppl.length) parts.push(`Travellers: ${ppl.join(", ")}`);
   }
 
@@ -132,18 +133,64 @@ Be warm, helpful, and specific with recommendations.`;
   if (ctx.currentDay) parts.push(`Currently viewing: Day ${ctx.currentDay}`);
   if (ctx.currentLocation) parts.push(`Current location: ${ctx.currentLocation}`);
 
+  // ── Real-time Intelligence from connectors ──
+  if (intel) {
+    parts.push("\n--- REAL-TIME INTELLIGENCE (use this to give smart, contextual advice) ---");
+
+    if (intel.weather) {
+      const w = intel.weather;
+      if (w.current) parts.push(`WEATHER NOW: ${w.current.temp}°C, ${w.current.condition} (feels like ${w.current.feelsLike}°C)`);
+      if (w.today) parts.push(`TODAY'S FORECAST: High ${w.today.high}°C / Low ${w.today.low}°C, ${w.today.condition}, rain: ${w.today.rainMm}mm, wind: ${w.today.windAvg} m/s`);
+      if (w.daily?.length > 1) {
+        const upcoming = w.daily.slice(1, 4).map(d => `${d.date}: ${d.high}°/${d.low}° ${d.condition}${d.rainMm > 1 ? ` (${d.rainMm}mm rain)` : ""}`).join("; ");
+        parts.push(`NEXT DAYS: ${upcoming}`);
+      }
+    }
+
+    if (intel.currency?.rates) {
+      const rateStrs = Object.entries(intel.currency.rates).map(([code, info]) => info.example);
+      if (rateStrs.length > 0) parts.push(`EXCHANGE RATES: ${rateStrs.join(", ")}`);
+    }
+
+    if (intel.language) {
+      parts.push(`LOCAL LANGUAGE: ${intel.language.lang} — hello: "${intel.language.hello}", thanks: "${intel.language.thanks}", bill: "${intel.language.bill}"`);
+    }
+
+    if (intel.directions) {
+      parts.push(`TRAVEL TODAY: ${intel.directions.totalDistanceText} drive (${intel.directions.totalDurationText})`);
+    }
+
+    if (intel.evChargers?.length > 0) {
+      parts.push(`EV CHARGING: ${intel.evChargers.length} stations nearby — ${intel.evChargers.slice(0, 3).map(c => c.name).join(", ")}`);
+    }
+
+    if (intel.nearbyAttractions?.length > 0) {
+      parts.push(`TOP ATTRACTIONS NEARBY: ${intel.nearbyAttractions.slice(0, 5).map(a => `${a.name}${a.rating ? ` (${a.rating}★)` : ""}`).join(", ")}`);
+    }
+
+    if (intel.alerts?.length > 0) {
+      parts.push(`ACTIVE ALERTS: ${intel.alerts.map(a => `${a.icon} ${a.title}: ${a.message}`).join("; ")}`);
+    }
+  }
+
   parts.push(`
 Guidelines:
 - Keep responses concise (under 200 words), use markdown with **bold** and bullet points
 - ALWAYS base recommendations on the Current location (the place the user is at on their selected day) — never default to another city
 - Give specific, real recommendations with ratings and prices when possible
 - Consider the group composition (kids' ages, dietary prefs) in all suggestions
+- USE THE REAL-TIME INTELLIGENCE above to give weather-aware, currency-aware, context-rich advice:
+  • If it's rainy, suggest indoor alternatives. If sunny, push outdoor activities.
+  • If it's a travel day, factor in drive time. Suggest rest stops and charging stops for EV.
+  • Mention exchange rates when discussing costs ("about X in local currency").
+  • Share language tips when relevant ("try saying X to locals").
+  • Warn about weather changes in coming days ("tomorrow looks rainy — do outdoor stuff today").
+  • For EV travellers, proactively mention charging options.
 - For restaurants: recommend places IN the current location, mention cuisine type, price range (£/££/£££), family-friendliness
 - For activities: recommend things to do IN the current location, mention suitability for different ages, duration, cost
 - Be warm, friendly, and proactive — suggest things they might not have thought of
 - Use emoji sparingly for visual appeal
 - If asked about routes/directions, give estimated times and recommend stops
-- Format links as [text](url) when providing external references
 - When suggesting restaurants or activities, remind the user they can say "Add [name] to Day X" to plug it into their itinerary
 - Always mention which day/location you're recommending for`);
 
