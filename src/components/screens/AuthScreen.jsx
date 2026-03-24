@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function AuthScreen() {
-  const { signInWithGoogle, signUpWithEmail, signInWithEmail, authScreen, setAuthScreen, authEmail, setAuthEmail, authPassword, setAuthPassword, authName, setAuthName, authError, setAuthError, setUser, setAuthLoading } = useAuth();
+  const { signInWithGoogle, signUpWithEmail, signInWithEmail, resetPassword, authScreen, setAuthScreen, authEmail, setAuthEmail, authPassword, setAuthPassword, authName, setAuthName, authError, setAuthError, setUser, setAuthLoading } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+
+  const labelStyle = { display: "block", fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4 };
+  const inputStyle = { width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", boxSizing: "border-box" };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -28,15 +33,41 @@ export function AuthScreen() {
           {/* Email auth */}
           {authScreen === "signup" && (
             <div style={{ marginBottom: 10 }}>
-              <input value={authName} onChange={e => setAuthName(e.target.value)} placeholder="Your name"
-                style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
+              <label htmlFor="auth-name" style={labelStyle}>Name</label>
+              <input id="auth-name" value={authName} onChange={e => setAuthName(e.target.value)} placeholder="Your name" type="text"
+                style={inputStyle} />
             </div>
           )}
-          <input value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" type="email"
-            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
-          <input value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" type="password"
-            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); authScreen === "signup" ? signUpWithEmail() : signInWithEmail(); } }}
-            style={{ width: "100%", padding: "10px 12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, background: T.s, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
+
+          <div style={{ marginBottom: 10 }}>
+            <label htmlFor="auth-email" style={labelStyle}>Email</label>
+            <input id="auth-email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="you@example.com" type="email"
+              style={inputStyle} />
+          </div>
+
+          <div style={{ marginBottom: 4 }}>
+            <label htmlFor="auth-password" style={labelStyle}>Password</label>
+            <div style={{ position: "relative" }}>
+              <input id="auth-password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="••••••••" type={showPassword ? "text" : "password"}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); authScreen === "signup" ? signUpWithEmail() : signInWithEmail(); } }}
+                style={{ ...inputStyle, paddingRight: 40 }} />
+              <button onClick={() => setShowPassword(p => !p)} type="button"
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 4, cursor: "pointer", fontSize: 16, color: T.t3, lineHeight: 1 }}
+                aria-label={showPassword ? "Hide password" : "Show password"}>
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
+          </div>
+
+          {/* Forgot password — login only */}
+          {authScreen === "login" && (
+            <p style={{ fontSize: 12, textAlign: "right", marginBottom: 10 }}>
+              <span onClick={resetPassword} style={{ color: T.a, cursor: "pointer", fontWeight: 500 }}>
+                Forgot password?
+              </span>
+            </p>
+          )}
+          {authScreen === "signup" && <div style={{ marginBottom: 12 }} />}
 
           <button onClick={authScreen === "signup" ? signUpWithEmail : signInWithEmail}
             style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 14, fontWeight: 500, cursor: "pointer", marginBottom: 10 }}>

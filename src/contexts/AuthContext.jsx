@@ -68,13 +68,23 @@ export function AuthProvider({ children }) {
     if (error) setAuthError(error.message);
   };
 
+  // Friendly error messages
+  const friendlyError = (msg) => {
+    if (!msg) return msg;
+    if (/missing email or phone/i.test(msg)) return "Please enter your email";
+    if (/invalid login credentials/i.test(msg)) return "Incorrect email or password";
+    if (/email not confirmed/i.test(msg)) return "Please confirm your email first — check your inbox";
+    if (/password.*short|at least/i.test(msg)) return "Password must be at least 6 characters";
+    return msg;
+  };
+
   const signInWithEmail = async () => {
     setAuthError("");
     const { error } = await supabase.auth.signInWithPassword({
       email: authEmail,
       password: authPassword,
     });
-    if (error) setAuthError(error.message);
+    if (error) setAuthError(friendlyError(error.message));
   };
 
   const signUpWithEmail = async () => {
@@ -84,8 +94,18 @@ export function AuthProvider({ children }) {
       password: authPassword,
       options: { data: { full_name: authName || authEmail.split("@")[0] } },
     });
-    if (error) setAuthError(error.message);
+    if (error) setAuthError(friendlyError(error.message));
     else setAuthError("Check your email for a confirmation link!");
+  };
+
+  const resetPassword = async () => {
+    setAuthError("");
+    if (!authEmail.trim()) { setAuthError("Enter your email above, then tap 'Reset password'"); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
+      redirectTo: window.location.origin,
+    });
+    if (error) setAuthError(friendlyError(error.message));
+    else setAuthError("Check your email for a password reset link!");
   };
 
   const signOut = async () => {
@@ -104,6 +124,7 @@ export function AuthProvider({ children }) {
     signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,
+    resetPassword,
     signOut,
   };
 
