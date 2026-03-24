@@ -49,12 +49,36 @@ export function CreateScreen() {
           return [...startsWith, ...contains].slice(0, 8);
         })()
       : [];
+    const templates = [
+      { icon: "🏖️", name: "Weekend Getaway", desc: "2–3 day short break", prefill: { budget: "Mid-range" } },
+      { icon: "👨‍👩‍👧‍👦", name: "Family Holiday", desc: "Kid-friendly adventures", prefill: { budget: "Mid-range" }, addKids: true },
+      { icon: "🎒", name: "Backpacking", desc: "Multi-stop on a budget", prefill: { budget: "Budget", travel: new Set(["Train"]) } },
+      { icon: "💍", name: "Romantic Trip", desc: "Just the two of you", prefill: { budget: "Luxury" } },
+    ];
+    const applyTemplate = (t) => {
+      setWizTrip(prev => ({ ...prev, ...t.prefill, travel: t.prefill.travel || prev.travel }));
+      if (t.addKids) setWizTravellers(prev => ({ ...prev, youngerKids: prev.youngerKids.length === 0 ? [{ name: "", age: 6 }] : prev.youngerKids }));
+    };
     return (
       <>
-        <div style={{ textAlign: "center", padding: "8px 0 20px" }}>
+        <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
           <span style={{ fontSize: 36 }}>✈️</span>
           <h3 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, marginTop: 8 }}>Where are you going?</h3>
-          <p style={{ fontSize: 14, color: T.t3, marginTop: 4 }}>Give your trip a name and add your destinations</p>
+          <p style={{ fontSize: 14, color: T.t3, marginTop: 4 }}>Pick a template or start from scratch</p>
+        </div>
+
+        {/* Quick-start templates */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          {templates.map(t => (
+            <div key={t.name} onClick={() => applyTemplate(t)}
+              style={{ padding: "14px 12px", borderRadius: T.r, border: `.5px solid ${T.border}`, background: T.s, cursor: "pointer", transition: "all .15s", textAlign: "center" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = T.a; e.currentTarget.style.background = T.al; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.s; }}>
+              <span style={{ fontSize: 28, display: "block", marginBottom: 6 }}>{t.icon}</span>
+              <p style={{ fontSize: 13, fontWeight: 600, color: T.t1, fontFamily: T.font }}>{t.name}</p>
+              <p style={{ fontSize: 11, color: T.t3, fontFamily: T.font }}>{t.desc}</p>
+            </div>
+          ))}
         </div>
 
         <div style={cardStyle}>

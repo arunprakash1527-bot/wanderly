@@ -89,9 +89,19 @@ export function HomeScreen() {
                 <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{trip.name}</h3>
                 <p style={{ fontSize: 12, color: T.t2 }}>{trip.rawStart && trip.rawEnd ? `${fmtDate(trip.rawStart)} – ${fmtDate(trip.rawEnd)} ${new Date(trip.rawEnd + "T12:00:00").getFullYear()}` : (trip.start && trip.end ? `${trip.start} – ${trip.end} ${trip.year}` : "Dates TBC")}</p>
               </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {getUnreadCount(trip.id) > 0 && <Tag bg={T.coralL} color={T.coral}>{getUnreadCount(trip.id)} new</Tag>}
-                {trip.status === "completed" ? <Tag bg={T.purpleL} color={T.purple}>Completed</Tag> : trip.status === "live" ? <Tag bg={T.al} color={T.ad}>Live</Tag> : <Tag bg={T.blueL} color={T.blue}>New</Tag>}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  {getUnreadCount(trip.id) > 0 && <Tag bg={T.coralL} color={T.coral}>{getUnreadCount(trip.id)} new</Tag>}
+                  {trip.status === "completed" ? <Tag bg={T.purpleL} color={T.purple}>Completed</Tag> : trip.status === "live" ? <Tag bg={T.al} color={T.ad}>Live</Tag> : <Tag bg={T.blueL} color={T.blue}>New</Tag>}
+                </div>
+                {trip.rawStart && trip.status !== "completed" && (() => {
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const start = new Date(trip.rawStart + "T00:00:00");
+                  const diff = Math.ceil((start - today) / 86400000);
+                  if (diff > 0 && diff <= 60) return <span style={{ fontSize: 11, fontWeight: 600, color: T.a, fontFamily: T.font }}>{diff === 1 ? "Tomorrow!" : `${diff} days to go`}</span>;
+                  if (diff === 0) return <span style={{ fontSize: 11, fontWeight: 600, color: T.coral, fontFamily: T.font }}>Today!</span>;
+                  return null;
+                })()}
               </div>
             </div>
             {trip.brief && <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>{trip.brief}</p>}

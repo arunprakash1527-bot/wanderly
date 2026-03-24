@@ -57,6 +57,23 @@ export function CreatedTripScreen() {
   const [conflicts, setConflicts] = useState([]);
   const [showConflicts, setShowConflicts] = useState(false);
 
+  // Swipe between days
+  const swipeRef = useRef(null);
+  const swipeStart = useRef(null);
+  const handleDaySwipe = (numDays) => ({
+    onTouchStart: (e) => { swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; },
+    onTouchEnd: (e) => {
+      if (!swipeStart.current) return;
+      const dx = e.changedTouches[0].clientX - swipeStart.current.x;
+      const dy = e.changedTouches[0].clientY - swipeStart.current.y;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (dx < 0 && selectedDay < numDays) { setSelectedDay(selectedDay + 1); setEditingTimelineIdx(null); }
+        if (dx > 0 && selectedDay > 1) { setSelectedDay(selectedDay - 1); setEditingTimelineIdx(null); }
+      }
+      swipeStart.current = null;
+    },
+  });
+
   const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
 
   // Load trip data from Supabase when selected trip changes
@@ -604,7 +621,7 @@ export function CreatedTripScreen() {
                   </div>
 
                   {/* Timeline items for selected day */}
-                  <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+                  <div style={{ flex: 1, overflowY: "auto", padding: 20 }} {...handleDaySwipe(numDays)}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>
                         Day {selectedDay}

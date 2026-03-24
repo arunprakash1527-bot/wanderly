@@ -9,7 +9,7 @@ const TripDataContext = createContext(null);
 
 export function TripDataProvider({ children }) {
   const { user } = useAuth();
-  const { showToast, navigate } = useNavigation();
+  const { showToast, navigate, showCelebration } = useNavigation();
 
   // ─── Trip State ───
   const [createdTrips, setCreatedTrips] = useState([]);
@@ -271,7 +271,7 @@ export function TripDataProvider({ children }) {
         });
       }
       setSaving(false);
-      showToast("Trip created!");
+      showCelebration(newTrip.name);
       setSelectedCreatedTrip(newTrip);
       navigate("createdTrip");
     }

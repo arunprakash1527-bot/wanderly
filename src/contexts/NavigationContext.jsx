@@ -7,6 +7,7 @@ export function NavigationProvider({ children }) {
   const [screen, setScreen] = useState("home");
   const [toast, setToast] = useState(null);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('twm_welcomed'));
+  const [celebration, setCelebration] = useState(null);
   const [showDemo, setShowDemo] = useState(false);
   const [demoSlide, setDemoSlide] = useState(0);
   const [demoTick, setDemoTick] = useState(0);
@@ -22,6 +23,11 @@ export function NavigationProvider({ children }) {
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const showCelebration = useCallback((tripName) => {
+    setCelebration({ tripName });
+    setTimeout(() => setCelebration(null), 3000);
   }, []);
 
   // Demo animation tick — drives all animations
@@ -64,6 +70,8 @@ export function NavigationProvider({ children }) {
     demoTickRef,
     navigate,
     showToast,
+    celebration,
+    showCelebration,
   };
 
   return (

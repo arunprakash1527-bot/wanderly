@@ -354,7 +354,7 @@ function DesktopSidePanel({ screen }) {
 // ─── AppShell: minimal routing + overlays ───
 function AppShell() {
   const { user, authLoading } = useAuth();
-  const { screen, toast } = useNavigation();
+  const { screen, toast, celebration } = useNavigation();
   const isDesktop = useIsDesktop();
 
   // PWA install prompt
@@ -474,6 +474,28 @@ function AppShell() {
       {toast && (
         <div style={{ position: "fixed", bottom: showInstall ? 150 : 80, left: isDesktop ? 240 : "50%", transform: "translateX(-50%)", zIndex: 9998, padding: "10px 20px", borderRadius: 20, background: toast.type === "error" ? T.red : T.ad, color: "#fff", fontSize: 13, fontFamily: T.font, boxShadow: "0 4px 12px rgba(0,0,0,.15)", animation: "reelFadeIn .3s ease" }}>
           {toast.type === "success" ? "\u2713 " : "\u26A0 "}{toast.message}
+        </div>
+      )}
+      {celebration && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {/* Confetti particles */}
+          {Array.from({ length: 40 }).map((_, i) => (
+            <div key={i} style={{
+              position: "absolute", top: -20,
+              left: `${Math.random() * 100}%`,
+              width: Math.random() * 8 + 4, height: Math.random() * 8 + 4,
+              borderRadius: Math.random() > 0.5 ? "50%" : "2px",
+              background: ["#1B8F6A", "#FF6B6B", "#4ECDC4", "#FFE66D", "#A78BFA", "#F472B6", "#38BDF8"][i % 7],
+              animation: `confettiFall ${Math.random() * 2 + 1.5}s ease-in ${Math.random() * 0.5}s forwards`,
+              opacity: 0.9,
+            }} />
+          ))}
+          {/* Center badge */}
+          <div style={{ textAlign: "center", animation: "celebratePop .5s cubic-bezier(.34,1.56,.64,1) forwards", padding: "28px 36px", borderRadius: 24, background: "rgba(255,255,255,.95)", backdropFilter: "blur(12px)", boxShadow: "0 8px 40px rgba(0,0,0,.15)" }}>
+            <span style={{ fontSize: 48, display: "block", marginBottom: 8 }}>🎉</span>
+            <h3 style={{ fontFamily: T.fontD, fontSize: 22, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Trip Created!</h3>
+            <p style={{ fontSize: 14, color: T.t2, fontFamily: T.font }}>{celebration.tripName}</p>
+          </div>
         </div>
       )}
     </div>
