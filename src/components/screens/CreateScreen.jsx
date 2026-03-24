@@ -61,6 +61,11 @@ export function CreateScreen() {
           <ControlledField label="Trip name" value={wizTrip.name} onChange={v => setWizTrip(prev => ({ ...prev, name: v }))} placeholder="e.g. Easter Lake District" required error={wizShowErrors && !wizTrip.name.trim() ? "Give your trip a name" : undefined} inputStyle={{ fontSize: 15, padding: "12px 14px", minHeight: 44 }} />
         </div>
 
+        <div style={cardStyle}>
+          <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
+            placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 departure" inputStyle={{ fontSize: 15, padding: "12px 14px", minHeight: 44 }} />
+        </div>
+
         <div style={{ ...cardStyle, position: "relative" }}>
           {sectionLabel("Destinations", true)}
           {wizTrip.places.length > 0 && (
@@ -102,11 +107,6 @@ export function CreateScreen() {
               </div>
             </div>
           )}
-        </div>
-
-        <div style={cardStyle}>
-          <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
-            placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 departure" inputStyle={{ fontSize: 15, padding: "12px 14px", minHeight: 44 }} />
         </div>
       </>
     );
