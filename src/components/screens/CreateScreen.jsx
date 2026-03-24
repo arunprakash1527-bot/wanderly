@@ -144,22 +144,40 @@ export function CreateScreen() {
         {/* ── When ── */}
         <div style={cardStyle}>
           {sectionLabel("When are you going")}
-          <div style={{ display: "flex", gap: 10, marginBottom: 0 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.t2, marginBottom: 6 }}>From</label>
-              <input type="date" value={wizTrip.start} onChange={e => setWizTrip(prev => ({ ...prev, start: e.target.value }))}
-                onClick={e => e.target.showPicker?.()}
-                style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 15, background: T.s2, outline: "none", minHeight: 48, cursor: "pointer", colorScheme: "light" }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 0 }}>
+            <div onClick={() => document.getElementById('wiz-start-date')?.showPicker?.()}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", border: `.5px solid ${wizTrip.start ? T.a : T.border}`, borderRadius: T.rs, background: wizTrip.start ? T.al : T.s2, cursor: "pointer", transition: "all .15s", minHeight: 52 }}>
+              <span style={{ fontSize: 20 }}>🛫</span>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 2 }}>START DATE</label>
+                {wizTrip.start ? (
+                  <span style={{ fontSize: 15, fontWeight: 500, color: T.t1, fontFamily: T.font }}>{new Date(wizTrip.start + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+                ) : (
+                  <span style={{ fontSize: 14, color: T.t3, fontFamily: T.font }}>Tap to pick a date</span>
+                )}
+              </div>
+              <input id="wiz-start-date" type="date" value={wizTrip.start} onChange={e => setWizTrip(prev => ({ ...prev, start: e.target.value }))}
+                style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }} />
+              <span style={{ fontSize: 14, color: T.t3 }}>📅</span>
             </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.t2, marginBottom: 6 }}>To</label>
-              <input type="date" value={wizTrip.end} onChange={e => setWizTrip(prev => ({ ...prev, end: e.target.value }))}
-                onClick={e => e.target.showPicker?.()}
+            <div onClick={() => document.getElementById('wiz-end-date')?.showPicker?.()}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", border: `.5px solid ${wizTrip.end ? T.a : T.border}`, borderRadius: T.rs, background: wizTrip.end ? T.al : T.s2, cursor: "pointer", transition: "all .15s", minHeight: 52 }}>
+              <span style={{ fontSize: 20 }}>🛬</span>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: T.t3, marginBottom: 2 }}>END DATE</label>
+                {wizTrip.end ? (
+                  <span style={{ fontSize: 15, fontWeight: 500, color: T.t1, fontFamily: T.font }}>{new Date(wizTrip.end + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+                ) : (
+                  <span style={{ fontSize: 14, color: T.t3, fontFamily: T.font }}>Tap to pick a date</span>
+                )}
+              </div>
+              <input id="wiz-end-date" type="date" value={wizTrip.end} onChange={e => setWizTrip(prev => ({ ...prev, end: e.target.value }))}
                 min={wizTrip.start || undefined}
-                style={{ width: "100%", padding: "12px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 15, background: T.s2, outline: "none", minHeight: 48, cursor: "pointer", colorScheme: "light" }} />
+                style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }} />
+              <span style={{ fontSize: 14, color: T.t3 }}>📅</span>
             </div>
           </div>
-          {tripDays && <p style={{ fontSize: 13, color: T.ad, fontWeight: 500, marginTop: 8 }}>{tripDays} day{tripDays > 1 ? "s" : ""}</p>}
+          {tripDays && <p style={{ fontSize: 13, color: T.ad, fontWeight: 500, marginTop: 10 }}>{tripDays} day{tripDays > 1 ? "s" : ""}</p>}
           <p style={{ fontSize: 12, color: T.t3, marginTop: 6 }}>Optional — you can add dates later</p>
         </div>
 

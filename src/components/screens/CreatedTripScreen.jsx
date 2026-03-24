@@ -57,10 +57,9 @@ export function CreatedTripScreen() {
   const [conflicts, setConflicts] = useState([]);
   const [showConflicts, setShowConflicts] = useState(false);
 
-  // Swipe between days
-  const swipeRef = useRef(null);
+  // Swipe between days — only on the day nav pills, not the content area (to avoid blocking scroll)
   const swipeStart = useRef(null);
-  const handleDaySwipe = (numDays) => ({
+  const handleDayNavSwipe = (numDays) => ({
     onTouchStart: (e) => { swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; },
     onTouchEnd: (e) => {
       if (!swipeStart.current) return;
@@ -376,7 +375,7 @@ export function CreatedTripScreen() {
               {tripHasTimeline && (
                 <>
                   {/* Day navigator pills */}
-                  <div style={{ display: "flex", gap: 6, padding: "10px 20px", overflowX: "auto", background: T.s, borderBottom: `.5px solid ${T.border}` }}>
+                  <div style={{ display: "flex", gap: 6, padding: "10px 20px", overflowX: "auto", background: T.s, borderBottom: `.5px solid ${T.border}` }} {...handleDayNavSwipe(numDays)}>
                     {Array.from({ length: numDays }, (_, i) => i + 1).map(d => {
                       const dayDate = tripStart ? new Date(tripStart.getTime() + (d - 1) * 86400000) : null;
                       const dateStr = dayDate ? dayDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
@@ -394,11 +393,16 @@ export function CreatedTripScreen() {
                     })}
                   </div>
 
-                  {/* Live Trip Progress */}
+                  {/* Live Trip Progress — only show time-sensitive info when selected day is today */}
                   {isLive && (() => {
                     const prog = getDayProgress(trip.timeline, selectedDay);
-                    const nextInfo = getTimeToNext(trip.timeline, selectedDay);
                     if (prog.total === 0) return null;
+                    // Check if selected day is actually today
+                    const dayDate = tripStart ? new Date(tripStart.getTime() + (selectedDay - 1) * 86400000) : null;
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    const isToday = dayDate && dayDate.toDateString() === today.toDateString();
+                    const isFuture = dayDate && dayDate > today;
+                    const nextInfo = isToday ? getTimeToNext(trip.timeline, selectedDay) : null;
                     return (
                       <div style={{ margin: "8px 20px 0", padding: "10px 14px", borderRadius: 12,
                         background: prog.allDone ? T.greenL : `linear-gradient(135deg, ${T.al}, ${T.s})`,
@@ -424,7 +428,7 @@ export function CreatedTripScreen() {
                             </span>
                           </div>
                         )}
-                        {!prog.allDone && (
+                        {!prog.allDone && isToday && (
                           <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
                             <button onClick={() => markRunningLate(trip, selectedDay, 15, setCreatedTrips, logActivity)}
                               style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", color: T.amber, borderColor: T.amber }}>
@@ -435,6 +439,9 @@ export function CreatedTripScreen() {
                               ⏰ Running 30 min late
                             </button>
                           </div>
+                        )}
+                        {isFuture && !prog.allDone && (
+                          <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>Progress tracking activates on the day</p>
                         )}
                       </div>
                     );
@@ -621,7 +628,7 @@ export function CreatedTripScreen() {
                   </div>
 
                   {/* Timeline items for selected day */}
-                  <div style={{ flex: 1, overflowY: "auto", padding: 20 }} {...handleDaySwipe(numDays)}>
+                  <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>
                         Day {selectedDay}

@@ -1,4 +1,4 @@
-import { LOCATION_VIBES, TRAVEL_TIMES, LOCATION_ACTIVITIES } from '../constants/locations';
+import { LOCATION_VIBES, TRAVEL_TIMES, LOCATION_ACTIVITIES, LOCATION_COORDS } from '../constants/locations';
 
 export function getLocationVibes(places) {
   const all = places.join(" ").toLowerCase();
@@ -36,19 +36,55 @@ export function getRegion(places) {
   return "uk";
 }
 
+// Haversine distance in km between two [lat, lng] pairs
+function haversineKm(c1, c2) {
+  const toRad = d => d * Math.PI / 180;
+  const [lat1, lon1] = c1, [lat2, lon2] = c2;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Look up coordinates for a location name (fuzzy match)
+function findCoords(name) {
+  const n = name.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  if (LOCATION_COORDS[n]) return LOCATION_COORDS[n];
+  for (const [k, v] of Object.entries(LOCATION_COORDS)) {
+    if (n.includes(k) || k.includes(n)) return v;
+  }
+  return null;
+}
+
+// Estimate driving hours from straight-line km distance
+function kmToDrivingHours(km) {
+  const roadFactor = km > 500 ? 1.25 : 1.35; // long routes use more highways
+  const avgSpeedKmh = km > 800 ? 80 : km > 400 ? 70 : km > 200 ? 60 : km > 50 ? 50 : 35;
+  return Math.round((km * roadFactor / avgSpeedKmh) * 10) / 10;
+}
+
 export function estimateTravelHours(from, to) {
   if (!from || !to) return 2;
   const a = from.toLowerCase().replace(/[^a-z\s]/g, "").trim();
   const b = to.toLowerCase().replace(/[^a-z\s]/g, "").trim();
   if (a === b) return 0;
+  // 1. Exact lookup
   const key1 = `${a}|${b}`, key2 = `${b}|${a}`;
   if (TRAVEL_TIMES[key1]) return TRAVEL_TIMES[key1];
   if (TRAVEL_TIMES[key2]) return TRAVEL_TIMES[key2];
+  // 2. Partial match lookup
   for (const [k, v] of Object.entries(TRAVEL_TIMES)) {
     const [ka, kb] = k.split("|");
     if ((a.includes(ka) || ka.includes(a)) && (b.includes(kb) || kb.includes(b))) return v;
     if ((a.includes(kb) || kb.includes(a)) && (b.includes(ka) || ka.includes(b))) return v;
   }
+  // 3. Coordinate-based estimation (Haversine + driving factor)
+  const coordA = findCoords(a), coordB = findCoords(b);
+  if (coordA && coordB) {
+    const km = haversineKm(coordA, coordB);
+    if (km < 5) return 0.25;
+    return kmToDrivingHours(km);
+  }
+  // 4. UK postcode fallback
   const isPostcode = /^[a-z]{1,2}\d/.test(a) || /^[a-z]{1,2}\d/.test(b);
   if (isPostcode) {
     const scottish = /edinburgh|glasgow|inverness|aberdeen|dundee|stirling|fort william|oban|isle of skye|skye|loch ness|highlands|st andrews/;
@@ -57,6 +93,7 @@ export function estimateTravelHours(from, to) {
     const dest = scottish.test(b) ? 7 : northern.test(b) ? 4 : midlands.test(b) ? 2.5 : scottish.test(a) ? 7 : northern.test(a) ? 4 : midlands.test(a) ? 2.5 : 3;
     return dest;
   }
+  // 5. Default fallback
   return 3;
 }
 
