@@ -29,7 +29,7 @@ export function generateMultiDayTimeline(trip) {
   const food = trip.prefs.food.length > 0 ? trip.prefs.food : ["Local cuisine"];
   const foodLabel = food.join(" + ");
   const travelMode = trip.travel[0] || "Travel";
-  const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
+  const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || []), ...(trip.travellers?.infants || [])];
   const hasKids = allKids.length > 0;
   const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
   const ctx = (trip.summary || "") + " " + (trip.prefs.instructions || "");

@@ -182,23 +182,26 @@ export function TripDataProvider({ children }) {
     if (numDays && trip.places?.length > 0) parts.push(`${numDays}-day trip to ${trip.places.join(", ")}`);
     if (trip.travel?.length > 0) parts.push(`travelling by ${trip.travel.join(" + ").toLowerCase()}`);
     if (trip.startLocation) parts.push(`starting from ${trip.startLocation}`);
-    const na = trip.travellers?.adults?.length || 0, nok = trip.travellers?.olderKids?.length || 0, nyk = trip.travellers?.youngerKids?.length || 0;
+    const na = trip.travellers?.adults?.length || 0, nok = trip.travellers?.olderKids?.length || 0, nyk = trip.travellers?.youngerKids?.length || 0, ninf = trip.travellers?.infants?.length || 0;
     const gp = [];
     if (na > 0) gp.push(`${na} adult${na > 1 ? "s" : ""}`);
-    if (nok > 0) gp.push(`${nok} older kid${nok > 1 ? "s" : ""} (${trip.travellers.olderKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
-    if (nyk > 0) gp.push(`${nyk} younger kid${nyk > 1 ? "s" : ""} (${trip.travellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    if (nok > 0) gp.push(`${nok} teen${nok > 1 ? "s" : ""} (${trip.travellers.olderKids.map(k => `${k.name || "teen"}, ${k.age}`).join("; ")})`);
+    if (nyk > 0) gp.push(`${nyk} child${nyk > 1 ? "ren" : ""} (${trip.travellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    if (ninf > 0) gp.push(`${ninf} infant${ninf > 1 ? "s" : ""} (${trip.travellers.infants.map(k => `${k.name || "baby"}, ${k.age}`).join("; ")})`);
     if (gp.length) parts.push(`group: ${gp.join(", ")}`);
     if (trip.budget) parts.push(`${trip.budget.toLowerCase()} budget`);
     if (trip.prefs?.food?.length > 0) parts.push(`food preferences: ${trip.prefs.food.join(", ")}`);
     if (trip.prefs?.adultActs?.length > 0) parts.push(`adult activities: ${trip.prefs.adultActs.join(", ")}`);
-    if (trip.prefs?.olderActs?.length > 0) parts.push(`older kids activities: ${trip.prefs.olderActs.join(", ")}`);
-    if (trip.prefs?.youngerActs?.length > 0) parts.push(`younger kids activities: ${trip.prefs.youngerActs.join(", ")}`);
+    if (trip.prefs?.olderActs?.length > 0) parts.push(`teen activities: ${trip.prefs.olderActs.join(", ")}`);
+    if (trip.prefs?.youngerActs?.length > 0) parts.push(`children activities: ${trip.prefs.youngerActs.join(", ")}`);
     if (trip.stayNames?.length > 0) parts.push(`staying at ${trip.stayNames.join(", ")}`);
-    const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || [])];
+    if (ninf > 0) parts.push("infant in group — plan for nap breaks, pram-friendly routes, baby-changing facilities");
+    const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || []), ...(trip.travellers?.infants || [])];
     if (allKids.length > 0) {
       const ages = allKids.map(k => parseInt(k.age) || 0);
       const youngest = Math.min(...ages);
-      if (youngest <= 5) parts.push("young children in group — plan short activity blocks and rest breaks");
+      if (youngest <= 1) parts.push("infant in group — plan short outings with rest breaks, pram access required");
+      else if (youngest <= 5) parts.push("young children in group — plan short activity blocks and rest breaks");
       else if (youngest <= 10) parts.push("children in group — mix family-friendly with adult activities");
     }
     if (trip.prefs?.instructions) parts.push(trip.prefs.instructions);
@@ -237,7 +240,7 @@ export function TripDataProvider({ children }) {
       travel: [...wizTrip.travel],
       budget: wizTrip.budget,
       startLocation: wizTrip.startLocation,
-      travellers: { adults: wizTravellers.adults.map(a => ({ ...a })), olderKids: wizTravellers.olderKids.map(c => ({ ...c })), youngerKids: wizTravellers.youngerKids.map(c => ({ ...c })) },
+      travellers: { adults: wizTravellers.adults.map(a => ({ ...a })), olderKids: wizTravellers.olderKids.map(c => ({ ...c })), youngerKids: wizTravellers.youngerKids.map(c => ({ ...c })), infants: wizTravellers.infants.map(c => ({ ...c })) },
       stays: [...wizStays],
       stayNames: wizStays.map(s => s.name || s),
       prefs: { food: [...wizPrefs.food], activities: [...wizPrefs.adultActs, ...wizPrefs.olderActs, ...wizPrefs.youngerActs], adultActs: [...wizPrefs.adultActs], olderActs: [...wizPrefs.olderActs], youngerActs: [...wizPrefs.youngerActs], instructions: wizPrefs.instructions || "" },
@@ -367,10 +370,12 @@ export function TripDataProvider({ children }) {
               const travellers = { ...t.travellers };
               if (role === 'lead' || role === 'adult') {
                 travellers.adults = [...(travellers.adults || []), { ...entry, isLead: role === 'lead', isClaimed: newTraveller.is_claimed }];
-              } else if (role === 'child_older') {
-                travellers.olderKids = [...(travellers.olderKids || []), { ...entry, age: newTraveller.age || 10 }];
-              } else if (role === 'child_younger') {
-                travellers.youngerKids = [...(travellers.youngerKids || []), { ...entry, age: newTraveller.age || 5 }];
+              } else if (role === 'child_older' || role === 'teen') {
+                travellers.olderKids = [...(travellers.olderKids || []), { ...entry, age: newTraveller.age || 14 }];
+              } else if (role === 'child_younger' || role === 'child') {
+                travellers.youngerKids = [...(travellers.youngerKids || []), { ...entry, age: newTraveller.age || 6 }];
+              } else if (role === 'infant') {
+                travellers.infants = [...(travellers.infants || []), { ...entry, age: newTraveller.age || 0 }];
               }
               return { ...t, travellers };
             }

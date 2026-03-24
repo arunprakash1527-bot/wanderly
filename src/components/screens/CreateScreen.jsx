@@ -172,7 +172,7 @@ export function CreateScreen() {
       setWizTravellers(prev => ({ ...prev, adults: prev.adults.filter((_, i) => i !== idx) }));
     };
     const addChild = (group) => {
-      setWizTravellers(prev => ({ ...prev, [group]: [...prev[group], { name: "", age: group === "olderKids" ? 10 : 5 }] }));
+      setWizTravellers(prev => ({ ...prev, [group]: [...prev[group], { name: "", age: group === "olderKids" ? 14 : group === "infants" ? 0 : 6 }] }));
     };
     const updateChild = (group, idx, field, val) => {
       setWizTravellers(prev => ({ ...prev, [group]: prev[group].map((c, i) => i === idx ? { ...c, [field]: val } : c) }));
@@ -192,7 +192,7 @@ export function CreateScreen() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: T.blueL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧑</div>
-              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Adults</h4><p style={{ fontSize: 12, color: T.t2 }}>Ages 15+</p></div>
+              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Adults</h4><p style={{ fontSize: 12, color: T.t2 }}>Ages 18+</p></div>
             </div>
             <button style={{ ...css.btn, ...css.btnSm }} onClick={addAdult}>+ Add</button>
           </div>
@@ -219,7 +219,7 @@ export function CreateScreen() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: T.pinkL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧒</div>
-              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Children 8-14</h4><p style={{ fontSize: 12, color: T.t2 }}>Older kids</p></div>
+              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Teenagers</h4><p style={{ fontSize: 12, color: T.t2 }}>Ages 12–17</p></div>
             </div>
             <button style={{ ...css.btn, ...css.btnSm }} onClick={() => addChild("olderKids")}>+ Add</button>
           </div>
@@ -232,7 +232,7 @@ export function CreateScreen() {
                     style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
                   <select value={c.age} onChange={e => updateChild("olderKids", i, "age", +e.target.value)}
                     style={{ padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none", width: 56 }}>
-                    {[8,9,10,11,12,13,14].map(a => <option key={a} value={a}>{a}</option>)}
+                    {[12,13,14,15,16,17].map(a => <option key={a} value={a}>{a}</option>)}
                   </select>
                   <span onClick={() => removeChild("olderKids", i)} style={{ cursor: "pointer", color: T.red, fontSize: 16 }}>×</span>
                 </div>
@@ -245,7 +245,7 @@ export function CreateScreen() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: T.coralL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧒</div>
-              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Children 3-7</h4><p style={{ fontSize: 12, color: T.t2 }}>Younger kids</p></div>
+              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Children</h4><p style={{ fontSize: 12, color: T.t2 }}>Ages 2–11</p></div>
             </div>
             <button style={{ ...css.btn, ...css.btnSm }} onClick={() => addChild("youngerKids")}>+ Add</button>
           </div>
@@ -258,9 +258,35 @@ export function CreateScreen() {
                     style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
                   <select value={c.age} onChange={e => updateChild("youngerKids", i, "age", +e.target.value)}
                     style={{ padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none", width: 56 }}>
-                    {[3,4,5,6,7].map(a => <option key={a} value={a}>{a}</option>)}
+                    {[2,3,4,5,6,7,8,9,10,11].map(a => <option key={a} value={a}>{a}</option>)}
                   </select>
                   <span onClick={() => removeChild("youngerKids", i)} style={{ cursor: "pointer", color: T.red, fontSize: 16 }}>×</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: T.r, marginBottom: 10, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: T.amberL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>👶</div>
+              <div><h4 style={{ fontSize: 14, fontWeight: 500 }}>Infants</h4><p style={{ fontSize: 12, color: T.t2 }}>Ages 0–1</p></div>
+            </div>
+            <button style={{ ...css.btn, ...css.btnSm }} onClick={() => addChild("infants")}>+ Add</button>
+          </div>
+          {wizTravellers.infants.length > 0 && (
+            <div style={{ padding: "0 14px 10px", borderTop: `.5px solid ${T.border}` }}>
+              {wizTravellers.infants.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+                  <Avatar bg={T.amber} label={c.name ? c.name[0].toUpperCase() : "?"} size={28} />
+                  <input value={c.name} onChange={e => updateChild("infants", i, "name", e.target.value)} placeholder="Name"
+                    style={{ flex: 1, padding: "6px 10px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 13, background: T.s2, outline: "none" }} />
+                  <select value={c.age} onChange={e => updateChild("infants", i, "age", +e.target.value)}
+                    style={{ padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 12, background: T.s, outline: "none", width: 56 }}>
+                    {[0,1].map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <span onClick={() => removeChild("infants", i)} style={{ cursor: "pointer", color: T.red, fontSize: 16 }}>×</span>
                 </div>
               ))}
             </div>
@@ -277,10 +303,14 @@ export function CreateScreen() {
           {wizTravellers.youngerKids.map((c, i) => (
             <Avatar key={`yk-${i}`} bg={T.coral} label={c.name ? c.name[0].toUpperCase() : "?"} size={28} style={{ border: `2px solid ${T.s}` }} />
           ))}
+          {wizTravellers.infants.map((c, i) => (
+            <Avatar key={`inf-${i}`} bg={T.amber} label={c.name ? c.name[0].toUpperCase() : "?"} size={28} style={{ border: `2px solid ${T.s}` }} />
+          ))}
           <span style={{ fontSize: 12, color: T.t3, marginLeft: 4 }}>
             {wizTravellers.adults.length} adult{wizTravellers.adults.length !== 1 ? "s" : ""}
-            {wizTravellers.olderKids.length > 0 ? ` · ${wizTravellers.olderKids.length} child (8-14)` : ""}
-            {wizTravellers.youngerKids.length > 0 ? ` · ${wizTravellers.youngerKids.length} child (3-7)` : ""}
+            {wizTravellers.olderKids.length > 0 ? ` · ${wizTravellers.olderKids.length} teen${wizTravellers.olderKids.length > 1 ? "s" : ""}` : ""}
+            {wizTravellers.youngerKids.length > 0 ? ` · ${wizTravellers.youngerKids.length} child${wizTravellers.youngerKids.length > 1 ? "ren" : ""}` : ""}
+            {wizTravellers.infants.length > 0 ? ` · ${wizTravellers.infants.length} infant${wizTravellers.infants.length > 1 ? "s" : ""}` : ""}
           </span>
         </div>
       </>
@@ -559,8 +589,8 @@ export function CreateScreen() {
         {locationName && <p style={{ fontSize: 11, color: T.t3, marginBottom: 8 }}>Suggestions based on <span style={{ fontWeight: 600, color: T.t }}>{locationName}</span>{vibes.length > 0 ? ` · ${vibes.join(", ")}` : ""}</p>}
         {renderPrefSection("Food preferences", "food", allFoodOpts, foodSearch, setFoodSearch, "Search or type a food preference...", placesFood.length > 0)}
         {renderPrefSection("Activities — Adults", "adultActs", suggestions.adults, adultActSearch, setAdultActSearch, "Search or add an activity...", placesActivities.length > 0)}
-        {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Children 8-14", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a kids activity...", false)}
-        {wizTravellers.youngerKids.length > 0 && renderPrefSection("Activities — Children 3-7", "youngerActs", suggestions.youngerKids, youngerActSearch, setYoungerActSearch, "Search or add a kids activity...", false)}
+        {wizTravellers.olderKids.length > 0 && renderPrefSection("Activities — Teenagers 12-17", "olderActs", suggestions.olderKids, olderActSearch, setOlderActSearch, "Search or add a teen activity...", false)}
+        {wizTravellers.youngerKids.length > 0 && renderPrefSection("Activities — Children 2-11", "youngerActs", suggestions.youngerKids, youngerActSearch, setYoungerActSearch, "Search or add a kids activity...", false)}
       </>
     );
   };
@@ -595,17 +625,20 @@ export function CreateScreen() {
     const na = wizTravellers.adults.length, nok = wizTravellers.olderKids.length, nyk = wizTravellers.youngerKids.length;
     const groupParts = [];
     if (na > 0) groupParts.push(`${na} adult${na > 1 ? "s" : ""}`);
-    if (nok > 0) groupParts.push(`${nok} older kid${nok > 1 ? "s" : ""} (${wizTravellers.olderKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
-    if (nyk > 0) groupParts.push(`${nyk} younger kid${nyk > 1 ? "s" : ""} (${wizTravellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    if (nok > 0) groupParts.push(`${nok} teen${nok > 1 ? "s" : ""} (${wizTravellers.olderKids.map(k => `${k.name || "teen"}, ${k.age}`).join("; ")})`);
+    if (nyk > 0) groupParts.push(`${nyk} child${nyk > 1 ? "ren" : ""} (${wizTravellers.youngerKids.map(k => `${k.name || "child"}, ${k.age}`).join("; ")})`);
+    const ninf = wizTravellers.infants.length;
+    if (ninf > 0) groupParts.push(`${ninf} infant${ninf > 1 ? "s" : ""} (${wizTravellers.infants.map(k => `${k.name || "baby"}, ${k.age}`).join("; ")})`);
     if (groupParts.length) parts.push(`group: ${groupParts.join(", ")}`);
     if (wizTrip.budget) parts.push(`${wizTrip.budget.toLowerCase()} budget`);
     if (wizPrefs.food.size > 0) parts.push(`food: ${[...wizPrefs.food].join(", ")}`);
     if (wizPrefs.adultActs.size > 0) parts.push(`adult activities: ${[...wizPrefs.adultActs].join(", ")}`);
-    if (wizPrefs.olderActs.size > 0) parts.push(`older kids activities: ${[...wizPrefs.olderActs].join(", ")}`);
-    if (wizPrefs.youngerActs.size > 0) parts.push(`younger kids activities: ${[...wizPrefs.youngerActs].join(", ")}`);
+    if (wizPrefs.olderActs.size > 0) parts.push(`teen activities: ${[...wizPrefs.olderActs].join(", ")}`);
+    if (wizPrefs.youngerActs.size > 0) parts.push(`children activities: ${[...wizPrefs.youngerActs].join(", ")}`);
     if (wizStays.length > 0) parts.push(`staying at ${wizStays.map(s => `${s.name}${s.location ? ` (${s.location})` : ""}`).join(", ")}`);
+    if (ninf > 0) parts.push("infant in group — plan for nap breaks, pram-friendly routes, baby-changing facilities");
     if (nok + nyk > 0) {
-      const ages = [...wizTravellers.olderKids, ...wizTravellers.youngerKids].map(k => parseInt(k.age) || 0);
+      const ages = [...wizTravellers.olderKids, ...wizTravellers.youngerKids, ...wizTravellers.infants].map(k => parseInt(k.age) || 0);
       const youngest = Math.min(...ages);
       if (youngest <= 5) parts.push("plan for short activity blocks — young children in group");
       else if (youngest <= 10) parts.push("mix family-friendly activities with some adult time");
@@ -678,8 +711,8 @@ export function CreateScreen() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {[...wizPrefs.food].map(f => <Tag key={f} bg={T.coralL} color={T.coral}>{f}</Tag>)}
                 {[...wizPrefs.adultActs].map(a => <Tag key={`aa-${a}`} bg={T.blueL} color={T.blue}>{a}</Tag>)}
-                {[...wizPrefs.olderActs].map(a => <Tag key={`oa-${a}`} bg={T.pinkL || "#fce4ec"} color={T.pink || "#e91e63"}>{a} (8-14)</Tag>)}
-                {[...wizPrefs.youngerActs].map(a => <Tag key={`ya-${a}`} bg={T.pinkL || "#fce4ec"} color={T.pink || "#e91e63"}>{a} (3-7)</Tag>)}
+                {[...wizPrefs.olderActs].map(a => <Tag key={`oa-${a}`} bg={T.pinkL || "#fce4ec"} color={T.pink || "#e91e63"}>{a} (teen)</Tag>)}
+                {[...wizPrefs.youngerActs].map(a => <Tag key={`ya-${a}`} bg={T.pinkL || "#fce4ec"} color={T.pink || "#e91e63"}>{a} (child)</Tag>)}
               </div>
             </div>
           )}

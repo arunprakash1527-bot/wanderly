@@ -93,8 +93,9 @@ export function HomeScreen() {
               {trip.places.map(p => <Tag key={p} bg={T.purpleL} color={T.purple}>{p}</Tag>)}
               {trip.travel.map(t => <Tag key={t} bg={T.blueL} color={T.blue}>{t}</Tag>)}
               {(trip.travellers?.adults?.length || 0) > 0 && <Tag bg={T.coralL} color={T.coral}>{trip.travellers.adults.length} adult{trip.travellers.adults.length > 1 ? "s" : ""}</Tag>}
-              {(trip.travellers?.olderKids?.length || 0) > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.olderKids.length} older kid{trip.travellers.olderKids.length > 1 ? "s" : ""}</Tag>}
-              {(trip.travellers?.youngerKids?.length || 0) > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.youngerKids.length} younger kid{trip.travellers.youngerKids.length > 1 ? "s" : ""}</Tag>}
+              {(trip.travellers?.olderKids?.length || 0) > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.olderKids.length} teen{trip.travellers.olderKids.length > 1 ? "s" : ""}</Tag>}
+              {(trip.travellers?.youngerKids?.length || 0) > 0 && <Tag bg={T.pinkL} color={T.pink}>{trip.travellers.youngerKids.length} child{trip.travellers.youngerKids.length > 1 ? "ren" : ""}</Tag>}
+              {(trip.travellers?.infants?.length || 0) > 0 && <Tag bg={T.amberL} color={T.amber}>{trip.travellers.infants.length} infant{trip.travellers.infants.length > 1 ? "s" : ""}</Tag>}
               {trip.stayNames.length > 0 && <Tag bg={T.amberL} color={T.amber}>{trip.stayNames.length} stay{trip.stayNames.length > 1 ? "s" : ""}</Tag>}
               {trip.budget && <Tag bg={T.greenL} color={T.green}>{trip.budget}</Tag>}
             </div>

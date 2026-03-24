@@ -10,7 +10,7 @@ export function WizardProvider({ children }) {
 
   // ─── New Trip Wizard State ───
   const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "", startLocation: "" });
-  const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
+  const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [], infants: [] });
   const [wizStays, setWizStays] = useState([]);
   const [wizPrefs, setWizPrefs] = useState({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
   const [wizShowErrors, setWizShowErrors] = useState(false);
@@ -136,7 +136,7 @@ export function WizardProvider({ children }) {
   // ─── Reset Wizard ───
   const resetWizard = useCallback(() => {
     setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "", startLocation: "" });
-    setWizTravellers({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [] });
+    setWizTravellers({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [], infants: [] });
     setWizStays([]);
     setWizPrefs({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
     setStaySearch("");

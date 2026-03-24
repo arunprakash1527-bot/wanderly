@@ -40,7 +40,7 @@ export function CreatedTripScreen() {
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const isLive = trip.status === "live";
   const isCompleted = trip.status === "completed";
-  const totalTravellers = (trip.travellers?.adults?.length || 0) + (trip.travellers?.olderKids?.length || 0) + (trip.travellers?.youngerKids?.length || 0);
+  const totalTravellers = (trip.travellers?.adults?.length || 0) + (trip.travellers?.olderKids?.length || 0) + (trip.travellers?.youngerKids?.length || 0) + (trip.travellers?.infants?.length || 0);
   // Smart numDays: prefer stay date span if stays indicate shorter trip
   let numDays = 1;
   const tripStays = trip.stays || [];
@@ -63,7 +63,7 @@ export function CreatedTripScreen() {
   // Edit trip handler
   const editTrip = () => {
     setWizTrip({ name: trip.name, brief: trip.brief || "", start: trip.rawStart || "", end: trip.rawEnd || "", places: [...trip.places], travel: new Set(trip.travel), budget: trip.budget || "", startLocation: trip.startLocation || "" });
-    setWizTravellers({ adults: trip.travellers.adults.map(a => ({ ...a })), olderKids: trip.travellers.olderKids.map(c => ({ ...c })), youngerKids: trip.travellers.youngerKids.map(c => ({ ...c })) });
+    setWizTravellers({ adults: trip.travellers.adults.map(a => ({ ...a })), olderKids: (trip.travellers.olderKids || []).map(c => ({ ...c })), youngerKids: (trip.travellers.youngerKids || []).map(c => ({ ...c })), infants: (trip.travellers.infants || []).map(c => ({ ...c })) });
     setWizStays(trip.stays || []);
     setWizPrefs({ food: new Set(trip.prefs.food), adultActs: new Set(trip.prefs.adultActs || trip.prefs.activities), olderActs: new Set(trip.prefs.olderActs || []), youngerActs: new Set(trip.prefs.youngerActs || []), instructions: trip.prefs.instructions || "" });
     setWizStep(0);

@@ -87,7 +87,7 @@ export function ChatProvider({ children }) {
     const budget = trip?.budget || "";
     const summary = trip?.summary || buildTripSummary(trip || {});
     const instructions = trip?.prefs?.instructions || "";
-    const allKids = [...(trip?.travellers?.olderKids || []), ...(trip?.travellers?.youngerKids || [])];
+    const allKids = [...(trip?.travellers?.olderKids || []), ...(trip?.travellers?.youngerKids || []), ...(trip?.travellers?.infants || [])];
     const hasKids = allKids.length > 0;
     const kidNames = allKids.map(k => `${k.name} (${k.age})`).join(", ");
     const budgetLabel = { "Budget": "budget-friendly", "Mid-range": "mid-range", "Luxury": "upscale", "No limit": "top-rated" }[budget] || "local";
