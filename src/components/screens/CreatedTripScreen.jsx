@@ -28,7 +28,7 @@ export function CreatedTripScreen() {
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
   const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
-  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
+  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
 
   const [confirmingEnd, setConfirmingEnd] = useState(false);
 
@@ -1178,8 +1178,8 @@ export function CreatedTripScreen() {
                 </select>
               </div>
             );
-            const uploadBox = () => (
-              <div onClick={() => photoInputRef.current?.click()} style={{ aspectRatio: "1", borderRadius: T.rs, background: T.s2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: T.t3, flexDirection: "column", gap: 2 }}>{"📷"}<span style={{ fontSize: 10 }}>Add</span></div>
+            const uploadBox = (dayLabel) => (
+              <div onClick={() => { uploadDayTagRef.current = dayLabel || "Untagged"; photoInputRef.current?.click(); }} style={{ aspectRatio: "1", borderRadius: T.rs, background: T.s2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, color: T.t3, flexDirection: "column", gap: 2 }}>{"📷"}<span style={{ fontSize: 10 }}>Add</span></div>
             );
 
             return (
@@ -1243,7 +1243,7 @@ export function CreatedTripScreen() {
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
                       {dayPhotos.map((p, i) => renderThumb(p, i))}
-                      {uploadBox()}
+                      {uploadBox(dayLabel)}
                     </div>
                   </div>
                 );

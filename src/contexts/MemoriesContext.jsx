@@ -24,6 +24,7 @@ export function MemoriesProvider({ children }) {
   // ─── Refs ───
   const photoInputRef = useRef(null);
   const reelTimerRef = useRef(null);
+  const uploadDayTagRef = useRef("Untagged");
 
   // ─── Supabase Functions ───
   const loadTripPhotos = async (tripId) => {
@@ -90,13 +91,15 @@ export function MemoriesProvider({ children }) {
           if (urlData?.publicUrl) { url = urlData.publicUrl; storedInSupabase = true; }
         }
       } catch (err) { /* Storage not set up */ }
-      const newPhoto = { id: uniqueId, url, name: f.name, day: "Untagged", liked: false, caption: "", uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }), sortOrder: uploadedPhotos.length, filePath: storedInSupabase ? filePath : null };
+      const dayTag = uploadDayTagRef.current || "Untagged";
+      const newPhoto = { id: uniqueId, url, name: f.name, day: dayTag, liked: false, caption: "", uploadDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }), sortOrder: uploadedPhotos.length, filePath: storedInSupabase ? filePath : null };
       setUploadedPhotos(prev => [...prev, newPhoto]);
       if (storedInSupabase && user) {
-        try { await supabase.from('trip_photos').insert({ trip_id: tripId, user_id: user.id, file_url: url, file_path: filePath, file_name: f.name, day_tag: 'Untagged', liked: false, caption: '', sort_order: uploadedPhotos.length }); } catch (err) {}
+        try { await supabase.from('trip_photos').insert({ trip_id: tripId, user_id: user.id, file_url: url, file_path: filePath, file_name: f.name, day_tag: dayTag, liked: false, caption: '', sort_order: uploadedPhotos.length }); } catch (err) {}
       }
     }
     if (files.length > 0 && trip?.id) logActivity(trip.id, "\uD83D\uDCF8", `Added ${files.length} photo${files.length > 1 ? "s" : ""} to memories`, "photo");
+    uploadDayTagRef.current = "Untagged";
     e.target.value = "";
   }, [selectedCreatedTrip, createdTrips, uploadedPhotos, setUploadedPhotos, user, logActivity, showToast, MAX_FILE_SIZE]);
 
@@ -111,6 +114,7 @@ export function MemoriesProvider({ children }) {
     reelStyle, setReelStyle,
     photoInputRef,
     reelTimerRef,
+    uploadDayTagRef,
     loadTripPhotos,
     updatePhotoInSupabase,
     deletePhotoFromSupabase,
