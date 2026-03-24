@@ -870,6 +870,35 @@ export function CreatedTripScreen() {
             const catBreakdown = getCategoryBreakdown(allExpenses);
             const settlements = calculateSettlement(allExpenses);
 
+            // Per-person spending breakdown
+            const perPerson = {};
+            adults.forEach(name => { perPerson[name] = { paid: 0, owes: 0 }; });
+            allExpenses.forEach(exp => {
+              if (perPerson[exp.paid_by]) perPerson[exp.paid_by].paid += exp.amount;
+              (exp.splits || []).forEach(s => {
+                if (perPerson[s.participant_name]) perPerson[s.participant_name].owes += s.share_amount;
+              });
+            });
+
+            // Group expenses by date
+            const expByDate = {};
+            expenses.forEach(exp => {
+              const dateKey = exp.expense_date || "Undated";
+              if (!expByDate[dateKey]) expByDate[dateKey] = [];
+              expByDate[dateKey].push(exp);
+            });
+            const sortedDates = Object.keys(expByDate).sort((a, b) => b.localeCompare(a));
+
+            const fmtExpDate = (iso) => {
+              if (!iso || iso === "Undated") return "Undated";
+              const d = new Date(iso + "T12:00:00");
+              const today = new Date(); today.setHours(12,0,0,0);
+              const diff = Math.round((today - d) / 86400000);
+              if (diff === 0) return "Today";
+              if (diff === 1) return "Yesterday";
+              return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
+            };
+
             const openAddExpense = (existingExpense) => {
               if (existingExpense) {
                 setEditingExpense(existingExpense);
@@ -893,92 +922,98 @@ export function CreatedTripScreen() {
               setShowAddExpense(true);
             };
 
+            // Quick-add presets
+            const quickPresets = [
+              { icon: "☕", label: "Coffee", cat: "food", amount: "4.50" },
+              { icon: "🍽️", label: "Meal", cat: "food", amount: "" },
+              { icon: "⛽", label: "Fuel", cat: "travel", amount: "" },
+              { icon: "🎟️", label: "Tickets", cat: "activities", amount: "" },
+              { icon: "🛒", label: "Shopping", cat: "other", amount: "" },
+            ];
+
             return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              {/* Add Expense Modal */}
+              {/* Add Expense Modal — bottom sheet style */}
               {showAddExpense && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 100, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "20px 0" }}
+                <div style={{ position: "absolute", inset: 0, zIndex: 100, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
                   onClick={(e) => { if (e.target === e.currentTarget) resetExpenseForm(); }}>
-                  <div style={{ background: T.bg, borderRadius: 20, width: "calc(100% - 32px)", maxWidth: 480, padding: "20px 20px 30px", margin: "auto 0" }}>
+                  <div style={{ background: T.bg, borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, maxHeight: "88vh", overflowY: "auto", padding: "8px 20px 30px", animation: "demoSlideUp .25s ease-out" }}>
+                    {/* Drag handle */}
+                    <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 12px" }}>
+                      <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border }} />
+                    </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                       <h3 style={{ fontFamily: T.fontD, fontSize: 18, fontWeight: 400 }}>{editingExpense ? "Edit Expense" : "Add Expense"}</h3>
-                      <button onClick={resetExpenseForm} style={{ ...css.btn, ...css.btnSm, fontSize: 18, padding: "2px 8px" }}>&times;</button>
+                      <button onClick={resetExpenseForm} style={{ background: "none", border: "none", fontSize: 22, color: T.t3, cursor: "pointer", padding: 4, lineHeight: 1 }}>&times;</button>
+                    </div>
+
+                    {/* Amount — prominent at top */}
+                    <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
+                      <div style={{ display: "inline-flex", alignItems: "baseline", gap: 2 }}>
+                        <span style={{ fontSize: 28, fontWeight: 300, color: T.t3 }}>£</span>
+                        <input value={expenseAmount} onChange={e => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" type="text" inputMode="decimal" autoFocus
+                          style={{ width: Math.max(80, (expenseAmount.length || 4) * 22), fontSize: 36, fontWeight: 700, fontFamily: T.font, border: "none", outline: "none", textAlign: "center", background: "transparent", color: T.t1 }} />
+                      </div>
                     </div>
 
                     {/* Description */}
-                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>What was it for?</label>
-                    <input value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} placeholder="e.g. Dinner at The Harbour"
-                      style={{ width: "100%", padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, marginTop: 4, marginBottom: 12, outline: "none", boxSizing: "border-box" }} />
+                    <input value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} placeholder="What was it for?"
+                      style={{ width: "100%", padding: "12px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 14, marginBottom: 12, outline: "none", boxSizing: "border-box", background: T.s }} />
 
-                    {/* Amount */}
-                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Amount</label>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, marginBottom: 12 }}>
-                      <span style={{ fontSize: 18, fontWeight: 600, color: T.t2 }}>{"£"}</span>
-                      <input value={expenseAmount} onChange={e => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" type="text" inputMode="decimal"
-                        style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 16, fontWeight: 600, outline: "none" }} />
-                    </div>
-
-                    {/* Date */}
-                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Date</label>
-                    <input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)}
-                      style={{ width: "100%", padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, marginTop: 4, marginBottom: 12, outline: "none", boxSizing: "border-box" }} />
-
-                    {/* Category */}
-                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Category</label>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, marginBottom: 12 }}>
+                    {/* Category — 2-row icon grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 12 }}>
                       {EXPENSE_CATEGORIES.map(cat => (
                         <button key={cat.key} onClick={() => setExpenseCategory(cat.key)}
-                          style={{ ...css.btn, ...css.btnSm, fontSize: 11, padding: "6px 10px", borderRadius: 20,
-                            background: expenseCategory === cat.key ? cat.color : T.s2,
-                            color: expenseCategory === cat.key ? "#fff" : T.t2,
-                            borderColor: expenseCategory === cat.key ? cat.color : T.border }}>
-                          {cat.icon} {cat.label}
+                          style={{ padding: "10px 4px", borderRadius: T.rs, border: `.5px solid ${expenseCategory === cat.key ? cat.color : T.border}`,
+                            background: expenseCategory === cat.key ? cat.color + "15" : T.s,
+                            cursor: "pointer", textAlign: "center", transition: "all .15s", fontFamily: T.font }}>
+                          <div style={{ fontSize: 20, marginBottom: 2 }}>{cat.icon}</div>
+                          <div style={{ fontSize: 10, fontWeight: expenseCategory === cat.key ? 600 : 400, color: expenseCategory === cat.key ? cat.color : T.t2 }}>{cat.label.split(" ")[0]}</div>
                         </button>
                       ))}
                     </div>
 
+                    {/* Date */}
+                    <input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)}
+                      style={{ width: "100%", padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontFamily: T.font, fontSize: 13, marginBottom: 14, outline: "none", boxSizing: "border-box", background: T.s }} />
+
                     {/* Paid by */}
-                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Paid by</label>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, marginBottom: 12 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6, display: "block" }}>Paid by</label>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto" }}>
                       {adults.map(name => (
                         <button key={name} onClick={() => setExpensePaidBy(name)}
-                          style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 12, padding: "6px 12px", borderRadius: 20,
-                            background: expensePaidBy === name ? T.a : T.s2,
-                            color: expensePaidBy === name ? "#fff" : T.t2,
-                            borderColor: expensePaidBy === name ? T.ad : T.border }}>
+                          style={{ padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: expensePaidBy === name ? 600 : 400, whiteSpace: "nowrap",
+                            background: expensePaidBy === name ? T.a : T.s, color: expensePaidBy === name ? "#fff" : T.t2,
+                            border: `.5px solid ${expensePaidBy === name ? T.ad : T.border}`, cursor: "pointer", fontFamily: T.font, transition: "all .15s" }}>
                           {name}
                         </button>
                       ))}
                     </div>
 
-                    {/* Split between (participant selection) */}
-                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Split between</label>
-                    <p style={{ fontSize: 10, color: T.t3, margin: "2px 0 6px" }}>Tap to add/remove people from this expense</p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                    {/* Split between */}
+                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6, display: "block" }}>Split between</label>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto" }}>
                       {adults.map(name => {
                         const isIn = expenseParticipants.includes(name);
                         return (
-                          <button key={name} onClick={() => {
-                            setExpenseParticipants(prev => isIn ? prev.filter(n => n !== name) : [...prev, name]);
-                          }}
-                            style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 12, padding: "6px 12px", borderRadius: 20,
-                              background: isIn ? T.blueL : T.s2, color: isIn ? T.blue : T.t3,
-                              borderColor: isIn ? T.blue : T.border, fontWeight: isIn ? 600 : 400 }}>
-                            {isIn ? "\u2713 " : ""}{name}
+                          <button key={name} onClick={() => setExpenseParticipants(prev => isIn ? prev.filter(n => n !== name) : [...prev, name])}
+                            style={{ padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: isIn ? 600 : 400, whiteSpace: "nowrap",
+                              background: isIn ? T.blueL : T.s, color: isIn ? T.blue : T.t3,
+                              border: `.5px solid ${isIn ? T.blue : T.border}`, cursor: "pointer", fontFamily: T.font, transition: "all .15s" }}>
+                            {isIn ? "✓ " : ""}{name}
                           </button>
                         );
                       })}
                     </div>
 
                     {/* Split method */}
-                    <label style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>Split method</label>
-                    <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
-                      {[{ key: 'equal', label: 'Equal' }, { key: 'percentage', label: 'By %' }, { key: 'custom', label: 'Custom' }].map(m => (
+                    <div style={{ display: "flex", gap: 0, marginBottom: 12, borderRadius: T.rs, overflow: "hidden", border: `.5px solid ${T.border}` }}>
+                      {[{ key: 'equal', label: '÷ Equal' }, { key: 'percentage', label: '% Percent' }, { key: 'custom', label: '# Custom' }].map(m => (
                         <button key={m.key} onClick={() => setExpenseSplitMethod(m.key)}
-                          style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 12, padding: "8px 0", borderRadius: T.rs,
-                            background: expenseSplitMethod === m.key ? T.a : T.s2,
-                            color: expenseSplitMethod === m.key ? "#fff" : T.t2,
-                            borderColor: expenseSplitMethod === m.key ? T.ad : T.border, fontWeight: 500 }}>
+                          style={{ flex: 1, padding: "10px 0", fontSize: 12, fontWeight: expenseSplitMethod === m.key ? 600 : 400,
+                            background: expenseSplitMethod === m.key ? T.al : T.s, color: expenseSplitMethod === m.key ? T.ad : T.t3,
+                            border: "none", cursor: "pointer", fontFamily: T.font, transition: "all .15s",
+                            borderRight: m.key !== 'custom' ? `.5px solid ${T.border}` : "none" }}>
                           {m.label}
                         </button>
                       ))}
@@ -986,20 +1021,21 @@ export function CreatedTripScreen() {
 
                     {/* Equal split preview */}
                     {expenseSplitMethod === 'equal' && expenseParticipants.length > 0 && parseFloat(expenseAmount) > 0 && (
-                      <div style={{ background: T.s2, borderRadius: T.rs, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.t2 }}>
-                        {"£"}{(parseFloat(expenseAmount) / expenseParticipants.length).toFixed(2)} each ({expenseParticipants.length} {expenseParticipants.length === 1 ? "person" : "people"})
+                      <div style={{ background: T.al, borderRadius: T.rs, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: T.ad, fontWeight: 500, textAlign: "center" }}>
+                        £{(parseFloat(expenseAmount) / expenseParticipants.length).toFixed(2)} each · {expenseParticipants.length} {expenseParticipants.length === 1 ? "person" : "people"}
                       </div>
                     )}
 
                     {/* Percentage inputs */}
                     {expenseSplitMethod === 'percentage' && expenseParticipants.length > 0 && (
-                      <div style={{ background: T.s2, borderRadius: T.rs, padding: 12, marginBottom: 12 }}>
+                      <div style={{ background: T.s, borderRadius: T.rs, padding: 12, marginBottom: 12, border: `.5px solid ${T.border}` }}>
                         {expenseParticipants.map(name => (
                           <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                             <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{name}</span>
                             <input value={expenseCustomSplits[name] || ''} onChange={e => setExpenseCustomSplits(prev => ({ ...prev, [name]: e.target.value }))}
                               placeholder="0" type="text" inputMode="decimal" style={{ width: 60, padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontSize: 13, fontWeight: 600, textAlign: "right", outline: "none" }} />
                             <span style={{ fontSize: 12, color: T.t3 }}>%</span>
+                            {parseFloat(expenseAmount) > 0 && <span style={{ fontSize: 10, color: T.t3, minWidth: 44, textAlign: "right" }}>£{(parseFloat(expenseAmount) * (parseFloat(expenseCustomSplits[name]) || 0) / 100).toFixed(2)}</span>}
                           </div>
                         ))}
                         <div style={{ fontSize: 11, color: expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0) === 100 ? T.green : T.red, marginTop: 4, fontWeight: 600 }}>
@@ -1010,25 +1046,25 @@ export function CreatedTripScreen() {
 
                     {/* Custom amount inputs */}
                     {expenseSplitMethod === 'custom' && expenseParticipants.length > 0 && (
-                      <div style={{ background: T.s2, borderRadius: T.rs, padding: 12, marginBottom: 12 }}>
+                      <div style={{ background: T.s, borderRadius: T.rs, padding: 12, marginBottom: 12, border: `.5px solid ${T.border}` }}>
                         {expenseParticipants.map(name => (
                           <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                             <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{name}</span>
-                            <span style={{ fontSize: 12, color: T.t3 }}>{"£"}</span>
+                            <span style={{ fontSize: 12, color: T.t3 }}>£</span>
                             <input value={expenseCustomSplits[name] || ''} onChange={e => setExpenseCustomSplits(prev => ({ ...prev, [name]: e.target.value }))}
                               placeholder="0.00" type="text" inputMode="decimal" style={{ width: 70, padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontSize: 13, fontWeight: 600, textAlign: "right", outline: "none" }} />
                           </div>
                         ))}
                         {parseFloat(expenseAmount) > 0 && (
                           <div style={{ fontSize: 11, color: Math.abs(expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0) - parseFloat(expenseAmount)) < 0.02 ? T.green : T.red, marginTop: 4, fontWeight: 600 }}>
-                            Total: {"£"}{expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0).toFixed(2)} / {"£"}{parseFloat(expenseAmount).toFixed(2)}
+                            Total: £{expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0).toFixed(2)} / £{parseFloat(expenseAmount).toFixed(2)}
                           </div>
                         )}
                       </div>
                     )}
 
                     {/* Save button */}
-                    <button onClick={() => saveExpense(trip)} style={{ ...css.btn, ...css.btnP, width: "100%", padding: "12px 0", borderRadius: T.rs, fontSize: 14, fontWeight: 600 }}>
+                    <button onClick={() => saveExpense(trip)} style={{ ...css.btn, ...css.btnP, width: "100%", padding: "14px 0", borderRadius: T.rs, fontSize: 14, fontWeight: 600 }}>
                       {editingExpense ? "Update Expense" : "Add Expense"}
                     </button>
                   </div>
@@ -1037,125 +1073,164 @@ export function CreatedTripScreen() {
 
               {/* Expenses content */}
               <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-                {/* Summary header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div>
-                    <p style={{ fontSize: 22, fontWeight: 700, fontFamily: T.fontD, color: T.t1 }}>{"£"}{totalSpent.toFixed(2)}</p>
-                    <p style={{ fontSize: 11, color: T.t3 }}>total spent{allExpenses.length > 0 ? ` \u00B7 ${allExpenses.length} item${allExpenses.length !== 1 ? "s" : ""}${stayCosts.length > 0 ? ` (incl. ${stayCosts.length} stay${stayCosts.length > 1 ? "s" : ""})` : ""}` : ""}</p>
-                  </div>
-                  <button onClick={() => openAddExpense()} style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 12, fontWeight: 600 }}>
-                    + Add
-                  </button>
-                </div>
 
-                {/* Category breakdown bar */}
-                {catBreakdown.length > 0 && (
-                  <div className="w-card" style={{ ...css.card, marginBottom: 16, padding: 14 }}>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Spending Breakdown</p>
-                    <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", marginBottom: 10 }}>
-                      {catBreakdown.map(s => (
-                        <div key={s.key} style={{ width: `${s.percentage}%`, background: s.color, minWidth: s.percentage > 0 ? 3 : 0 }} title={`${s.label}: \u00A3${s.amount.toFixed(2)}`} />
-                      ))}
+                {/* ── Summary hero ── */}
+                <div style={{ background: `linear-gradient(135deg, ${T.al}, ${T.s})`, borderRadius: T.r, padding: 20, marginBottom: 16, border: `.5px solid ${T.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                    <div>
+                      <p style={{ fontSize: 10, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4 }}>Total spent</p>
+                      <p style={{ fontSize: 28, fontWeight: 700, fontFamily: T.fontD, color: T.t1, lineHeight: 1 }}>£{totalSpent.toFixed(2)}</p>
+                      <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>{allExpenses.length} expense{allExpenses.length !== 1 ? "s" : ""}{adults.length > 0 ? ` · £${(totalSpent / Math.max(adults.length, 1)).toFixed(0)} per person` : ""}</p>
                     </div>
-                    {catBreakdown.map(s => (
-                      <div key={s.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 12 }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.t2 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                          {s.icon} {s.label}
-                        </span>
-                        <span style={{ fontWeight: 600, color: T.t1 }}>{"£"}{s.amount.toFixed(2)} <span style={{ fontWeight: 400, color: T.t3 }}>({s.percentage.toFixed(0)}%)</span></span>
-                      </div>
+                    <button onClick={() => openAddExpense()} style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 13, fontWeight: 600 }}>
+                      + Add
+                    </button>
+                  </div>
+
+                  {/* Quick add presets */}
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                    {quickPresets.map((qp, i) => (
+                      <button key={i} onClick={() => { resetExpenseForm(); setExpensePaidBy(adults[0] || ''); setExpenseParticipants([...adults]); setExpenseCategory(qp.cat); if (qp.amount) setExpenseAmount(qp.amount); setExpenseDesc(qp.label); setShowAddExpense(true); }}
+                        style={{ padding: "6px 12px", borderRadius: 20, background: T.s, border: `.5px solid ${T.border}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", flexShrink: 0, fontFamily: T.font, fontSize: 11, color: T.t2, transition: "all .15s" }}>
+                        <span style={{ fontSize: 14 }}>{qp.icon}</span> {qp.label}
+                      </button>
                     ))}
                   </div>
-                )}
+                </div>
 
-                {/* Settlement summary */}
-                {expenses.length > 0 && (
-                  <div className="w-card" style={{ ...css.card, marginBottom: 16, padding: 14, borderColor: settlements.length > 0 ? T.amber : T.green }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                {/* ── Settlement — always visible when expenses exist ── */}
+                {allExpenses.length > 0 && (
+                  <div style={{ ...css.card, marginBottom: 16, padding: 0, overflow: "hidden", border: `.5px solid ${settlements.length > 0 ? T.amber : T.green}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", background: settlements.length > 0 ? T.amberL : T.greenL, cursor: "pointer" }}
                       onClick={() => setShowSettlement(!showSettlement)}>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5 }}>
-                        {settlements.length > 0 ? "\uD83D\uDCB8 Who Owes Whom" : "\u2705 All Settled Up"}
-                      </p>
-                      <span style={{ fontSize: 12, color: T.t3 }}>{showSettlement ? "\u25B2" : "\u25BC"}</span>
+                      <span style={{ fontSize: 16 }}>{settlements.length > 0 ? "💸" : "✅"}</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>{settlements.length > 0 ? "Settle up" : "All settled up!"}</p>
+                        <p style={{ fontSize: 11, color: T.t3 }}>{settlements.length > 0 ? `${settlements.length} payment${settlements.length > 1 ? "s" : ""} needed` : "No payments needed"}</p>
+                      </div>
+                      <span style={{ fontSize: 12, color: T.t3, transition: "transform .2s", transform: showSettlement ? "rotate(180deg)" : "none" }}>▼</span>
                     </div>
                     {showSettlement && settlements.length > 0 && (
-                      <div style={{ marginTop: 10 }}>
+                      <div style={{ padding: "4px 14px 12px" }}>
                         {settlements.map((s, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: i < settlements.length - 1 ? `.5px solid ${T.border}` : "none" }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: T.coral }}>{s.from}</span>
-                            <span style={{ fontSize: 11, color: T.t3 }}>{"→"} pays</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: T.green }}>{s.to}</span>
-                            <span style={{ marginLeft: "auto", fontSize: 14, fontWeight: 700, color: T.t1 }}>{"£"}{s.amount.toFixed(2)}</span>
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: i < settlements.length - 1 ? `.5px solid ${T.border}` : "none" }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: T.coralL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: T.coral, flexShrink: 0 }}>{s.from.charAt(0)}</div>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ fontSize: 12 }}><b style={{ color: T.coral }}>{s.from}</b> <span style={{ color: T.t3 }}>→</span> <b style={{ color: T.green }}>{s.to}</b></p>
+                            </div>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>£{s.amount.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
                     )}
                     {showSettlement && settlements.length === 0 && (
-                      <p style={{ fontSize: 12, color: T.t3, marginTop: 8 }}>Everyone is square! No payments needed.</p>
+                      <p style={{ fontSize: 12, color: T.t3, padding: "8px 14px 12px" }}>Everyone is square — no payments needed.</p>
                     )}
                   </div>
                 )}
 
-                {/* Accommodation costs from stays */}
-                {stayCosts.length > 0 && (
-                  <div className="w-card" style={{ ...css.card, marginBottom: 16, padding: 14, borderColor: T.amber }}>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>🏨 Accommodation Costs</p>
-                    {stayCosts.map((sc, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < stayCosts.length - 1 ? `.5px solid ${T.border}` : "none" }}>
-                        <div>
-                          <p style={{ fontSize: 13, fontWeight: 500 }}>{sc.description}</p>
-                          <p style={{ fontSize: 10, color: T.t3 }}>Split equally · {adults.length} people · £{(sc.amount / adults.length).toFixed(2)} each</p>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <button onClick={() => { resetExpenseForm(); setExpenseDesc(sc.description); setExpenseAmount(String(sc.amount)); setExpenseCategory('accommodation'); setExpensePaidBy(adults[0] || ''); setExpenseParticipants([...adults]); setShowAddExpense(true); }}
-                            style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", color: T.a, borderColor: T.a, whiteSpace: "nowrap" }}>Add to expenses</button>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: T.amber }}>£{sc.amount.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    ))}
-                    <p style={{ fontSize: 10, color: T.t3, marginTop: 6, fontStyle: "italic" }}>Auto-added from accommodation details</p>
+                {/* ── Per-person breakdown ── */}
+                {adults.length > 1 && allExpenses.length > 0 && (
+                  <div style={{ ...css.card, marginBottom: 16, padding: 14 }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>Per person</p>
+                    <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(adults.length, 3)}, 1fr)`, gap: 8 }}>
+                      {adults.map((name, i) => {
+                        const pp = perPerson[name] || { paid: 0, owes: 0 };
+                        const balance = pp.paid - pp.owes;
+                        return (
+                          <div key={i} style={{ padding: "10px 8px", borderRadius: T.rs, background: T.s2, textAlign: "center" }}>
+                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: balance >= 0 ? T.greenL : T.coralL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: balance >= 0 ? T.green : T.coral, margin: "0 auto 6px" }}>{name.charAt(0)}</div>
+                            <p style={{ fontSize: 12, fontWeight: 600, color: T.t1, marginBottom: 2 }}>{name.split(" ")[0]}</p>
+                            <p style={{ fontSize: 10, color: T.t3 }}>Paid £{pp.paid.toFixed(0)}</p>
+                            <p style={{ fontSize: 10, color: T.t3 }}>Owes £{pp.owes.toFixed(0)}</p>
+                            <p style={{ fontSize: 11, fontWeight: 600, color: balance >= 0 ? T.green : T.coral, marginTop: 4 }}>{balance >= 0 ? "+" : ""}£{balance.toFixed(2)}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {/* Expense list */}
-                {expenses.length === 0 && stayCosts.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3, background: T.amberL, borderRadius: T.rs, margin: "12px 0" }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>{"💷"}</div>
-                    <p style={{ fontSize: 14, fontWeight: 500, color: T.t2, marginBottom: 4 }}>No expenses yet</p>
-                    <p style={{ fontSize: 12, lineHeight: 1.5, fontStyle: "italic" }}>Track group spending and split costs</p>
+                {/* ── Category breakdown ── */}
+                {catBreakdown.length > 0 && (
+                  <div style={{ ...css.card, marginBottom: 16, padding: 14 }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>Spending breakdown</p>
+                    {/* Stacked bar */}
+                    <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
+                      {catBreakdown.map(s => (
+                        <div key={s.key} style={{ width: `${s.percentage}%`, background: s.color, minWidth: s.percentage > 0 ? 3 : 0, transition: "width .5s ease" }} title={`${s.label}: £${s.amount.toFixed(2)}`} />
+                      ))}
+                    </div>
+                    {catBreakdown.map(s => (
+                      <div key={s.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", fontSize: 12 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.t2 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+                          {s.icon} {s.label}
+                        </span>
+                        <span style={{ fontWeight: 600, color: T.t1 }}>£{s.amount.toFixed(2)} <span style={{ fontWeight: 400, color: T.t3, fontSize: 10 }}>({s.percentage.toFixed(0)}%)</span></span>
+                      </div>
+                    ))}
                   </div>
                 )}
-                {expenses.length === 0 && stayCosts.length > 0 && (
-                  <p style={{ fontSize: 12, color: T.t3, textAlign: "center", padding: "12px 0" }}>No additional expenses logged yet. Tap <b>+ Add</b> to log meals, activities, and more.</p>
+
+                {/* ── Accommodation costs from stays ── */}
+                {stayCosts.length > 0 && (
+                  <div style={{ ...css.card, marginBottom: 16, padding: 14, background: T.amberL, borderColor: T.amber + "40" }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: T.amber, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>🏨 Accommodation</p>
+                    {stayCosts.map((sc, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < stayCosts.length - 1 ? `.5px solid ${T.amber}22` : "none" }}>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 500, color: T.t1 }}>{sc.description}</p>
+                          <p style={{ fontSize: 10, color: T.t2 }}>£{(sc.amount / adults.length).toFixed(2)} each · {adults.length} people</p>
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: T.amber }}>£{sc.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    <p style={{ fontSize: 10, color: T.t3, marginTop: 8, fontStyle: "italic" }}>Auto-included from stay details</p>
+                  </div>
                 )}
-                {[...expenses].sort((a, b) => (b.expense_date || b.created_at || '').localeCompare(a.expense_date || a.created_at || '')).map((exp, i) => {
-                  const cat = getCatInfo(exp.category);
-                  const splitNames = (exp.splits || []).map(s => s.participant_name).join(", ");
-                  return (
-                    <div key={exp.id || i} className="w-card" style={{ ...css.card, marginBottom: 8, padding: "12px 14px", cursor: "pointer" }}
-                      onClick={() => openAddExpense(exp)}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: cat.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-                          {cat.icon}
+
+                {/* ── Expense list — grouped by date ── */}
+                {expenses.length === 0 && stayCosts.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px 16px", color: T.t3 }}>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>💷</div>
+                    <p style={{ fontSize: 15, fontWeight: 500, color: T.t2, marginBottom: 6 }}>No expenses yet</p>
+                    <p style={{ fontSize: 12, lineHeight: 1.5, maxWidth: 240, margin: "0 auto" }}>Track group spending, split costs, and see who owes whom</p>
+                    <button onClick={() => openAddExpense()} style={{ ...css.btn, ...css.btnP, borderRadius: 20, padding: "10px 24px", fontSize: 13, marginTop: 16 }}>Add first expense</button>
+                  </div>
+                )}
+
+                {sortedDates.map(dateKey => (
+                  <div key={dateKey} style={{ marginBottom: 4 }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8, marginTop: 8 }}>
+                      {fmtExpDate(dateKey)}
+                      <span style={{ fontWeight: 400, marginLeft: 8, textTransform: "none" }}>£{expByDate[dateKey].reduce((s, e) => s + e.amount, 0).toFixed(2)}</span>
+                    </p>
+                    {expByDate[dateKey].map((exp, i) => {
+                      const cat = getCatInfo(exp.category);
+                      const myShare = (exp.splits || []).find(s => s.participant_name === (adults[0] || ""));
+                      return (
+                        <div key={exp.id || i} className="w-card" style={{ ...css.card, marginBottom: 6, padding: "10px 12px", cursor: "pointer" }}
+                          onClick={() => openAddExpense(exp)}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 10, background: cat.color + "15", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                              {cat.icon}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontSize: 13, fontWeight: 600, color: T.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{exp.description}</p>
+                              <p style={{ fontSize: 10, color: T.t3 }}>
+                                {exp.paid_by} paid
+                                {exp.split_method === "equal" && (exp.splits || []).length > 1 ? ` · split ${(exp.splits || []).length} ways` : ""}
+                                {myShare ? ` · your share £${myShare.share_amount.toFixed(2)}` : ""}
+                              </p>
+                            </div>
+                            <p style={{ fontSize: 15, fontWeight: 700, color: T.t1, flexShrink: 0 }}>£{exp.amount.toFixed(2)}</p>
+                          </div>
                         </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: 13, fontWeight: 600, color: T.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{exp.description}</p>
-                          <p style={{ fontSize: 11, color: T.t3 }}>Paid by <b>{exp.paid_by}</b> {"·"} {exp.split_method} split {"·"} {(exp.splits || []).length} people</p>
-                        </div>
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <p style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>{"£"}{exp.amount.toFixed(2)}</p>
-                          <p style={{ fontSize: 10, color: T.t3 }}>{cat.label}</p>
-                        </div>
-                      </div>
-                      {/* Delete button */}
-                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                        <button onClick={(e) => { e.stopPropagation(); deleteExpense(exp.id, trip.dbId || trip.id); }}
-                          style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.red, padding: "3px 10px" }}>Remove</button>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
             );
