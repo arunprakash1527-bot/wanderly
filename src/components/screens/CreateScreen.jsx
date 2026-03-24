@@ -103,6 +103,11 @@ export function CreateScreen() {
             </div>
           )}
         </div>
+
+        <div style={cardStyle}>
+          <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
+            placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 departure" inputStyle={{ fontSize: 15, padding: "12px 14px", minHeight: 44 }} />
+        </div>
       </>
     );
   };
@@ -149,12 +154,6 @@ export function CreateScreen() {
               );
             })}
           </div>
-        </div>
-
-        {/* ── Starting from ── */}
-        <div style={cardStyle}>
-          <ControlledField label="Starting from" value={wizTrip.startLocation} onChange={v => setWizTrip(prev => ({ ...prev, startLocation: v }))}
-            placeholder="e.g. Manchester, M1 2AB" hint="Helps plan your Day 1 departure" inputStyle={{ fontSize: 15, padding: "12px 14px", minHeight: 44 }} />
         </div>
 
         {/* ── Budget ── */}
