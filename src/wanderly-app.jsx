@@ -87,7 +87,13 @@ function AppShell() {
 
   return (
     <div className="w-app" style={phoneStyle}>
-      <div style={{ height: "100%" }}>
+      {/* Skip to content — accessibility */}
+      <a href="#main-content" style={{ position: "absolute", left: -9999, top: "auto", width: 1, height: 1, overflow: "hidden", zIndex: 10000, padding: "12px 16px", background: T.ad, color: "#fff", fontSize: 14, fontFamily: T.font, borderRadius: "0 0 8px 0", textDecoration: "none" }}
+        onFocus={e => { e.target.style.left = "0"; e.target.style.width = "auto"; e.target.style.height = "auto"; }}
+        onBlur={e => { e.target.style.left = "-9999px"; e.target.style.width = "1px"; e.target.style.height = "1px"; }}>
+        Skip to content
+      </a>
+      <main id="main-content" role="main" style={{ height: "100%" }}>
         {screen === "home" && <HomeScreen />}
         {screen === "create" && <CreateScreen />}
         {screen === "createdTrip" && <CreatedTripScreen />}
@@ -99,7 +105,7 @@ function AppShell() {
         {screen === "explore" && <ExploreScreen />}
         {screen === "settings" && <SettingsScreen />}
         {screen === "joinPreview" && <JoinPreviewScreen />}
-      </div>
+      </main>
       <ActivationModal />
       <ReelOverlay />
       <WelcomeModal />

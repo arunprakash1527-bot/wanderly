@@ -21,7 +21,7 @@ export function HomeScreen() {
           <span style={{ fontSize: 11, color: T.t3, fontWeight: 500, letterSpacing: 0.5 }}>TRAVEL CONCIERGE</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button style={{ position: "relative", background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 4 }} onClick={() => setShowNotifications(prev => !prev)} title="Notifications">
+          <button style={{ position: "relative", background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 4 }} onClick={() => setShowNotifications(prev => !prev)} title="Notifications" aria-label={`Notifications${totalUnread > 0 ? `, ${totalUnread} unread` : ""}`}>
             🔔
             {totalUnread > 0 && <span style={{ position: "absolute", top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, background: T.coral, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: `2px solid ${T.s}` }}>{totalUnread > 99 ? "99+" : totalUnread}</span>}
           </button>
@@ -66,7 +66,14 @@ export function HomeScreen() {
         </div>
       </>}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Your upcoming adventures</p>
+        {createdTrips.length === 0 ? (
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <p style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400, color: T.t1, marginBottom: 4 }}>No trips yet</p>
+            <p style={{ fontSize: 13, color: T.t3 }}>Start planning your first adventure</p>
+          </div>
+        ) : (
+          <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Your upcoming adventures</p>
+        )}
 
         {createdTrips.map(trip => (
           <div key={trip.id} style={{ ...css.card, position: "relative", overflow: "hidden", marginBottom: 12, cursor: "pointer" }} onClick={() => viewCreatedTrip(trip)}>
@@ -113,7 +120,7 @@ export function HomeScreen() {
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <p style={{ fontSize: 11, color: T.t3, fontStyle: "italic" }}>Sample trip — tap to explore</p>
-            <button onClick={e => { e.stopPropagation(); setShowDemo(true); setDemoSlide(0); }} style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", gap: 4 }}>▶ Watch demo</button>
+            <button onClick={e => { e.stopPropagation(); setShowDemo(true); setDemoSlide(0); }} style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", gap: 4 }}>{localStorage.getItem('twm_demo_seen') ? "▶ Replay demo" : "▶ Watch demo"}</button>
           </div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
             <Tag bg={T.blueL} color={T.blue}>EV road trip</Tag>
@@ -130,9 +137,9 @@ export function HomeScreen() {
             <span style={{ fontSize: 12, color: T.t3 }}>4 adults · 2 children</span>
           </div>
         </div>
-        <div style={{ ...css.card, border: `1.5px dashed ${T.border}`, background: "none", textAlign: "center", padding: "36px 20px", cursor: "pointer", boxShadow: "none" }} onClick={() => { resetWizard(); navigate("create"); }}>
-          <div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>+</div>
-          <p style={{ fontSize: 14, fontWeight: 500, color: T.t2 }}>Plan your next adventure</p>
+        <div style={{ ...css.card, ...(createdTrips.length === 0 ? { background: T.al, borderColor: T.a } : { border: `1.5px dashed ${T.border}`, background: "none", boxShadow: "none" }), textAlign: "center", padding: "36px 20px", cursor: "pointer" }} onClick={() => { resetWizard(); navigate("create"); }}>
+          <div style={{ fontSize: 32, opacity: createdTrips.length === 0 ? 0.8 : 0.3, marginBottom: 8 }}>{createdTrips.length === 0 ? "✈️" : "+"}</div>
+          <p style={{ fontSize: 14, fontWeight: createdTrips.length === 0 ? 600 : 500, color: createdTrips.length === 0 ? T.ad : T.t2 }}>Plan your next adventure</p>
           <p style={{ fontSize: 12, color: T.t3, marginTop: 4 }}>Create from scratch or use a template</p>
         </div>
 

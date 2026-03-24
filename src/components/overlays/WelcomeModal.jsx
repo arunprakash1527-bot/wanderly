@@ -15,7 +15,7 @@ export function WelcomeModal() {
   const dismiss = () => { setShowWelcome(false); localStorage.setItem('twm_welcomed', 'true'); };
 
   return (
-    <div onClick={dismiss} style={{ position: "fixed", inset: 0, zIndex: 9997, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div onClick={dismiss} role="dialog" aria-modal="true" aria-label="Welcome to Trip With Me" style={{ position: "fixed", inset: 0, zIndex: 9997, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", background: T.s, borderRadius: T.r, padding: 28, maxWidth: 340, width: "100%", textAlign: "center" }}>
         {/* Close button */}
         <button onClick={dismiss} aria-label="Close"
@@ -31,7 +31,7 @@ export function WelcomeModal() {
         </button>
         <button onClick={() => { dismiss(); setShowDemo(true); setDemoSlide(0); }}
           style={{ ...css.btn, width: "100%", padding: "12px 16px", justifyContent: "center", fontSize: 13, color: T.t2 }}>
-          Explore the demo first
+          {localStorage.getItem('twm_demo_seen') ? "Watch demo again" : "Explore the demo first"}
         </button>
       </div>
     </div>

@@ -371,13 +371,13 @@ export function DemoOverlay() {
             Trip With Me connects maps, weather, bookings, EV chargers, and AI — so you can focus on making memories.
           </p>
           {show(14) && (
-            <button onClick={e => { e.stopPropagation(); setShowDemo(false); navigate("create"); setWizStep(0); resetWizard(); }}
+            <button onClick={e => { e.stopPropagation(); localStorage.setItem('twm_demo_seen', 'true'); setShowDemo(false); navigate("create"); setWizStep(0); resetWizard(); }}
               style={{ ...css.btn, ...css.btnP, width: "100%", padding: "14px 16px", justifyContent: "center", fontSize: 15, fontWeight: 500, marginBottom: 10, ...slideUp(14) }}>
               Create my first trip
             </button>
           )}
           {show(18) && (
-            <p onClick={e => { e.stopPropagation(); setShowDemo(false); }}
+            <p onClick={e => { e.stopPropagation(); localStorage.setItem('twm_demo_seen', 'true'); setShowDemo(false); }}
               style={{ fontSize: 12, color: "rgba(255,255,255,.4)", cursor: "pointer", marginTop: 4, ...slideUp(18) }}>
               or explore the demo trip {"\u2192"}
             </p>
@@ -404,7 +404,7 @@ export function DemoOverlay() {
   ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "linear-gradient(180deg, #0D2818 0%, #1A3C2A 50%, #0D2818 100%)", display: "flex", flexDirection: "column", fontFamily: T.font, overflow: "hidden" }}
+    <div role="dialog" aria-modal="true" aria-label="Trip With Me interactive demo" style={{ position: "fixed", inset: 0, zIndex: 9999, background: "linear-gradient(180deg, #0D2818 0%, #1A3C2A 50%, #0D2818 100%)", display: "flex", flexDirection: "column", fontFamily: T.font, overflow: "hidden" }}
       onClick={e => {
         if (isLast) return;
         const x = e.clientX;
@@ -426,13 +426,13 @@ export function DemoOverlay() {
       </div>
       {/* Top bar: Skip + pause */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px 0", flexShrink: 0 }}>
-        <span style={{ fontSize: 11, color: "rgba(255,255,255,.4)" }}>{s + 1} / {total}</span>
+        <span style={{ fontSize: 11, color: "rgba(255,255,255,.4)" }}>{s + 1} / {total}{s === 0 ? " · ~2 min" : ""}</span>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={e => { e.stopPropagation(); setDemoPaused(p => !p); }}
             style={{ background: "rgba(255,255,255,.1)", border: "none", color: "rgba(255,255,255,.7)", fontSize: 11, padding: "4px 12px", borderRadius: 12, cursor: "pointer", fontFamily: T.font }}>
             {demoPaused ? "\u25B6 Play" : "\u275A\u275A Pause"}
           </button>
-          <button onClick={e => { e.stopPropagation(); setShowDemo(false); setDemoPaused(false); setDemoInteracted({}); }}
+          <button onClick={e => { e.stopPropagation(); localStorage.setItem('twm_demo_seen', 'true'); setShowDemo(false); setDemoPaused(false); setDemoInteracted({}); }}
             style={{ background: "rgba(255,255,255,.1)", border: "none", color: "rgba(255,255,255,.7)", fontSize: 11, padding: "4px 12px", borderRadius: 12, cursor: "pointer", fontFamily: T.font }}>
             Skip
           </button>
@@ -445,7 +445,7 @@ export function DemoOverlay() {
       {/* Bottom caption */}
       {captions[s] && (
         <div style={{ textAlign: "center", padding: "12px 24px 24px", flexShrink: 0 }}>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,.4)", fontStyle: "italic" }}>{captions[s]}</p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,.85)", fontStyle: "italic" }}>{captions[s]}</p>
         </div>
       )}
     </div>

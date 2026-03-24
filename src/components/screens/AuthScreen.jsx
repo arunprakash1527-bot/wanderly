@@ -13,6 +13,9 @@ export function AuthScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: T.al, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={T.ad} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.6 3.4-2.5 2.5-2.2-.7c-.3-.1-.7 0-.9.2l-.3.3c-.2.3-.1.7.1.9L6.8 18l3.4 3.3c.2.2.6.3.9.1l.3-.3c.2-.2.3-.6.2-.9l-.7-2.2 2.5-2.5 3.4 5.6c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>
+        </div>
         <h1 style={{ fontFamily: T.fontD, fontSize: 32, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Trip With Me</h1>
         <p style={{ fontSize: 13, color: T.t2, marginBottom: 30 }}>Your travel concierge</p>
 
