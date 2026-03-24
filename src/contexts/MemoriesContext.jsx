@@ -20,10 +20,13 @@ export function MemoriesProvider({ children }) {
   const [reelIndex, setReelIndex] = useState(0);
   const [reelPaused, setReelPaused] = useState(false);
   const [reelStyle, setReelStyle] = useState("cinematic"); // "cinematic" | "slideshow" | "energetic"
+  const [reelTrack, setReelTrack] = useState("ambient"); // music track id
+  const [reelPhotos, setReelPhotos] = useState([]); // curated photos for reel
 
   // ─── Refs ───
   const photoInputRef = useRef(null);
   const reelTimerRef = useRef(null);
+  const reelMusicRef = useRef(null); // { stop(), audioCtx }
   const uploadDayTagRef = useRef("Untagged");
 
   // ─── Supabase Functions ───
@@ -54,12 +57,13 @@ export function MemoriesProvider({ children }) {
 
   // ─── Trip Reel auto-advance timer ───
   useEffect(() => {
-    if (reelPlaying && !reelPaused && uploadedPhotos.length > 0) {
+    const photos = reelPhotos.length > 0 ? reelPhotos : uploadedPhotos;
+    if (reelPlaying && !reelPaused && photos.length > 0) {
       const baseDuration = reelStyle === "energetic" ? 2000 : reelStyle === "slideshow" ? 3000 : 4000;
       const reelDuration = videoSettings.has("Slow-mo") ? baseDuration * 1.5 : baseDuration;
       reelTimerRef.current = setInterval(() => {
         setReelIndex(prev => {
-          if (prev >= uploadedPhotos.length - 1) {
+          if (prev >= photos.length - 1) {
             setReelPlaying(false);
             return 0;
           }
@@ -68,7 +72,7 @@ export function MemoriesProvider({ children }) {
       }, reelDuration);
     }
     return () => { if (reelTimerRef.current) clearInterval(reelTimerRef.current); };
-  }, [reelPlaying, reelPaused, uploadedPhotos.length, reelStyle, videoSettings]);
+  }, [reelPlaying, reelPaused, uploadedPhotos.length, reelPhotos.length, reelStyle, videoSettings]); // eslint-disable-line
 
   // ─── Photo Upload ───
   const handlePhotoUpload = useCallback(async (e) => {
@@ -112,8 +116,11 @@ export function MemoriesProvider({ children }) {
     reelIndex, setReelIndex,
     reelPaused, setReelPaused,
     reelStyle, setReelStyle,
+    reelTrack, setReelTrack,
+    reelPhotos, setReelPhotos,
     photoInputRef,
     reelTimerRef,
+    reelMusicRef,
     uploadDayTagRef,
     loadTripPhotos,
     updatePhotoInSupabase,

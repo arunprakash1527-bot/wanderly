@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { T } from '../../styles/tokens';
 import { useMemories } from '../../contexts/MemoriesContext';
+import { playTrack } from '../../utils/reelMusic';
 
 export function ReelOverlay() {
   const {
@@ -9,13 +10,54 @@ export function ReelOverlay() {
     reelIndex, setReelIndex,
     reelPaused, setReelPaused,
     reelStyle,
+    reelTrack,
+    reelPhotos,
     videoSettings,
     reelTimerRef,
+    reelMusicRef,
   } = useMemories();
+
+  const musicStartedRef = useRef(false);
+
+  // Start/stop music with reel
+  useEffect(() => {
+    if (reelPlaying && !musicStartedRef.current) {
+      try {
+        const totalDur = (reelPhotos.length || uploadedPhotos.length) * 4;
+        reelMusicRef.current = playTrack(reelTrack, totalDur);
+        musicStartedRef.current = true;
+      } catch (e) { /* Web Audio not supported */ }
+    }
+    if (!reelPlaying && musicStartedRef.current) {
+      try { reelMusicRef.current?.stop(); } catch (e) {}
+      reelMusicRef.current = null;
+      musicStartedRef.current = false;
+    }
+    return () => {
+      if (!reelPlaying) {
+        try { reelMusicRef.current?.stop(); } catch (e) {}
+        reelMusicRef.current = null;
+        musicStartedRef.current = false;
+      }
+    };
+  }, [reelPlaying, reelTrack, reelPhotos.length, uploadedPhotos.length, reelMusicRef]);
+
+  // Pause/resume music
+  useEffect(() => {
+    const ctx = reelMusicRef.current?.audioCtx;
+    if (!ctx) return;
+    try {
+      if (reelPaused && ctx.state === 'running') ctx.suspend();
+      if (!reelPaused && ctx.state === 'suspended') ctx.resume();
+    } catch (e) {}
+  }, [reelPaused, reelMusicRef]);
 
   if (!reelPlaying || uploadedPhotos.length === 0) return null;
 
-  const photo = uploadedPhotos[reelIndex] || uploadedPhotos[0];
+  // Use curated photos if available, otherwise all photos
+  const photos = reelPhotos.length > 0 ? reelPhotos : uploadedPhotos;
+
+  const photo = photos[reelIndex] || photos[0];
   const baseDur = reelStyle === "energetic" ? 2 : reelStyle === "slideshow" ? 3 : 4;
   const reelDuration = videoSettings.has("Slow-mo") ? baseDur * 1.5 : baseDur;
   let photoAnimation, photoTransformOrigin;
@@ -31,19 +73,20 @@ export function ReelOverlay() {
     photoAnimation = `reelEnergetic ${reelDuration}s ease-out forwards`;
     photoTransformOrigin = reelIndex % 2 === 0 ? "center left" : "center right";
   }
-  const likedCount = uploadedPhotos.filter(p => p.liked).length;
+
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "#000", display: "flex", flexDirection: "column", fontFamily: T.font }}>
       {/* Progress bars */}
       <div style={{ display: "flex", gap: 3, padding: "12px 8px 8px", zIndex: 2 }}>
-        {uploadedPhotos.map((_, i) => (
-          <div key={i} style={{ flex: 1, height: 2.5, borderRadius: 2, overflow: "hidden", background: "rgba(255,255,255,0.3)" }}>
+        {photos.map((_, i) => (
+          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, overflow: "hidden", background: "rgba(255,255,255,0.3)" }}>
             <div style={{
               height: "100%",
               borderRadius: 2,
               background: "#fff",
               width: i < reelIndex ? "100%" : i === reelIndex ? "0%" : "0%",
+              ...(i === reelIndex ? { boxShadow: "0 0 6px rgba(255,255,255,0.6)" } : {}),
               ...(i === reelIndex && !reelPaused ? { animation: `reelProgress ${reelDuration}s linear forwards` } : {}),
               ...(i === reelIndex && reelPaused ? { width: "50%" } : {}),
             }} />
@@ -75,15 +118,17 @@ export function ReelOverlay() {
         )}
         {/* Bottom overlay gradient */}
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40%", background: "linear-gradient(transparent, rgba(0,0,0,0.7))", pointerEvents: "none" }} />
-        {/* Day badge + caption */}
-        <div style={{ position: "absolute", bottom: 60, left: 16, right: 16, zIndex: 2 }}>
-          <span style={{ display: "inline-block", padding: "4px 10px", borderRadius: 12, background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)", color: "#fff", fontSize: 12, fontWeight: 500, marginBottom: 8 }}>{"\uD83D\uDCCD"} {photo.day || "Untagged"}</span>
-          {photo.caption && <p style={{ color: "#fff", fontSize: 15, fontWeight: 500, marginBottom: 4, textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>{photo.caption}</p>}
-          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>{photo.name}</p>
-        </div>
-        {/* Stats */}
-        <div style={{ position: "absolute", bottom: 24, left: 16, zIndex: 2 }}>
-          <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>{"\u2764\uFE0F"} {likedCount} photo{likedCount !== 1 ? "s" : ""} liked</span>
+        {/* Day label + caption (animated) + photo counter */}
+        <div style={{ position: "absolute", bottom: 48, left: 16, right: 16, zIndex: 2 }}>
+          <div key={`day-${reelIndex}`} style={{ opacity: 0, animation: "demoSlideUp 0.5s ease-out 0.3s forwards", marginBottom: 6 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#fff", fontSize: 22, fontWeight: 700, textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>{"\uD83D\uDCCD"} {photo.day || "Untagged"}</span>
+          </div>
+          {photo.caption && (
+            <div key={`cap-${reelIndex}`} style={{ opacity: 0, animation: "demoSlideUp 0.5s ease-out 0.5s forwards" }}>
+              <p style={{ color: "#fff", fontSize: 15, fontWeight: 500, margin: "0 0 6px", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>{photo.caption}</p>
+            </div>
+          )}
+          <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 500 }}>{reelIndex + 1} of {photos.length}</span>
         </div>
         {/* Touch zones */}
         <div style={{ position: "absolute", inset: 0, display: "flex", zIndex: 1 }}>
@@ -100,7 +145,7 @@ export function ReelOverlay() {
           {/* Right third - next */}
           <div style={{ flex: 1, cursor: "pointer" }} onClick={() => {
             if (reelTimerRef.current) clearInterval(reelTimerRef.current);
-            if (reelIndex < uploadedPhotos.length - 1) {
+            if (reelIndex < photos.length - 1) {
               setReelIndex(prev => prev + 1);
               setReelPaused(false);
             } else {

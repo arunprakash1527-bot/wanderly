@@ -14,6 +14,8 @@ import { useWizard } from '../../contexts/WizardContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useExpenses } from '../../contexts/ExpenseContext';
 import { useMemories } from '../../contexts/MemoriesContext';
+import { curateReelPhotos } from '../../utils/reelCurator';
+import { REEL_TRACKS } from '../../utils/reelMusic';
 
 const fmtDate = (iso) => {
   if (!iso) return "";
@@ -28,7 +30,7 @@ export function CreatedTripScreen() {
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
   const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
-  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
+  const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
 
   const [confirmingEnd, setConfirmingEnd] = useState(false);
 
@@ -1195,25 +1197,41 @@ export function CreatedTripScreen() {
               </div>
 
               {/* Highlight reel */}
-              {totalPhotos > 0 && (
+              {totalPhotos > 0 && (() => {
+                const curatedCount = curateReelPhotos(uploadedPhotos).length;
+                return (<>
                 <div style={{ ...css.card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
                   <div style={{ height: 120, background: `linear-gradient(135deg, ${T.ad}, ${T.a})`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", gap: 12 }}>
-                    <button onClick={() => { setReelIndex(0); setReelPaused(false); setReelPlaying(true); }}
-                      style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,.2)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+                    <button onClick={() => { const curated = curateReelPhotos(uploadedPhotos); setReelPhotos(curated); setReelIndex(0); setReelPaused(false); setReelPlaying(true); }}
+                      style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(255,255,255,.2)", border: "2px solid rgba(255,255,255,.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
                     </button>
                     <div>
-                      <p style={{ fontSize: 14, fontWeight: 500 }}>Trip Highlight Reel</p>
-                      <p style={{ fontSize: 11, opacity: .7 }}>{totalPhotos} photos · Auto-generated</p>
+                      <p style={{ fontSize: 16, fontWeight: 600 }}>Trip Highlight Reel</p>
+                      <p style={{ fontSize: 11, opacity: .7 }}>{curatedCount} best photos · Music synced</p>
                     </div>
                   </div>
                 </div>
-              )}
 
-              {/* Reel style selector */}
-              {totalPhotos > 0 && (
+                {/* Music track picker */}
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Music</p>
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
+                    {REEL_TRACKS.map(t => (
+                      <button key={t.id} onClick={() => setReelTrack(t.id)}
+                        style={{ minWidth: 90, padding: "8px 10px", borderRadius: T.rs, border: `.5px solid ${reelTrack === t.id ? T.a : T.border}`,
+                          background: reelTrack === t.id ? T.al : T.s2, cursor: "pointer", textAlign: "center", flexShrink: 0 }}>
+                        <p style={{ fontSize: 16, marginBottom: 2 }}>{t.icon}</p>
+                        <p style={{ fontSize: 11, fontWeight: 500, color: reelTrack === t.id ? T.ad : T.t1 }}>{t.name}</p>
+                        <p style={{ fontSize: 9, color: T.t3 }}>{t.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reel style selector */}
                 <div style={{ marginBottom: 16 }}>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Reel Style</p>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>Visual Style</p>
                   <div style={{ display: "flex", gap: 6 }}>
                     {[
                       { id: "cinematic", label: "\uD83C\uDFAC Cinematic", desc: "Slow Ken Burns" },
@@ -1228,9 +1246,9 @@ export function CreatedTripScreen() {
                       </button>
                     ))}
                   </div>
-                  <p style={{ fontSize: 10, color: T.t3, marginTop: 6 }}>Photos play in upload order. Drag to reorder coming soon.</p>
                 </div>
-              )}
+                </>);
+              })()}
 
               {/* Day-grouped photos */}
               {dayGroups.map(dayLabel => {
