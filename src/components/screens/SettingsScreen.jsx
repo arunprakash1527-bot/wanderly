@@ -10,8 +10,9 @@ import { useTrip } from '../../contexts/TripContext';
 
 export function SettingsScreen() {
   const { user, signOut } = useAuth();
-  const { navigate } = useNavigation();
+  const { navigate, prevScreen } = useNavigation();
   const { selectedCreatedTrip, syncing } = useTrip();
+  const cameFromHome = prevScreen === "home";
   // settingsToggles is local to this screen
   const [settingsToggles, setSettingsToggles] = useState(() => {
     const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
@@ -21,7 +22,7 @@ export function SettingsScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate(selectedCreatedTrip ? "createdTrip" : "trip")}>Back</button>
+        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => navigate(cameFromHome ? "home" : selectedCreatedTrip ? "createdTrip" : "trip")}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Settings</h2>
         <div />
       </div>
@@ -81,7 +82,7 @@ export function SettingsScreen() {
           </div>
         ))}
       </div>
-      <TabBar active="settings" onNav={navigate} />
+      <TabBar active={cameFromHome ? "home" : "settings"} onNav={navigate} />
     </div>
   );
 }

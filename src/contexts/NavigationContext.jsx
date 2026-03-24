@@ -5,6 +5,7 @@ const NavigationContext = createContext(null);
 
 export function NavigationProvider({ children }) {
   const [screen, setScreen] = useState("home");
+  const [prevScreen, setPrevScreen] = useState("home");
   const [toast, setToast] = useState(null);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('twm_welcomed'));
   const [celebration, setCelebration] = useState(null);
@@ -17,7 +18,7 @@ export function NavigationProvider({ children }) {
   const demoTickRef = useRef(null);
 
   const navigate = useCallback((target) => {
-    setScreen(target);
+    setScreen(prev => { setPrevScreen(prev); return target; });
   }, []);
 
   const showToast = useCallback((message, type = "success") => {
@@ -53,6 +54,7 @@ export function NavigationProvider({ children }) {
 
   const value = {
     screen,
+    prevScreen,
     toast,
     showWelcome,
     setShowWelcome,

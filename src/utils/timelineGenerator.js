@@ -183,7 +183,7 @@ export function generateMultiDayTimeline(trip) {
     const kidPool = locPools.kids || [`Family activity in ${loc}`, "Nature walk", "Playground"];
 
     if (isFirst) {
-      const travelHrs = estimateTravelHours(trip.startLocation || "", loc);
+      const travelHrs = estimateTravelHours(trip.startLocation || "", loc, travelMode);
       const evTime = isEV ? (enabledStops.filter(s => s.type === "ev_charge" && s.enabled).length * 0.5) : 0;
       const totalTravelHrs = travelHrs + evTime;
       const arrivalHour = Math.min(Math.floor(startHour + startMin / 60 + totalTravelHrs), 22);
@@ -234,7 +234,7 @@ export function generateMultiDayTimeline(trip) {
       const dayInfo = dayMap[d];
       const departureLoc = dayInfo.isBaseCamp ? dayInfo.baseLoc : loc;
       const departureStay = dayInfo.isBaseCamp ? dayInfo.baseStayName : stayName;
-      const returnHrs = estimateTravelHours(departureLoc, trip.startLocation || "");
+      const returnHrs = estimateTravelHours(departureLoc, trip.startLocation || "", travelMode);
       const rLabel = returnHrs >= 1 ? `~${Math.round(returnHrs * 10) / 10} hrs` : `~${Math.round(returnHrs * 60)} min`;
       items.push({ time: fmtTime(8), title: "Breakfast", desc: departureStay, group: "Everyone", color: T.coral });
       items.push({ time: fmtTime(9, 30), title: "Check out & pack", desc: `${departureStay} · Bags ready`, group: "Everyone", color: T.t3 });
@@ -258,7 +258,7 @@ export function generateMultiDayTimeline(trip) {
       const dayInfo = dayMap[d];
 
       if (dayInfo.isDayTrip && dayInfo.baseLoc) {
-        const legHrs = estimateTravelHours(dayInfo.baseLoc, loc);
+        const legHrs = estimateTravelHours(dayInfo.baseLoc, loc, travelMode);
         const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
         const departHr = startHour;
 
@@ -299,7 +299,7 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(returnArriveHr), title: `Back at ${dayInfo.baseStayName}`, desc: `Freshen up · Relax`, group: "Everyone", color: T.t3 });
 
       } else if (isTransit) {
-        const legHrs = estimateTravelHours(prevPlace, loc);
+        const legHrs = estimateTravelHours(prevPlace, loc, travelMode);
         const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
         const prevStay = dayMap[d - 1]?.stayName || "accommodation";
         items.push({ time: fmtTime(8), title: "Breakfast & check out", desc: `${prevStay} · Pack up & say goodbye to ${prevPlace}`, group: "Everyone", color: T.coral });
