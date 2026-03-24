@@ -17,6 +17,11 @@ import { useMemories } from '../../contexts/MemoriesContext';
 import { curateReelPhotos } from '../../utils/reelCurator';
 import { REEL_TRACKS } from '../../utils/reelMusic';
 import { detectMood, generateAutoCaption, buildMemoryTimeline } from '../../utils/aiMemories';
+import { checkSchoolHolidays, getHolidayBadge } from '../../utils/schoolHolidays';
+import { detectConflicts } from '../../utils/conflictDetector';
+import { generatePackingSuggestions, PACKING_CATEGORIES } from '../../utils/packingSuggester';
+import { EV_MODELS, calculateRealisticRange, planChargingStops } from '../../utils/evPlanner';
+import { checkInActivity, markRunningLate, getDayProgress, getTimeToNext } from '../../utils/liveTrip';
 
 const fmtDate = (iso) => {
   if (!iso) return "";
@@ -35,6 +40,23 @@ export function CreatedTripScreen() {
 
   const [confirmingEnd, setConfirmingEnd] = useState(false);
 
+  // Packing list state
+  const [packingItems, setPackingItems] = useState([]);
+  const [packingGenerated, setPackingGenerated] = useState(false);
+  const [newPackingItem, setNewPackingItem] = useState("");
+  const [packingFilter, setPackingFilter] = useState("all"); // "all", "packed", "unpacked", person name
+
+  // EV profile state
+  const [evProfile, setEvProfile] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("twm_ev_profile")) || null; } catch { return null; }
+  });
+  const [showEvSetup, setShowEvSetup] = useState(false);
+  const [chargingPlan, setChargingPlan] = useState(null);
+
+  // Conflict detection
+  const [conflicts, setConflicts] = useState([]);
+  const [showConflicts, setShowConflicts] = useState(false);
+
   // Load trip data from Supabase when selected trip changes
   const tripDbId = selectedCreatedTrip?.dbId || selectedCreatedTrip?.id;
   useEffect(() => {
@@ -44,6 +66,13 @@ export function CreatedTripScreen() {
       loadTripPhotos(tripDbId);
     }
   }, [tripDbId]); // eslint-disable-line
+
+  // Auto-detect conflicts when timeline changes
+  useEffect(() => {
+    if (trip?.timeline && Object.keys(trip.timeline).length > 0) {
+      setConflicts(detectConflicts(trip));
+    }
+  }, [trip?.timeline, selectedDay]); // eslint-disable-line
 
   const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
@@ -306,6 +335,7 @@ export function CreatedTripScreen() {
             <button className="w-tab" style={tripTabStyle("chat")} onClick={() => setTripDetailTab("chat")}>Chat</button>
             <button className="w-tab" style={tripTabStyle("polls")} onClick={() => setTripDetailTab("polls")}>Polls</button>
             <button className="w-tab" style={tripTabStyle("expenses")} onClick={() => setTripDetailTab("expenses")}>Expenses</button>
+            <button className="w-tab" style={tripTabStyle("packing")} onClick={() => setTripDetailTab("packing")}>Packing</button>
             <button className="w-tab" style={tripTabStyle("memories")} onClick={() => setTripDetailTab("memories")}>Memories</button>
             <button className="w-tab" style={{ ...tripTabStyle("activity"), position: "relative" }} onClick={() => { setTripDetailTab("activity"); markTripSeen(trip.id); }}>
               Activity
@@ -346,6 +376,101 @@ export function CreatedTripScreen() {
                       );
                     })}
                   </div>
+
+                  {/* Live Trip Progress */}
+                  {isLive && (() => {
+                    const prog = getDayProgress(trip.timeline, selectedDay);
+                    const nextInfo = getTimeToNext(trip.timeline, selectedDay);
+                    if (prog.total === 0) return null;
+                    return (
+                      <div style={{ margin: "8px 20px 0", padding: "10px 14px", borderRadius: 12,
+                        background: prog.allDone ? T.greenL : `linear-gradient(135deg, ${T.al}, ${T.s})`,
+                        border: `.5px solid ${prog.allDone ? T.green : T.a}30` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: prog.allDone ? T.green : T.ad }}>
+                            {prog.allDone ? "✅ Day complete!" : `📍 Day ${selectedDay} Progress`}
+                          </span>
+                          <span style={{ fontSize: 11, color: T.t3 }}>{prog.done}/{prog.total} done</span>
+                        </div>
+                        <div style={{ height: 4, borderRadius: 2, background: T.s2, overflow: "hidden", marginBottom: 6 }}>
+                          <div style={{ height: "100%", borderRadius: 2, background: prog.allDone ? T.green : T.a,
+                            width: `${prog.percent}%`, transition: "width .3s" }} />
+                        </div>
+                        {nextInfo && !prog.allDone && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 11, color: T.t2 }}>
+                              Next: <strong>{nextInfo.item.title}</strong> at {nextInfo.item.time}
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 600,
+                              color: nextInfo.overdue ? T.red : nextInfo.mins < 15 ? T.amber : T.t3 }}>
+                              {nextInfo.overdue ? `⚠️ ${nextInfo.label}` : `in ${nextInfo.label}`}
+                            </span>
+                          </div>
+                        )}
+                        {!prog.allDone && (
+                          <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                            <button onClick={() => markRunningLate(trip, selectedDay, 15, setCreatedTrips, logActivity)}
+                              style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", color: T.amber, borderColor: T.amber }}>
+                              ⏰ Running 15 min late
+                            </button>
+                            <button onClick={() => markRunningLate(trip, selectedDay, 30, setCreatedTrips, logActivity)}
+                              style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", color: T.coral, borderColor: T.coral }}>
+                              ⏰ Running 30 min late
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* School Holiday Warning */}
+                  {trip.rawStart && trip.rawEnd && (() => {
+                    const hol = checkSchoolHolidays(trip.rawStart, trip.rawEnd);
+                    return hol.warnings.length > 0 ? (
+                      <div style={{ padding: "6px 20px 0", display: "flex", flexDirection: "column", gap: 4 }}>
+                        {hol.warnings.map((w, i) => (
+                          <div key={i} style={{ padding: "8px 12px", borderRadius: 10,
+                            background: w.severity === "positive" ? T.greenL : w.severity === "warning" ? T.amberL : T.blueL,
+                            fontSize: 11, color: w.severity === "positive" ? T.green : w.severity === "warning" ? T.amber : T.blue,
+                            display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 14 }}>{w.icon}</span>
+                            <span><strong>{w.title}</strong> — {w.message}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Conflict Alerts */}
+                  {conflicts.length > 0 && (
+                    <div style={{ padding: "6px 20px 0" }}>
+                      <button onClick={() => setShowConflicts(!showConflicts)}
+                        style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "space-between",
+                          background: conflicts.some(c => c.severity === "error") ? T.redL : T.amberL,
+                          color: conflicts.some(c => c.severity === "error") ? T.red : T.amber,
+                          borderColor: "transparent", fontSize: 11 }}>
+                        <span>⚠️ {conflicts.length} schedule {conflicts.length === 1 ? "issue" : "issues"} detected</span>
+                        <span>{showConflicts ? "▲" : "▼"}</span>
+                      </button>
+                      {showConflicts && (
+                        <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
+                          {conflicts.filter(c => !c.dayNum || c.dayNum === selectedDay).map((c, i) => (
+                            <div key={i} style={{ padding: "8px 12px", borderRadius: 8, background: T.s,
+                              border: `.5px solid ${c.severity === "error" ? T.red : c.severity === "warning" ? T.amber : T.border}`,
+                              fontSize: 11, color: T.t2, display: "flex", alignItems: "flex-start", gap: 8 }}>
+                              <span style={{ fontSize: 14, flexShrink: 0 }}>{c.icon}</span>
+                              <span>{c.message}</span>
+                            </div>
+                          ))}
+                          {conflicts.filter(c => c.dayNum && c.dayNum !== selectedDay).length > 0 && (
+                            <p style={{ fontSize: 10, color: T.t3, padding: "4px 0" }}>
+                              + {conflicts.filter(c => c.dayNum && c.dayNum !== selectedDay).length} issues on other days
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Smart Tips from Trip Intelligence */}
                   {smartTips.length > 0 && (
@@ -507,9 +632,10 @@ export function CreatedTripScreen() {
                     )}
 
                     {dayItems.map((item, i) => (
-                      <div key={i} data-timeline-idx={i} style={{ display: "flex", gap: 12, marginBottom: editingTimelineIdx === i ? 8 : 14 }}>
+                      <div key={i} data-timeline-idx={i} style={{ display: "flex", gap: 12, marginBottom: editingTimelineIdx === i ? 8 : 14,
+                        opacity: item.checkedIn ? 0.5 : 1, transition: "opacity .2s" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
+                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.checkedIn ? T.green : item.color, flexShrink: 0 }} />
                           {i < dayItems.length - 1 && <div style={{ width: 1.5, flex: 1, background: T.border, marginTop: 4 }} />}
                         </div>
                         <div style={{ flex: 1, paddingBottom: 4 }}>
@@ -548,7 +674,18 @@ export function CreatedTripScreen() {
                                 <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
                                 <Tag bg={item.group === "Adults" ? T.blueL : item.group === "Kids" ? T.pinkL : item.group === "Note" ? T.amberL : T.al} color={item.group === "Adults" ? T.blue : item.group === "Kids" ? T.pink : item.group === "Note" ? T.amber : T.ad}>{item.group}</Tag>
                               </div>
-                              <button onClick={() => setEditingTimelineIdx(i)} aria-label={`Edit ${item.title}`} style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 40, minHeight: 40, opacity: 0.5, justifyContent: "center" }}>✏️</button>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+                                {isLive && !item.checkedIn && (
+                                  <button onClick={() => checkInActivity(trip, selectedDay, i, setCreatedTrips, logActivity)}
+                                    style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 8px", minWidth: 36, minHeight: 28,
+                                      background: T.al, borderColor: T.a, color: T.ad, justifyContent: "center" }}>✓</button>
+                                )}
+                                {isLive && item.checkedIn && (
+                                  <span style={{ fontSize: 16 }}>✅</span>
+                                )}
+                                <button onClick={() => setEditingTimelineIdx(i)} aria-label={`Edit ${item.title}`}
+                                  style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 40, minHeight: 40, opacity: 0.5, justifyContent: "center" }}>✏️</button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1270,6 +1407,168 @@ export function CreatedTripScreen() {
                 ))}
               </div>
             </div>
+            );
+          })()}
+
+          {/* ── PACKING TAB ── */}
+          {tripDetailTab === "packing" && (() => {
+            // Generate suggestions if not done yet
+            if (!packingGenerated) {
+              const suggested = generatePackingSuggestions(trip, intelligence);
+              setPackingItems(suggested);
+              setPackingGenerated(true);
+            }
+            const togglePacked = (idx) => setPackingItems(prev => prev.map((p, i) => i === idx ? { ...p, checked: !p.checked } : p));
+            const addCustomItem = () => {
+              if (!newPackingItem.trim()) return;
+              setPackingItems(prev => [...prev, { item: newPackingItem.trim(), category: "essentials", reason: "Custom", person: "everyone", checked: false, auto: false }]);
+              setNewPackingItem("");
+            };
+            const removeItem = (idx) => setPackingItems(prev => prev.filter((_, i) => i !== idx));
+            const packedCount = packingItems.filter(p => p.checked).length;
+            const totalCount = packingItems.length;
+            const progress = totalCount > 0 ? Math.round((packedCount / totalCount) * 100) : 0;
+
+            // Group by category or person
+            const grouped = {};
+            const filteredItems = packingFilter === "all" ? packingItems
+              : packingFilter === "packed" ? packingItems.filter(p => p.checked)
+              : packingFilter === "unpacked" ? packingItems.filter(p => !p.checked)
+              : packingItems.filter(p => p.person === packingFilter);
+
+            for (const item of filteredItems) {
+              const cat = item.category || "essentials";
+              if (!grouped[cat]) grouped[cat] = [];
+              grouped[cat].push(item);
+            }
+
+            // Get unique people for filter pills
+            const people = [...new Set(packingItems.map(p => p.person).filter(p => p && p !== "everyone"))];
+
+            return (
+              <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
+                {/* Progress bar */}
+                <div style={{ padding: "16px 20px 8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600 }}>Packing List</p>
+                    <span style={{ fontSize: 11, color: progress === 100 ? T.green : T.t3 }}>
+                      {progress === 100 ? "✅ All packed!" : `${packedCount}/${totalCount} packed`}
+                    </span>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 2, background: T.s2, overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 2, background: progress === 100 ? T.green : T.a,
+                      width: `${progress}%`, transition: "width .3s" }} />
+                  </div>
+                </div>
+
+                {/* Filter pills */}
+                <div style={{ display: "flex", gap: 6, padding: "6px 20px", overflowX: "auto" }}>
+                  {["all", "unpacked", "packed", ...people].map(f => (
+                    <button key={f} onClick={() => setPackingFilter(f)}
+                      style={{ padding: "4px 12px", borderRadius: 16, border: `.5px solid ${packingFilter === f ? T.a : T.border}`,
+                        background: packingFilter === f ? T.al : "transparent", color: packingFilter === f ? T.ad : T.t3,
+                        fontSize: 11, cursor: "pointer", fontFamily: T.font, whiteSpace: "nowrap", textTransform: "capitalize" }}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Add custom item */}
+                <div style={{ display: "flex", gap: 6, padding: "8px 20px" }}>
+                  <input value={newPackingItem} onChange={e => setNewPackingItem(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addCustomItem()}
+                    placeholder="Add custom item..."
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: `.5px solid ${T.border}`,
+                      fontSize: 12, fontFamily: T.font, outline: "none", minHeight: 36 }} />
+                  <button onClick={addCustomItem} style={{ ...css.btn, ...css.btnP, ...css.btnSm, borderRadius: 10 }}>+</button>
+                </div>
+
+                {/* EV vehicle profile (show if EV travel mode) */}
+                {trip.travel?.some(m => /ev|electric/i.test(m)) && (
+                  <div style={{ margin: "0 20px 8px", padding: "10px 14px", borderRadius: 12, background: T.greenL,
+                    border: `.5px solid ${T.border}`, fontSize: 11 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontWeight: 600, color: T.ad }}>⚡ EV Vehicle Profile</span>
+                      <button onClick={() => setShowEvSetup(!showEvSetup)}
+                        style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 10px" }}>
+                        {evProfile ? "Change" : "Set up"}
+                      </button>
+                    </div>
+                    {evProfile && !showEvSetup && (
+                      <p style={{ color: T.t2, marginTop: 4 }}>
+                        {evProfile.make} {evProfile.model} · {calculateRealisticRange(evProfile).realisticRange} mi real range · {evProfile.connectors?.join(", ")}
+                      </p>
+                    )}
+                    {showEvSetup && (
+                      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <select
+                          value={evProfile?.id || ""}
+                          onChange={e => {
+                            const selected = EV_MODELS.find(m => m.id === e.target.value);
+                            if (selected) {
+                              setEvProfile(selected);
+                              localStorage.setItem("twm_ev_profile", JSON.stringify(selected));
+                              setShowEvSetup(false);
+                            }
+                          }}
+                          style={{ padding: "8px 12px", borderRadius: 8, border: `.5px solid ${T.border}`, fontSize: 12, fontFamily: T.font }}>
+                          <option value="">Select your vehicle...</option>
+                          {EV_MODELS.map(m => (
+                            <option key={m.id} value={m.id}>{m.make} {m.model} ({m.rangeMiles} mi)</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Grouped items */}
+                <div style={{ padding: "0 20px 100px" }}>
+                  {Object.entries(grouped).map(([cat, items]) => {
+                    const catInfo = PACKING_CATEGORIES[cat] || { label: cat, icon: "📦" };
+                    return (
+                      <div key={cat} style={{ marginBottom: 12 }}>
+                        <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                          {catInfo.icon} {catInfo.label} ({items.filter(i => i.checked).length}/{items.length})
+                        </p>
+                        {items.map((item, idx) => {
+                          const globalIdx = packingItems.indexOf(item);
+                          return (
+                            <div key={globalIdx} onClick={() => togglePacked(globalIdx)}
+                              style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0",
+                                borderBottom: `.5px solid ${T.border}`, cursor: "pointer",
+                                opacity: item.checked ? 0.5 : 1, transition: "opacity .15s" }}>
+                              <div style={{ width: 20, height: 20, borderRadius: 6,
+                                border: `1.5px solid ${item.checked ? T.a : T.t3}`,
+                                background: item.checked ? T.a : "transparent",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                color: "#fff", fontSize: 12, flexShrink: 0, transition: "all .15s" }}>
+                                {item.checked && "✓"}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ fontSize: 13, textDecoration: item.checked ? "line-through" : "none", color: T.t1 }}>{item.item}</p>
+                                <p style={{ fontSize: 10, color: T.t3 }}>
+                                  {item.person !== "everyone" && <span style={{ color: T.ad, marginRight: 4 }}>{item.person}</span>}
+                                  {item.reason}
+                                </p>
+                              </div>
+                              {!item.auto && (
+                                <button onClick={e => { e.stopPropagation(); removeItem(globalIdx); }}
+                                  style={{ background: "none", border: "none", fontSize: 14, color: T.t3, cursor: "pointer", padding: 4 }}>×</button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                  {filteredItems.length === 0 && (
+                    <div style={{ textAlign: "center", padding: 40, color: T.t3 }}>
+                      <p style={{ fontSize: 13 }}>No items match this filter</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             );
           })()}
 
