@@ -68,8 +68,8 @@ export function HomeScreen() {
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {createdTrips.length === 0 ? (
           <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <p style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400, color: T.t1, marginBottom: 4 }}>No trips yet</p>
-            <p style={{ fontSize: 13, color: T.t3 }}>Start planning your first adventure</p>
+            <p style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Welcome aboard</p>
+            <p style={{ fontSize: 13, color: T.t3 }}>Explore the demo below or create your first trip</p>
           </div>
         ) : (
           <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Your upcoming adventures</p>
@@ -140,7 +140,7 @@ export function HomeScreen() {
         <div style={{ ...css.card, ...(createdTrips.length === 0 ? { background: T.al, borderColor: T.a } : { border: `1.5px dashed ${T.border}`, background: "none", boxShadow: "none" }), textAlign: "center", padding: "36px 20px", cursor: "pointer" }} onClick={() => { resetWizard(); navigate("create"); }}>
           <div style={{ fontSize: 32, opacity: createdTrips.length === 0 ? 0.8 : 0.3, marginBottom: 8 }}>{createdTrips.length === 0 ? "✈️" : "+"}</div>
           <p style={{ fontSize: 14, fontWeight: createdTrips.length === 0 ? 600 : 500, color: createdTrips.length === 0 ? T.ad : T.t2 }}>Plan your next adventure</p>
-          <p style={{ fontSize: 12, color: T.t3, marginTop: 4 }}>Create from scratch or use a template</p>
+          <p style={{ fontSize: 12, color: T.t3, marginTop: 4 }}>Start planning in under a minute</p>
         </div>
 
         <div style={{ ...css.card, marginTop: 16, background: T.al, borderColor: T.a }}>
