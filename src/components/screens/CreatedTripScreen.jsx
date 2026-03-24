@@ -933,7 +933,7 @@ export function CreatedTripScreen() {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, marginBottom: 12 }}>
                       {adults.map(name => (
                         <button key={name} onClick={() => setExpensePaidBy(name)}
-                          style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "6px 12px", borderRadius: 20,
+                          style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 12, padding: "6px 12px", borderRadius: 20,
                             background: expensePaidBy === name ? T.a : T.s2,
                             color: expensePaidBy === name ? "#fff" : T.t2,
                             borderColor: expensePaidBy === name ? T.ad : T.border }}>
@@ -952,7 +952,7 @@ export function CreatedTripScreen() {
                           <button key={name} onClick={() => {
                             setExpenseParticipants(prev => isIn ? prev.filter(n => n !== name) : [...prev, name]);
                           }}
-                            style={{ ...css.btn, ...css.btnSm, fontSize: 12, padding: "6px 12px", borderRadius: 20,
+                            style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 12, padding: "6px 12px", borderRadius: 20,
                               background: isIn ? T.blueL : T.s2, color: isIn ? T.blue : T.t3,
                               borderColor: isIn ? T.blue : T.border, fontWeight: isIn ? 600 : 400 }}>
                             {isIn ? "\u2713 " : ""}{name}
@@ -966,7 +966,7 @@ export function CreatedTripScreen() {
                     <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 12 }}>
                       {[{ key: 'equal', label: 'Equal' }, { key: 'percentage', label: 'By %' }, { key: 'custom', label: 'Custom' }].map(m => (
                         <button key={m.key} onClick={() => setExpenseSplitMethod(m.key)}
-                          style={{ ...css.btn, ...css.btnSm, flex: 1, fontSize: 12, padding: "8px 0", borderRadius: T.rs,
+                          style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 12, padding: "8px 0", borderRadius: T.rs,
                             background: expenseSplitMethod === m.key ? T.a : T.s2,
                             color: expenseSplitMethod === m.key ? "#fff" : T.t2,
                             borderColor: expenseSplitMethod === m.key ? T.ad : T.border, fontWeight: 500 }}>
