@@ -130,6 +130,11 @@ export function mapStaysForInsert(stays, tripId) {
     rating: s.rating,
     price: s.price,
     location: s.location,
+    check_in: s.checkIn || null,
+    check_out: s.checkOut || null,
+    cost: s.cost ? parseFloat(s.cost) : null,
+    booking_ref: s.bookingRef || null,
+    address: s.address || null,
   }));
 }
 
