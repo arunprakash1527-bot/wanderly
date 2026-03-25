@@ -427,6 +427,76 @@ export function TripDataProvider({ children }) {
     }
   }, [user]);
 
+  // ─── Per-trip Realtime Subscription (collaborative editing) ───
+  useEffect(() => {
+    const tripDbId = selectedCreatedTrip?.dbId;
+    if (!tripDbId || !user || user.id === 'demo') {
+      setRealtimeConnected(false);
+      return;
+    }
+
+    const unsubscribe = subscribeToTripUpdates(tripDbId, {
+      onTripUpdate: (payload) => {
+        const updated = payload.new;
+        if (!updated) return;
+        // Merge incoming trip changes into local state
+        setCreatedTrips(prev => prev.map(t => {
+          if (t.dbId !== updated.id) return t;
+          return {
+            ...t,
+            name: updated.name || t.name,
+            status: updated.status || t.status,
+            timeline: updated.timeline || t.timeline,
+            polls: updated.polls || t.polls,
+            start: updated.start_date || t.start,
+            end: updated.end_date || t.end,
+            places: updated.places || t.places,
+            travel: updated.travel_modes || t.travel,
+          };
+        }));
+        setSelectedCreatedTrip(prev => {
+          if (!prev || prev.dbId !== updated.id) return prev;
+          return {
+            ...prev,
+            name: updated.name || prev.name,
+            status: updated.status || prev.status,
+            timeline: updated.timeline || prev.timeline,
+            polls: updated.polls || prev.polls,
+            start: updated.start_date || prev.start,
+            end: updated.end_date || prev.end,
+            places: updated.places || prev.places,
+            travel: updated.travel_modes || prev.travel,
+          };
+        });
+        showToast("Trip updated by a collaborator", "info");
+      },
+      onMessage: (payload) => {
+        const msg = payload.new;
+        if (!msg) return;
+        const senderName = msg.sender_name || msg.user_name || "Someone";
+        showToast(`New message from ${senderName}`, "info");
+      },
+      onExpenseChange: (payload) => {
+        const { eventType } = payload;
+        if (eventType === 'DELETE') {
+          showToast("An expense was removed", "info");
+        } else {
+          showToast("Expenses updated", "info");
+        }
+        // Trigger a refetch of trips to get fresh expense data
+        loadTripsFromDB();
+      },
+      onStatusChange: (status) => {
+        setRealtimeConnected(status === 'SUBSCRIBED');
+      },
+    });
+
+    return () => {
+      unsubscribe();
+      setRealtimeConnected(false);
+    };
+  }, [selectedCreatedTrip?.dbId, user, showToast, loadTripsFromDB]);
+
   const value = {
     createdTrips, setCreatedTrips,
     selectedCreatedTrip, setSelectedCreatedTrip,
@@ -451,6 +521,7 @@ export function TripDataProvider({ children }) {
     shareToWhatsApp,
     deleteCreatedTrip,
     endTrip,
+    realtimeConnected,
   };
 
   return (

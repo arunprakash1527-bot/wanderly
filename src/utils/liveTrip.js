@@ -117,7 +117,25 @@ export function subscribeToTripUpdates(tripDbId, callbacks) {
     }, payload => {
       if (callbacks.onMessage) callbacks.onMessage(payload);
     })
-    .subscribe();
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'trips',
+      filter: `id=eq.${tripDbId}`,
+    }, payload => {
+      if (callbacks.onTripUpdate) callbacks.onTripUpdate(payload);
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'expenses',
+      filter: `trip_id=eq.${tripDbId}`,
+    }, payload => {
+      if (callbacks.onExpenseChange) callbacks.onExpenseChange(payload);
+    })
+    .subscribe((status) => {
+      if (callbacks.onStatusChange) callbacks.onStatusChange(status);
+    });
 
   return () => { supabase.removeChannel(channel); };
 }
