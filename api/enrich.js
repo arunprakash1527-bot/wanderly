@@ -2,6 +2,8 @@
 // Orchestrates Weather, Currency, Places, and Directions APIs
 // Returns unified intelligence for a trip's current day
 
+import { createClient } from "@supabase/supabase-js";
+
 function getAllowedOrigin(req) {
   const origin = req.headers?.origin || "";
   const allowed = ["https://tripwithme.app", "https://www.tripwithme.app", "http://localhost:3000"];
@@ -15,6 +17,25 @@ export default async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  // Verify Supabase auth token
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return res.status(503).json({ error: "Auth service not configured" });
+  }
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized — missing auth token" });
+  }
+  try {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: "Unauthorized" });
+  } catch (e) {
+    return res.status(401).json({ error: "Unauthorized — token validation failed" });
+  }
 
   try {
     const { location, places, tripDates, travelMode, homeCurrency, dayNum, travellers, budget, stays, timeline } = req.body;

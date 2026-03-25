@@ -2,6 +2,8 @@
 // Set OPENWEATHER_API_KEY in Vercel environment variables
 // Free tier: 1000 calls/day, 5-day forecast
 
+import { createClient } from "@supabase/supabase-js";
+
 function getAllowedOrigin(req) {
   const origin = req.headers?.origin || "";
   const allowed = ["https://tripwithme.app", "https://www.tripwithme.app", "http://localhost:3000"];
@@ -15,6 +17,25 @@ export default async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  // Verify Supabase auth token
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return res.status(503).json({ error: "Auth service not configured", fallback: true });
+  }
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized — missing auth token", fallback: true });
+  }
+  try {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: "Unauthorized", fallback: true });
+  } catch (e) {
+    return res.status(401).json({ error: "Unauthorized — token validation failed", fallback: true });
+  }
 
   const apiKey = process.env.OPENWEATHER_API_KEY;
   if (!apiKey) return res.status(503).json({ error: "Weather API not configured", fallback: true });

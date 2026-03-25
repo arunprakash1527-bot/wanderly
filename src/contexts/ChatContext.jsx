@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { supabase } from "../supabaseClient";
 import { T } from "../styles/tokens";
 import { API } from "../constants/api";
+import { authFetch } from "../utils/authFetch";
 import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
@@ -168,7 +169,7 @@ export function ChatProvider({ children }) {
           else { body.locationName = firstLoc; }
           if (connectorType) body.connectorType = connectorType;
 
-          const res = await fetch(API.EV_CHARGERS, {
+          const res = await authFetch(API.EV_CHARGERS, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -247,7 +248,7 @@ export function ChatProvider({ children }) {
           const body = lat && lng
             ? { location: { lat, lng }, type: searchType, radius: 5000 }
             : { query: `${searchType} near ${firstLoc}`, radius: 5000 };
-          const res = await fetch(API.PLACES, {
+          const res = await authFetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -293,7 +294,7 @@ export function ChatProvider({ children }) {
 
     // Try Claude API first for richer, context-aware responses
     try {
-      const res = await fetch(API.CHAT, {
+      const res = await authFetch(API.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -340,7 +341,7 @@ export function ChatProvider({ children }) {
         const doPlacesSearch = async (gpsLat, gpsLng) => {
           const body = { query: searchQuery, type: "restaurant" };
           if (gpsLat && gpsLng) { body.location = { lat: gpsLat, lng: gpsLng }; body.radius = 5000; }
-          const placesRes = await fetch(API.PLACES, {
+          const placesRes = await authFetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),

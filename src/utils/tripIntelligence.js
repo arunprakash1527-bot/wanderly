@@ -1,4 +1,5 @@
 import { API } from "../constants/api";
+import { authFetch } from "./authFetch";
 
 /**
  * Trip Intelligence Engine
@@ -10,6 +11,29 @@ import { API } from "../constants/api";
 
 const cache = new Map();
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Detect the user's home currency from browser locale
+ */
+function detectHomeCurrency() {
+  try {
+    const locale = navigator.language || 'en-GB';
+    // Map common locales to currencies
+    const localeCurrencyMap = {
+      'en-US': 'USD', 'en-GB': 'GBP', 'en-AU': 'AUD', 'en-CA': 'CAD',
+      'en-NZ': 'NZD', 'en-IE': 'EUR', 'de': 'EUR', 'fr': 'EUR', 'es': 'EUR',
+      'it': 'EUR', 'nl': 'EUR', 'pt': 'EUR', 'ja': 'JPY', 'zh': 'CNY',
+      'ko': 'KRW', 'hi': 'INR', 'ar': 'AED', 'sv': 'SEK', 'no': 'NOK',
+      'da': 'DKK', 'pl': 'PLN', 'cs': 'CZK', 'hu': 'HUF', 'ro': 'RON',
+      'bg': 'BGN', 'hr': 'HRK', 'tr': 'TRY', 'ru': 'RUB', 'th': 'THB',
+      'id': 'IDR', 'ms': 'MYR', 'vi': 'VND', 'fil': 'PHP', 'zh-TW': 'TWD',
+      'zh-HK': 'HKD', 'en-SG': 'SGD', 'en-ZA': 'ZAR', 'pt-BR': 'BRL',
+      'es-MX': 'MXN', 'es-AR': 'ARS', 'es-CL': 'CLP', 'es-CO': 'COP',
+    };
+    // Try exact match first, then language prefix
+    return localeCurrencyMap[locale] || localeCurrencyMap[locale.split('-')[0]] || 'GBP';
+  } catch { return 'GBP'; }
+}
 
 function cacheKey(location, dayNum) {
   return `${location.toLowerCase().trim()}|${dayNum}`;
@@ -32,7 +56,7 @@ export async function fetchTripIntelligence(trip, dayNum, currentLocation) {
   }
 
   try {
-    const res = await fetch(API.ENRICH, {
+    const res = await authFetch(API.ENRICH, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -40,7 +64,7 @@ export async function fetchTripIntelligence(trip, dayNum, currentLocation) {
         places: trip.places || [],
         tripDates: trip.rawStart && trip.rawEnd ? { start: trip.rawStart, end: trip.rawEnd } : null,
         travelMode: trip.travel,
-        homeCurrency: "GBP", // Could be made configurable
+        homeCurrency: detectHomeCurrency(),
         dayNum,
         travellers: trip.travellers,
         budget: trip.budget,

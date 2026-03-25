@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback } from "react";
 import { T } from "../styles/tokens";
 import { API } from "../constants/api";
+import { authFetch } from "../utils/authFetch";
 import { generateMultiDayTimeline } from "../utils/timelineGenerator";
 import { estimateTravelHours, estimateDistanceMiles } from "../utils/locationHelpers";
 import { useTripData } from "./TripDataContext";
@@ -42,7 +43,7 @@ export function TimelineProvider({ children }) {
       try {
         const enriched = await Promise.all(evItems.map(async (ev) => {
           const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
-          const res = await fetch(API.PLACES, {
+          const res = await authFetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),
@@ -181,7 +182,7 @@ export function TimelineProvider({ children }) {
       try {
         const enriched = await Promise.all(evItems.map(async (ev) => {
           const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
-          const res = await fetch(API.PLACES, {
+          const res = await authFetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),

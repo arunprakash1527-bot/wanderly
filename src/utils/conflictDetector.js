@@ -1,4 +1,5 @@
 import { API } from "../constants/api";
+import { authFetch } from "./authFetch";
 
 /**
  * Smart Conflict Detection
@@ -184,7 +185,7 @@ export function detectConflicts(trip, directions = {}) {
  */
 export async function fetchDriveTime(origin, destination) {
   try {
-    const res = await fetch(API.DIRECTIONS, {
+    const res = await authFetch(API.DIRECTIONS, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ origin, destination, mode: "driving" }),

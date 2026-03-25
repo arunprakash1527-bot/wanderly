@@ -1,4 +1,5 @@
 import { API } from "../constants/api";
+import { authFetch } from "./authFetch";
 
 /**
  * EV Vehicle Profile & Smart Route Charging Planner
@@ -182,7 +183,7 @@ export function planChargingStops(vehicle, distanceMiles, startBattery = 80, con
  */
 export async function findChargersAtStop(stopLocation, connectorTypes = ["CCS"]) {
   try {
-    const res = await fetch(API.PLACES, {
+    const res = await authFetch(API.PLACES, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: `EV charging station near ${stopLocation}`, type: "electric_vehicle_charging_station", radius: 10000 }),
