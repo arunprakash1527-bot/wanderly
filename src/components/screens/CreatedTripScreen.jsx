@@ -22,6 +22,8 @@ import { detectConflicts } from '../../utils/conflictDetector';
 import { generatePackingSuggestions, PACKING_CATEGORIES } from '../../utils/packingSuggester';
 import { EV_MODELS, calculateRealisticRange, planChargingStops } from '../../utils/evPlanner';
 import { checkInActivity, markRunningLate, getDayProgress, getTimeToNext } from '../../utils/liveTrip';
+import { checkWeatherAlerts } from '../../utils/weatherAlerts';
+import { exportItineraryAsPDF } from '../../utils/exportItinerary';
 
 const fmtDate = (iso) => {
   if (!iso) return "";
@@ -40,6 +42,9 @@ export function CreatedTripScreen() {
 
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [showLateOptions, setShowLateOptions] = useState(false);
+  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("twm_dismissed_weather_alerts") || "[]"); } catch { return []; }
+  });
 
   // Packing list state
   const [packingItems, setPackingItems] = useState(() => {
@@ -459,6 +464,10 @@ export function CreatedTripScreen() {
                         </button>
                       );
                     })}
+                    <button onClick={() => exportItineraryAsPDF(trip, tripStart)}
+                      style={{ padding: "4px 10px", borderRadius: 14, border: `.5px solid ${T.border}`, background: T.s, fontSize: 10, color: T.t2, cursor: "pointer", fontFamily: T.font, whiteSpace: "nowrap", flexShrink: 0 }}>
+                      📄 Export PDF
+                    </button>
                   </div>
 
                   {/* Live Trip Progress — compact single line, only for today */}
@@ -561,6 +570,38 @@ export function CreatedTripScreen() {
                           <span key={code} style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "4px 10px", borderRadius: 14, background: T.s2, fontSize: 10, color: T.t2, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0 }}>
                             💱 {info.example}
                           </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Weather alerts — proactive banners */}
+                  {(() => {
+                    const weatherAlerts = checkWeatherAlerts(intelligence, trip, selectedDay);
+                    const activeAlerts = weatherAlerts.filter(a => !dismissedAlerts.includes(`${trip?.id}_${selectedDay}_${a.type}`));
+                    if (activeAlerts.length === 0) return null;
+                    return (
+                      <div style={{ padding: "4px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+                        {activeAlerts.map((alert) => (
+                          <div key={alert.type} style={{
+                            display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8,
+                            background: alert.severity === "warning" ? T.amberL : T.blueL,
+                            border: `.5px solid ${alert.severity === "warning" ? T.amber : T.blue}22`,
+                            fontSize: 11, color: alert.severity === "warning" ? T.amber : T.blue, fontWeight: 500,
+                          }}>
+                            <span style={{ fontSize: 13, flexShrink: 0 }}>{alert.icon}</span>
+                            <span style={{ flex: 1 }}>{alert.message}</span>
+                            <button
+                              onClick={() => {
+                                const key = `${trip?.id}_${selectedDay}_${alert.type}`;
+                                const next = [...dismissedAlerts, key];
+                                setDismissedAlerts(next);
+                                try { localStorage.setItem("twm_dismissed_weather_alerts", JSON.stringify(next)); } catch {}
+                              }}
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", fontSize: 13, color: alert.severity === "warning" ? T.amber : T.blue, opacity: 0.6, fontFamily: T.font, lineHeight: 1, flexShrink: 0 }}
+                              aria-label="Dismiss alert"
+                            >&times;</button>
+                          </div>
                         ))}
                       </div>
                     );
