@@ -71,16 +71,17 @@ export function CreatedTripScreen() {
   });
 
   // Packing list state
+  const tripId = selectedCreatedTrip?.id;
   const [packingItems, setPackingItems] = useState(() => {
-    if (trip?.id) {
-      const saved = localStorage.getItem(`twm_packing_${trip.id}`);
+    if (tripId) {
+      const saved = localStorage.getItem(`twm_packing_${tripId}`);
       if (saved) try { return JSON.parse(saved); } catch {}
     }
     return [];
   });
   const [packingGenerated, setPackingGenerated] = useState(() => {
-    if (trip?.id) {
-      const saved = localStorage.getItem(`twm_packing_${trip.id}`);
+    if (tripId) {
+      const saved = localStorage.getItem(`twm_packing_${tripId}`);
       if (saved) try { JSON.parse(saved); return true; } catch {}
     }
     return false;
