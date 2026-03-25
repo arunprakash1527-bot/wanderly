@@ -4,6 +4,8 @@ import { mapTripFromDB, mapTripForInsert, mapTravellersForInsert, mapStaysForIns
 import { generateMultiDayTimeline } from "../utils/timelineGenerator";
 import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
+import { cacheTripsOffline, getOfflineTrips, getOfflineCacheAge, cacheUserOffline } from "../utils/offlineCache";
+import { subscribeToTripUpdates } from "../utils/liveTrip";
 
 const TripDataContext = createContext(null);
 
@@ -19,6 +21,7 @@ export function TripDataProvider({ children }) {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [lastSeenActivity, setLastSeenActivity] = useState(() => {
     try { return JSON.parse(localStorage.getItem("twm_lastSeen") || "{}"); } catch { return {}; }
   });
@@ -72,7 +75,17 @@ export function TripDataProvider({ children }) {
       }
     } catch (err) {
       console.error('Error loading trips:', err);
-      showToast("Failed to load trips — check connection", "error");
+      // ─── Offline Fallback ───
+      const cached = getOfflineTrips();
+      if (cached && cached.length > 0) {
+        setCreatedTrips(cached);
+        const ageMs = getOfflineCacheAge();
+        const ageMin = ageMs ? Math.round(ageMs / 60000) : null;
+        const ageLabel = ageMin != null ? (ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`) : '';
+        showToast(`Offline — showing cached data${ageLabel ? ` (${ageLabel})` : ''}`, "error");
+      } else {
+        showToast("Failed to load trips — check connection", "error");
+      }
     }
     setSyncing(false);
   }, [user, showToast]);
@@ -399,6 +412,20 @@ export function TripDataProvider({ children }) {
       loadTripsFromDB();
     }
   }, [user, loadTripsFromDB]);
+
+  // ─── Cache trips offline whenever they update ───
+  useEffect(() => {
+    if (createdTrips.length > 0) {
+      cacheTripsOffline(createdTrips);
+    }
+  }, [createdTrips]);
+
+  // ─── Cache user info for offline display ───
+  useEffect(() => {
+    if (user && user.id !== 'demo') {
+      cacheUserOffline(user);
+    }
+  }, [user]);
 
   const value = {
     createdTrips, setCreatedTrips,

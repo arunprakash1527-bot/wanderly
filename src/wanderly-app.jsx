@@ -351,6 +351,19 @@ function AppShell() {
   const { screen, toast, celebration } = useNavigation();
   const isDesktop = useIsDesktop();
 
+  // ─── Offline detection ───
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
   // PWA install prompt
   const deferredPromptRef = useRef(null);
   const [showInstall, setShowInstall] = useState(false);
@@ -417,6 +430,12 @@ function AppShell() {
 
   return (
     <div className="w-app" style={phoneStyle}>
+      {/* Offline banner */}
+      {isOffline && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 10001, textAlign: "center", padding: "6px 16px", background: "#78350f", color: "#fef3c7", fontSize: 12, fontWeight: 600, fontFamily: T.font, letterSpacing: 0.2 }}>
+          {"\uD83D\uDCF4"} Offline — showing cached data
+        </div>
+      )}
       {/* Skip to content — accessibility */}
       <a href="#main-content" style={{ position: "absolute", left: -9999, top: "auto", width: 1, height: 1, overflow: "hidden", zIndex: 10000, padding: "12px 16px", background: T.ad, color: "#fff", fontSize: 14, fontFamily: T.font, borderRadius: "0 0 8px 0", textDecoration: "none" }}
         onFocus={e => { e.target.style.left = "0"; e.target.style.width = "auto"; e.target.style.height = "auto"; }}
