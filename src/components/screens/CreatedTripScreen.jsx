@@ -294,15 +294,40 @@ export function CreatedTripScreen() {
             {hasStays && (
               <div style={{ ...css.card, marginBottom: 12, padding: 16 }}>
                 <p style={{ fontSize: 12, fontWeight: 600, color: T.t, marginBottom: 10 }}>Accommodation</p>
-                {(trip.stays || []).map((s, i) => (
+                {(trip.stays || []).map((s, i) => {
+                  const addToCalendar = s.checkIn ? () => {
+                    const start = s.checkIn.replace(/-/g, "");
+                    const end = s.checkOut ? s.checkOut.replace(/-/g, "") : start;
+                    const loc = s.address || s.location || s.name;
+                    const ics = [
+                      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TripWithMe//EN", "BEGIN:VEVENT",
+                      `DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${end}`,
+                      `SUMMARY:🏨 ${s.name}`, `LOCATION:${loc}`,
+                      `DESCRIPTION:Check-in: ${s.checkIn}${s.checkOut ? `\\nCheck-out: ${s.checkOut}` : ""}\\n\\nTrip With Me — ${trip.name}`,
+                      "END:VEVENT", "END:VCALENDAR"
+                    ].join("\r\n");
+                    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `${s.name.replace(/[^a-z0-9]/gi, "_")}.ics`; a.click();
+                    URL.revokeObjectURL(url);
+                    showToast("Calendar event downloaded");
+                  } : null;
+                  return (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < trip.stays.length - 1 ? `.5px solid ${T.border}` : "none" }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: T.amberL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🏨</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 13, fontWeight: 500, color: T.t, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</p>
                       {s.checkIn && <p style={{ fontSize: 11, color: T.t3 }}>{s.checkIn}{s.checkOut ? ` → ${s.checkOut}` : ""}{s.location ? ` · ${s.location}` : ""}</p>}
                     </div>
+                    {addToCalendar && (
+                      <button onClick={addToCalendar} title="Add to calendar"
+                        style={{ background: T.s2, border: "none", borderRadius: 8, padding: "6px 8px", cursor: "pointer", fontSize: 14, flexShrink: 0, lineHeight: 1 }}>
+                        📅
+                      </button>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
