@@ -8,4 +8,5 @@ export const API = {
   WEATHER: '/api/weather',
   CURRENCY: '/api/currency',
   ENRICH: '/api/enrich',
+  EV_CHARGERS: '/api/ev-chargers',
 };

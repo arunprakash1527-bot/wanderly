@@ -138,75 +138,84 @@ export function ChatProvider({ children }) {
     const contextLine = "";
     const lower = msg.toLowerCase();
 
-    // ── EV charger queries — always use current GPS location + Places API ──
+    // ── EV charger queries — Open Charge Map for detailed results ──
     if (/ev|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
-      setTripChatMessages(prev => [...prev, { role: "ai", text: "📍 Finding EV chargers near you..." }]);
+      // Extract connector type preference from message
+      const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/);
+      const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "") : null;
+
+      // Check if trip has 4+ travellers — ask about multi-car charging
+      const adultCount = trip?.travellers?.adults?.length || 1;
+      const totalTravellers = adultCount + (trip?.travellers?.olderKids?.length || 0) + (trip?.travellers?.youngerKids?.length || 0) + (trip?.travellers?.infants?.length || 0);
+      const needsMultiCarPrompt = totalTravellers > 4 && !/\d+\s*car|\d+\s*vehicle|single car|one car/i.test(lower);
+
+      if (needsMultiCarPrompt) {
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: `🚗 Your trip has ${totalTravellers} travellers. How many EVs need charging? Also, what connector type do you need?\n\n• **CCS** (most common for rapid charging)\n• **CHAdeMO**\n• **Type 2** (standard AC)\n\nJust reply like: "2 cars, CCS" or "1 car, Type 2"` }]);
+        return;
+      }
+
+      // Parse multi-car count from message
+      const carCountMatch = lower.match(/(\d+)\s*(?:car|vehicle|ev)/);
+      const carCount = carCountMatch ? parseInt(carCountMatch[1]) : 1;
+
+      setTripChatMessages(prev => [...prev, { role: "ai", text: "⚡ Finding EV chargers with real-time details..." }]);
+
       const handleEvResults = async (lat, lng, locLabel) => {
         try {
-          // If we have GPS coords, use nearby search (location + type, no query)
-          // If no GPS, use text search with location name in query (no type filter)
-          const body = lat && lng
-            ? { location: { lat, lng }, type: "electric_vehicle_charging_station", radius: 15000 }
-            : { query: `EV charging stations near ${firstLoc}`, radius: 15000 };
-          const res = await fetch(API.PLACES, {
+          const body = { maxResults: 5 };
+          if (lat && lng) { body.lat = lat; body.lng = lng; }
+          else { body.locationName = firstLoc; }
+          if (connectorType) body.connectorType = connectorType;
+
+          const res = await fetch(API.EV_CHARGERS, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           });
           const data = await res.json();
-          if (res.ok && data.places?.length > 0) {
-            const chargers = data.places.slice(0, 5);
-            const list = chargers.map((p, i) => {
-              const stars = p.rating ? ` · ${p.rating}★` : "";
-              const status = p.openNow === true ? " · Open now" : p.openNow === false ? " · Closed" : "";
-              const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
-              return `${i + 1}. **${p.name}**${stars}${status}\n   ${p.address}\n   [Navigate in Maps](${mapLink})`;
+
+          if (res.ok && data.chargers?.length > 0) {
+            const list = data.chargers.map((c, i) => {
+              const dist = c.distance ? ` · 📏 ${c.distance}` : "";
+              const status = c.isOperational ? " · 🟢 Operational" : " · 🔴 Out of service";
+              const speed = c.maxPowerKW ? ` · ⚡ ${c.speedLabel} (${c.maxPowerKW}kW)` : "";
+              const connectors = c.connectors.length > 0 ? `\n   🔌 ${c.connectors.join(", ")} · ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}` : "";
+              const points = carCount > 1 ? (c.totalPoints >= carCount ? ` ✅ Can charge ${carCount} cars` : ` ⚠️ Only ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}`) : "";
+              const cost = c.usageCost ? `\n   💰 ${c.usageCost}` : c.usageType ? `\n   💰 ${c.usageType}` : "";
+              const facilities = c.facilities.length > 0 ? `\n   🏪 ${c.facilities.join(" · ")}` : "";
+              const operator = c.operator ? `\n   🏢 ${c.operator}` : "";
+              return `${i + 1}. **${c.name}**${dist}${status}${speed}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink}) · [Zap-Map Live](${c.zapMapLink})`;
             }).join("\n\n");
-            return `⚡ **EV Chargers near ${locLabel}:**\n\n${list}\n\n💡 **Tips:**\n• Check connector type (CCS/CHAdeMO/Type 2) before heading there\n• Rapid chargers (50kW+) get you to 80% in ~30 min\n• Use Zap-Map app for real-time availability`;
+
+            const connectorNote = !connectorType ? "\n\n🔌 **Need a specific connector?** Ask me for CCS, CHAdeMO, or Type 2 chargers." : "";
+            return `⚡ **EV Chargers near ${locLabel}:**\n\n${list}${connectorNote}\n\n📡 Tap "Zap-Map Live" for real-time availability and queue times.`;
           }
         } catch (e) { /* fallback below */ }
-        return `⚡ I couldn't find chargers via search. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time EV charger availability near ${locLabel}.`;
+        return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
       };
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const reply = await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location");
-            setTripChatTyping(false);
-            setTripChatMessages(prev => {
-              const updated = [...prev];
-              const idx = updated.findLastIndex(m => m.text === "📍 Finding EV chargers near you...");
-              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-              else updated.push({ role: "ai", text: reply });
-              return updated;
-            });
-          },
-          async () => {
-            // Location denied — search near trip destination instead
-            const reply = await handleEvResults(null, null, firstLoc);
-            setTripChatTyping(false);
-            setTripChatMessages(prev => {
-              const updated = [...prev];
-              const idx = updated.findLastIndex(m => m.text === "📍 Finding EV chargers near you...");
-              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-              else updated.push({ role: "ai", text: reply });
-              return updated;
-            });
-          },
-          { enableHighAccuracy: false, timeout: 8000 }
-        );
-      } else {
-        const reply = await handleEvResults(null, null, firstLoc);
+      const updateEvReply = (reply) => {
         setTripChatTyping(false);
         setTripChatMessages(prev => {
           const updated = [...prev];
-          const idx = updated.findLastIndex(m => m.text === "📍 Finding EV chargers near you...");
+          const idx = updated.findLastIndex(m => m.text === "⚡ Finding EV chargers with real-time details...");
           if (idx >= 0) updated[idx] = { role: "ai", text: reply };
           else updated.push({ role: "ai", text: reply });
           return updated;
         });
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => updateEvReply(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")),
+          async () => updateEvReply(await handleEvResults(null, null, firstLoc)),
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
+      } else {
+        updateEvReply(await handleEvResults(null, null, firstLoc));
       }
-      return; // Handled — don't fall through to Claude API
+      return;
     }
 
     // ── "Nearby" queries (restaurants, food, cafes, activities, petrol) — use GPS + Places API ──
