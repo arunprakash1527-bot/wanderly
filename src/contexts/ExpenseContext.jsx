@@ -66,7 +66,7 @@ export function ExpenseProvider({ children }) {
       }));
     } else {
       const totalCustom = selected.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0);
-      if (Math.abs(totalCustom - amount) > 0.01) { showToast(`Custom amounts must add up to \u00A3${amount.toFixed(2)}`, "error"); return; }
+      if (Math.abs(totalCustom - amount) > 0.01) { showToast(`Custom amounts must add up to ${amount.toFixed(2)}`, "error"); return; }
       splits = selected.map(name => ({
         participant_name: name,
         share_amount: parseFloat(expenseCustomSplits[name]) || 0,
@@ -104,7 +104,7 @@ export function ExpenseProvider({ children }) {
       } catch (e) { /* local state already has the expense */ }
       showToast("Expense added");
       const expTrip = selectedCreatedTrip || (createdTrips && createdTrips[0]);
-      if (expTrip?.id && logActivity) logActivity(expTrip.id, "\uD83D\uDCB0", `Added expense: ${expenseDesc.trim()} (\u00A3${amount.toFixed(2)})`, "expense");
+      if (expTrip?.id && logActivity) logActivity(expTrip.id, "\uD83D\uDCB0", `Added expense: ${expenseDesc.trim()} (${amount.toFixed(2)})`, "expense");
     }
     resetExpenseForm();
   };

@@ -269,15 +269,24 @@ export function TimelineProvider({ children }) {
 
   const deleteTimelineItem = (tripId, idx) => {
     const trip = createdTrips.find(t => t.id === tripId);
-    const item = trip?.timeline?.[selectedDay]?.[idx];
-    if (!window.confirm(`Remove "${item?.title || "this item"}" from Day ${selectedDay}?`)) return;
+    if (!trip) return;
+    const dayKey = selectedDay;
+    const dayItems = trip.timeline?.[dayKey] || [];
+    if (idx < 0 || idx >= dayItems.length) return;
+    const item = dayItems[idx];
+    const title = item?.title || "this item";
+    // Use try/catch for confirm — some mobile browsers suppress it
+    let confirmed = true;
+    try { confirmed = window.confirm(`Remove "${title}" from Day ${dayKey}?`); } catch { confirmed = true; }
+    if (!confirmed) return;
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
-      const tl = t.timeline || {};
-      return { ...t, timeline: { ...tl, [selectedDay]: (tl[selectedDay] || []).filter((_, i) => i !== idx) } };
+      const tl = { ...(t.timeline || {}) };
+      tl[dayKey] = [...(tl[dayKey] || [])].filter((_, i) => i !== idx);
+      return { ...t, timeline: tl };
     }));
     setEditingTimelineIdx(null);
-    showToast("Item removed");
+    showToast(`"${title}" removed from Day ${dayKey}`);
   };
 
   const moveTimelineItem = (tripId, idx, direction) => {

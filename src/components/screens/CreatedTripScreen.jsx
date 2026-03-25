@@ -32,6 +32,29 @@ const fmtDate = (iso) => {
   return `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`;
 };
 
+/** Detect the user's locale currency symbol */
+function getLocaleCurrencySymbol() {
+  try {
+    const locale = navigator.language || 'en-GB';
+    const currencyMap = {
+      'en-US': 'USD', 'en-GB': 'GBP', 'en-AU': 'AUD', 'en-CA': 'CAD',
+      'en-NZ': 'NZD', 'en-IE': 'EUR', 'de': 'EUR', 'fr': 'EUR', 'es': 'EUR',
+      'it': 'EUR', 'nl': 'EUR', 'pt': 'EUR', 'ja': 'JPY', 'zh': 'CNY',
+      'ko': 'KRW', 'hi': 'INR', 'ar': 'AED', 'sv': 'SEK', 'no': 'NOK',
+      'da': 'DKK', 'pl': 'PLN', 'cs': 'CZK', 'hu': 'HUF', 'ro': 'RON',
+      'bg': 'BGN', 'hr': 'HRK', 'tr': 'TRY', 'ru': 'RUB', 'th': 'THB',
+      'id': 'IDR', 'ms': 'MYR', 'vi': 'VND', 'fil': 'PHP', 'zh-TW': 'TWD',
+      'zh-HK': 'HKD', 'en-SG': 'SGD', 'en-ZA': 'ZAR', 'pt-BR': 'BRL',
+      'es-MX': 'MXN', 'es-AR': 'ARS', 'es-CL': 'CLP', 'es-CO': 'COP',
+    };
+    const code = currencyMap[locale] || currencyMap[locale.split('-')[0]] || 'GBP';
+    const parts = new Intl.NumberFormat(locale, { style: 'currency', currency: code }).formatToParts(0);
+    const sym = parts.find(p => p.type === 'currency');
+    return sym ? sym.value : '£';
+  } catch { return '£'; }
+}
+const CS = getLocaleCurrencySymbol();
+
 export function CreatedTripScreen() {
   const { user } = useAuth();
   const { navigate, showToast } = useNavigation();
@@ -1185,7 +1208,7 @@ export function CreatedTripScreen() {
                     {/* Amount — prominent at top */}
                     <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
                       <div style={{ display: "inline-flex", alignItems: "baseline", gap: 2 }}>
-                        <span style={{ fontSize: 28, fontWeight: 300, color: T.t3 }}>£</span>
+                        <span style={{ fontSize: 28, fontWeight: 300, color: T.t3 }}>{CS}</span>
                         <input value={expenseAmount} onChange={e => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" type="text" inputMode="decimal" autoFocus
                           style={{ width: Math.max(80, (expenseAmount.length || 4) * 22), fontSize: 36, fontWeight: 700, fontFamily: T.font, border: "none", outline: "none", textAlign: "center", background: "transparent", color: T.t1 }} />
                       </div>
@@ -1257,7 +1280,7 @@ export function CreatedTripScreen() {
                     {/* Equal split preview */}
                     {expenseSplitMethod === 'equal' && expenseParticipants.length > 0 && parseFloat(expenseAmount) > 0 && (
                       <div style={{ background: T.al, borderRadius: T.rs, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: T.ad, fontWeight: 500, textAlign: "center" }}>
-                        £{(parseFloat(expenseAmount) / expenseParticipants.length).toFixed(2)} each · {expenseParticipants.length} {expenseParticipants.length === 1 ? "person" : "people"}
+                        {CS}{(parseFloat(expenseAmount) / expenseParticipants.length).toFixed(2)} each · {expenseParticipants.length} {expenseParticipants.length === 1 ? "person" : "people"}
                       </div>
                     )}
 
@@ -1270,7 +1293,7 @@ export function CreatedTripScreen() {
                             <input value={expenseCustomSplits[name] || ''} onChange={e => setExpenseCustomSplits(prev => ({ ...prev, [name]: e.target.value }))}
                               placeholder="0" type="text" inputMode="decimal" style={{ width: 60, padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontSize: 13, fontWeight: 600, textAlign: "right", outline: "none" }} />
                             <span style={{ fontSize: 12, color: T.t3 }}>%</span>
-                            {parseFloat(expenseAmount) > 0 && <span style={{ fontSize: 10, color: T.t3, minWidth: 44, textAlign: "right" }}>£{(parseFloat(expenseAmount) * (parseFloat(expenseCustomSplits[name]) || 0) / 100).toFixed(2)}</span>}
+                            {parseFloat(expenseAmount) > 0 && <span style={{ fontSize: 10, color: T.t3, minWidth: 44, textAlign: "right" }}>{CS}{(parseFloat(expenseAmount) * (parseFloat(expenseCustomSplits[name]) || 0) / 100).toFixed(2)}</span>}
                           </div>
                         ))}
                         <div style={{ fontSize: 11, color: expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0) === 100 ? T.green : T.red, marginTop: 4, fontWeight: 600 }}>
@@ -1285,14 +1308,14 @@ export function CreatedTripScreen() {
                         {expenseParticipants.map(name => (
                           <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                             <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{name}</span>
-                            <span style={{ fontSize: 12, color: T.t3 }}>£</span>
+                            <span style={{ fontSize: 12, color: T.t3 }}>{CS}</span>
                             <input value={expenseCustomSplits[name] || ''} onChange={e => setExpenseCustomSplits(prev => ({ ...prev, [name]: e.target.value }))}
                               placeholder="0.00" type="text" inputMode="decimal" style={{ width: 70, padding: "6px 8px", border: `.5px solid ${T.border}`, borderRadius: T.rs, fontSize: 13, fontWeight: 600, textAlign: "right", outline: "none" }} />
                           </div>
                         ))}
                         {parseFloat(expenseAmount) > 0 && (
                           <div style={{ fontSize: 11, color: Math.abs(expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0) - parseFloat(expenseAmount)) < 0.02 ? T.green : T.red, marginTop: 4, fontWeight: 600 }}>
-                            Total: £{expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0).toFixed(2)} / £{parseFloat(expenseAmount).toFixed(2)}
+                            Total: {CS}{expenseParticipants.reduce((s, n) => s + (parseFloat(expenseCustomSplits[n]) || 0), 0).toFixed(2)} / {CS}{parseFloat(expenseAmount).toFixed(2)}
                           </div>
                         )}
                       </div>
@@ -1314,8 +1337,8 @@ export function CreatedTripScreen() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                     <div>
                       <p style={{ fontSize: 10, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4 }}>Total spent</p>
-                      <p style={{ fontSize: 28, fontWeight: 700, fontFamily: T.fontD, color: T.t1, lineHeight: 1 }}>£{totalSpent.toFixed(2)}</p>
-                      <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>{allExpenses.length} expense{allExpenses.length !== 1 ? "s" : ""}{adults.length > 0 ? ` · £${(totalSpent / Math.max(adults.length, 1)).toFixed(0)} per person` : ""}</p>
+                      <p style={{ fontSize: 28, fontWeight: 700, fontFamily: T.fontD, color: T.t1, lineHeight: 1 }}>{CS}{totalSpent.toFixed(2)}</p>
+                      <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>{allExpenses.length} expense{allExpenses.length !== 1 ? "s" : ""}{adults.length > 0 ? ` · ${CS}${(totalSpent / Math.max(adults.length, 1)).toFixed(0)} per person` : ""}</p>
                     </div>
                     <button onClick={() => openAddExpense()} style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 18px", fontSize: 13, fontWeight: 600 }}>
                       + Add
@@ -1353,7 +1376,7 @@ export function CreatedTripScreen() {
                             <div style={{ flex: 1 }}>
                               <p style={{ fontSize: 12 }}><b style={{ color: T.coral }}>{s.from}</b> <span style={{ color: T.t3 }}>→</span> <b style={{ color: T.green }}>{s.to}</b></p>
                             </div>
-                            <span style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>£{s.amount.toFixed(2)}</span>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>{CS}{s.amount.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -1376,9 +1399,9 @@ export function CreatedTripScreen() {
                           <div key={i} style={{ padding: "10px 8px", borderRadius: T.rs, background: T.s2, textAlign: "center" }}>
                             <div style={{ width: 32, height: 32, borderRadius: "50%", background: balance >= 0 ? T.greenL : T.coralL, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: balance >= 0 ? T.green : T.coral, margin: "0 auto 6px" }}>{name.charAt(0)}</div>
                             <p style={{ fontSize: 12, fontWeight: 600, color: T.t1, marginBottom: 2 }}>{name.split(" ")[0]}</p>
-                            <p style={{ fontSize: 10, color: T.t3 }}>Paid £{pp.paid.toFixed(0)}</p>
-                            <p style={{ fontSize: 10, color: T.t3 }}>Owes £{pp.owes.toFixed(0)}</p>
-                            <p style={{ fontSize: 11, fontWeight: 600, color: balance >= 0 ? T.green : T.coral, marginTop: 4 }}>{balance >= 0 ? "+" : ""}£{balance.toFixed(2)}</p>
+                            <p style={{ fontSize: 10, color: T.t3 }}>Paid {CS}{pp.paid.toFixed(0)}</p>
+                            <p style={{ fontSize: 10, color: T.t3 }}>Owes {CS}{pp.owes.toFixed(0)}</p>
+                            <p style={{ fontSize: 11, fontWeight: 600, color: balance >= 0 ? T.green : T.coral, marginTop: 4 }}>{balance >= 0 ? "+" : ""}{CS}{balance.toFixed(2)}</p>
                           </div>
                         );
                       })}
@@ -1393,7 +1416,7 @@ export function CreatedTripScreen() {
                     {/* Stacked bar */}
                     <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
                       {catBreakdown.map(s => (
-                        <div key={s.key} style={{ width: `${s.percentage}%`, background: s.color, minWidth: s.percentage > 0 ? 3 : 0, transition: "width .5s ease" }} title={`${s.label}: £${s.amount.toFixed(2)}`} />
+                        <div key={s.key} style={{ width: `${s.percentage}%`, background: s.color, minWidth: s.percentage > 0 ? 3 : 0, transition: "width .5s ease" }} title={`${s.label}: ${CS}${s.amount.toFixed(2)}`} />
                       ))}
                     </div>
                     {catBreakdown.map(s => (
@@ -1402,7 +1425,7 @@ export function CreatedTripScreen() {
                           <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
                           {s.icon} {s.label}
                         </span>
-                        <span style={{ fontWeight: 600, color: T.t1 }}>£{s.amount.toFixed(2)} <span style={{ fontWeight: 400, color: T.t3, fontSize: 10 }}>({s.percentage.toFixed(0)}%)</span></span>
+                        <span style={{ fontWeight: 600, color: T.t1 }}>{CS}{s.amount.toFixed(2)} <span style={{ fontWeight: 400, color: T.t3, fontSize: 10 }}>({s.percentage.toFixed(0)}%)</span></span>
                       </div>
                     ))}
                   </div>
@@ -1416,9 +1439,9 @@ export function CreatedTripScreen() {
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < stayCosts.length - 1 ? `.5px solid ${T.amber}22` : "none" }}>
                         <div>
                           <p style={{ fontSize: 13, fontWeight: 500, color: T.t1 }}>{sc.description}</p>
-                          <p style={{ fontSize: 10, color: T.t2 }}>£{(sc.amount / adults.length).toFixed(2)} each · {adults.length} people</p>
+                          <p style={{ fontSize: 10, color: T.t2 }}>{CS}{(sc.amount / adults.length).toFixed(2)} each · {adults.length} people</p>
                         </div>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: T.amber }}>£{sc.amount.toFixed(2)}</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: T.amber }}>{CS}{sc.amount.toFixed(2)}</span>
                       </div>
                     ))}
                     <p style={{ fontSize: 10, color: T.t3, marginTop: 8, fontStyle: "italic" }}>Auto-included from stay details</p>
@@ -1439,7 +1462,7 @@ export function CreatedTripScreen() {
                   <div key={dateKey} style={{ marginBottom: 4 }}>
                     <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8, marginTop: 8 }}>
                       {fmtExpDate(dateKey)}
-                      <span style={{ fontWeight: 400, marginLeft: 8, textTransform: "none" }}>£{expByDate[dateKey].reduce((s, e) => s + e.amount, 0).toFixed(2)}</span>
+                      <span style={{ fontWeight: 400, marginLeft: 8, textTransform: "none" }}>{CS}{expByDate[dateKey].reduce((s, e) => s + e.amount, 0).toFixed(2)}</span>
                     </p>
                     {expByDate[dateKey].map((exp, i) => {
                       const cat = getCatInfo(exp.category);
@@ -1456,10 +1479,10 @@ export function CreatedTripScreen() {
                               <p style={{ fontSize: 10, color: T.t3 }}>
                                 {exp.paid_by} paid
                                 {exp.split_method === "equal" && (exp.splits || []).length > 1 ? ` · split ${(exp.splits || []).length} ways` : ""}
-                                {myShare ? ` · your share £${myShare.share_amount.toFixed(2)}` : ""}
+                                {myShare ? ` · your share ${CS}${myShare.share_amount.toFixed(2)}` : ""}
                               </p>
                             </div>
-                            <p style={{ fontSize: 15, fontWeight: 700, color: T.t1, flexShrink: 0 }}>£{exp.amount.toFixed(2)}</p>
+                            <p style={{ fontSize: 15, fontWeight: 700, color: T.t1, flexShrink: 0 }}>{CS}{exp.amount.toFixed(2)}</p>
                           </div>
                         </div>
                       );
