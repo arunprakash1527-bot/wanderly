@@ -157,7 +157,7 @@ export function CreateScreen() {
                 )}
               </div>
               <input id="wiz-start-date" type="date" value={wizTrip.start} onChange={e => setWizTrip(prev => ({ ...prev, start: e.target.value }))}
-                style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
+                style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer", zIndex: 2, fontSize: 16 }} />
               <span style={{ fontSize: 14, color: T.t3, pointerEvents: "none" }}>📅</span>
             </label>
             <label htmlFor="wiz-end-date"
@@ -173,7 +173,7 @@ export function CreateScreen() {
               </div>
               <input id="wiz-end-date" type="date" value={wizTrip.end} onChange={e => setWizTrip(prev => ({ ...prev, end: e.target.value }))}
                 min={wizTrip.start || undefined}
-                style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
+                style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer", zIndex: 2, fontSize: 16 }} />
               <span style={{ fontSize: 14, color: T.t3, pointerEvents: "none" }}>📅</span>
             </label>
           </div>

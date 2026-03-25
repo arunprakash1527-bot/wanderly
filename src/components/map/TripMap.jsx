@@ -34,8 +34,8 @@ export function TripMap({ places, routePolyline, height, onDirectionsLoaded, tra
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
-      zoomControl: true,
-      gestureHandling: "cooperative", // requires 2-finger to pan/zoom — prevents stealing page scroll
+      zoomControl: false,
+      gestureHandling: "none", // small preview map — disable all gestures to prevent page scroll hijacking
       styles: [
         { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
         { featureType: "transit", stylers: [{ visibility: "off" }] },
@@ -167,8 +167,8 @@ export function TripMap({ places, routePolyline, height, onDirectionsLoaded, tra
   }
 
   return (
-    <div style={{ position: "relative", borderRadius: T.rs, overflow: "hidden", border: `.5px solid ${T.border}` }}>
-      <div ref={mapRef} style={{ width: "100%", height: height || 200 }} />
+    <div style={{ position: "relative", borderRadius: T.rs, overflow: "hidden", border: `.5px solid ${T.border}`, touchAction: "pan-y" }}>
+      <div ref={mapRef} style={{ width: "100%", height: height || 200, touchAction: "pan-y" }} />
       {!mapReady && (
         <div style={{ position: "absolute", inset: 0, background: T.s2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.t3 }}>
           Loading map...
