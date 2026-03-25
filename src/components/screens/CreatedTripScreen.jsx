@@ -519,34 +519,39 @@ export function CreatedTripScreen() {
                     </div>
                   )}
 
-                  {/* Smart Tips from Trip Intelligence */}
-                  {smartTips.length > 0 && (
-                    <div style={{ padding: "8px 20px 0" }}>
-                      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-                        {smartTips.slice(0, 4).map((tip, i) => (
-                          <div key={i} style={{ minWidth: 220, maxWidth: 260, flexShrink: 0, padding: "10px 14px", borderRadius: 12,
-                            background: `linear-gradient(135deg, ${T.s}, ${T.s2})`, border: `.5px solid ${T.border}`,
-                            fontSize: 11, color: T.t2, lineHeight: 1.4, display: "flex", gap: 8, alignItems: "flex-start" }}>
-                            <span style={{ fontSize: 16, flexShrink: 0 }}>{tip.icon}</span>
-                            <span>{tip.tip}</span>
+                  {/* Smart Tips + Weather — only show for trips starting within 7 days */}
+                  {(() => {
+                    const tripStart = trip.rawStart ? new Date(trip.rawStart + "T00:00:00") : null;
+                    const daysUntilTrip = tripStart ? Math.floor((tripStart - new Date()) / 86400000) : 999;
+                    const showWeather = daysUntilTrip <= 7 && daysUntilTrip >= -30; // during or up to 7 days before
+                    return (<>
+                      {showWeather && smartTips.length > 0 && (
+                        <div style={{ padding: "8px 20px 0" }}>
+                          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                            {smartTips.slice(0, 4).map((tip, i) => (
+                              <div key={i} style={{ minWidth: 220, maxWidth: 260, flexShrink: 0, padding: "10px 14px", borderRadius: 12,
+                                background: `linear-gradient(135deg, ${T.s}, ${T.s2})`, border: `.5px solid ${T.border}`,
+                                fontSize: 11, color: T.t2, lineHeight: 1.4, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ fontSize: 16, flexShrink: 0 }}>{tip.icon}</span>
+                                <span>{tip.tip}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Weather signal bar */}
-                  {intelligence?.weather?.current && (
-                    <div style={{ margin: "8px 20px 0", padding: "8px 14px", borderRadius: 10, background: T.blueL,
-                      fontSize: 11, color: T.t2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      {intelligence.signals?.filter(s => s.type === "weather" || s.type === "directions" || s.type === "ev").map((s, i) => (
-                        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{s.icon} {s.label}</span>
-                      ))}
-                      {intelligence.currency?.rates && Object.entries(intelligence.currency.rates).slice(0, 1).map(([code, info]) => (
-                        <span key={code} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>💱 {info.example}</span>
-                      ))}
-                    </div>
-                  )}
+                        </div>
+                      )}
+                      {showWeather && intelligence?.weather?.current && (
+                        <div style={{ margin: "8px 20px 0", padding: "8px 14px", borderRadius: 10, background: T.blueL,
+                          fontSize: 11, color: T.t2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          {intelligence.signals?.filter(s => s.type === "weather" || s.type === "directions" || s.type === "ev").map((s, i) => (
+                            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{s.icon} {s.label}</span>
+                          ))}
+                          {intelligence.currency?.rates && Object.entries(intelligence.currency.rates).slice(0, 1).map(([code, info]) => (
+                            <span key={code} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>💱 {info.example}</span>
+                          ))}
+                        </div>
+                      )}
+                    </>);
+                  })()}
 
                   {/* Embedded Map */}
                   {showMap && trip.places?.length > 0 && (

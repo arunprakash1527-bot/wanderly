@@ -60,6 +60,9 @@ export function detectConflicts(trip, directions = {}) {
       const next = parsed[i + 1];
       const gap = next.startMins - current.startMins;
 
+      // Same-time items are intentional (e.g. parallel adult/kid activities)
+      if (gap === 0) continue;
+
       if (gap < 0) {
         conflicts.push({
           dayNum: day, type: "overlap", severity: "error",
@@ -67,7 +70,7 @@ export function detectConflicts(trip, directions = {}) {
           message: `"${current.title}" and "${next.title}" overlap on Day ${day}`,
           items: [current.idx, next.idx],
         });
-      } else if (gap < 30 && gap >= 0) {
+      } else if (gap > 0 && gap < 30) {
         conflicts.push({
           dayNum: day, type: "tight", severity: "warning",
           icon: "⏱️",
@@ -130,8 +133,9 @@ export function detectConflicts(trip, directions = {}) {
       }
     }
 
-    // 3. Packed schedule warnings
-    if (parsed.length >= 7) {
+    // 3. Packed schedule warnings (only flag if user has customised the timeline)
+    const hasUserEdits = items.some(i => i.userAdded || i.userEdited);
+    if (parsed.length >= 7 && hasUserEdits) {
       conflicts.push({
         dayNum: day, type: "packed", severity: "warning",
         icon: "📋",
