@@ -64,12 +64,74 @@ export default async function handler(req, res) {
       if (typeId) params.set("connectiontypeid", typeId);
     }
 
-    const ocmRes = await fetch(`https://api.openchargemap.io/v3/poi/?${params.toString()}`, {
-      headers: { "User-Agent": "Wanderly-TripWithMe/1.0" },
-    });
-    const ocmData = await ocmRes.json();
+    // OCM requires an API key — add via Vercel env var OCM_API_KEY
+    const ocmKey = process.env.OCM_API_KEY;
+    if (ocmKey) params.set("key", ocmKey);
 
-    if (!Array.isArray(ocmData) || ocmData.length === 0) {
+    let ocmData = [];
+    try {
+      const ocmRes = await fetch(`https://api.openchargemap.io/v3/poi/?${params.toString()}`, {
+        headers: { "User-Agent": "Wanderly-TripWithMe/1.0", ...(ocmKey ? { "x-api-key": ocmKey } : {}) },
+      });
+      if (ocmRes.ok) {
+        const parsed = await ocmRes.json();
+        if (Array.isArray(parsed)) ocmData = parsed;
+      }
+    } catch (e) { /* OCM failed — try Google Places fallback */ }
+
+    // Fallback to Google Places if OCM returns nothing (no key / no results)
+    if (ocmData.length === 0) {
+      const geoKey = process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_MAPS_API_KEY;
+      if (geoKey) {
+        try {
+          const gParams = new URLSearchParams({
+            query: `EV charging station`,
+            location: `${searchLat},${searchLng}`,
+            radius: 15000,
+            type: "electric_vehicle_charging_station",
+            key: geoKey,
+          });
+          const gRes = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?${gParams.toString()}`);
+          const gData = await gRes.json();
+          if (gData.results?.length > 0) {
+            const fallbackChargers = gData.results.slice(0, maxResults).map(p => {
+              const plat = p.geometry?.location?.lat;
+              const plng = p.geometry?.location?.lng;
+              // Haversine distance
+              let distKm = null;
+              if (plat && plng) {
+                const R = 6371;
+                const dLat = (plat - searchLat) * Math.PI / 180;
+                const dLng = (plng - searchLng) * Math.PI / 180;
+                const a = Math.sin(dLat/2)**2 + Math.cos(searchLat*Math.PI/180)*Math.cos(plat*Math.PI/180)*Math.sin(dLng/2)**2;
+                distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              }
+              return {
+                name: p.name,
+                address: p.formatted_address || p.vicinity || "",
+                lat: plat, lng: plng,
+                distance: distKm ? `${distKm.toFixed(1)} km` : null,
+                distanceKm: distKm,
+                connectors: [],
+                connections: [],
+                maxPowerKW: null,
+                speedLabel: null,
+                totalPoints: null,
+                operator: null, operatorUrl: null,
+                usageType: null, usageCost: null,
+                isOperational: p.business_status === "OPERATIONAL",
+                facilities: [],
+                zapMapLink: plat ? `https://www.zap-map.com/live/?lat=${plat}&lng=${plng}&z=15` : null,
+                mapsLink: plat ? `https://www.google.com/maps/dir/?api=1&destination=${plat},${plng}` : `https://www.google.com/maps/place/?q=place_id:${p.place_id}`,
+                rating: p.rating || null,
+                openNow: p.opening_hours?.open_now ?? null,
+                source: "google", // flag so chat handler knows detail level is lower
+              };
+            });
+            return res.status(200).json({ chargers: fallbackChargers, source: "google" });
+          }
+        } catch (e) { /* both failed */ }
+      }
       return res.status(200).json({ chargers: [] });
     }
 

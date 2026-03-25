@@ -176,20 +176,26 @@ export function ChatProvider({ children }) {
           const data = await res.json();
 
           if (res.ok && data.chargers?.length > 0) {
+            const isGoogleFallback = data.source === "google";
             const list = data.chargers.map((c, i) => {
               const dist = c.distance ? ` · 📏 ${c.distance}` : "";
-              const status = c.isOperational ? " · 🟢 Operational" : " · 🔴 Out of service";
+              const status = c.isOperational ? " · 🟢 Operational" : c.isOperational === false ? " · 🔴 Out of service" : "";
               const speed = c.maxPowerKW ? ` · ⚡ ${c.speedLabel} (${c.maxPowerKW}kW)` : "";
-              const connectors = c.connectors.length > 0 ? `\n   🔌 ${c.connectors.join(", ")} · ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}` : "";
-              const points = carCount > 1 ? (c.totalPoints >= carCount ? ` ✅ Can charge ${carCount} cars` : ` ⚠️ Only ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}`) : "";
+              const connectors = c.connectors?.length > 0 ? `\n   🔌 ${c.connectors.join(", ")} · ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}` : "";
+              const points = carCount > 1 && c.totalPoints ? (c.totalPoints >= carCount ? ` ✅ Can charge ${carCount} cars` : ` ⚠️ Only ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}`) : "";
               const cost = c.usageCost ? `\n   💰 ${c.usageCost}` : c.usageType ? `\n   💰 ${c.usageType}` : "";
-              const facilities = c.facilities.length > 0 ? `\n   🏪 ${c.facilities.join(" · ")}` : "";
+              const facilities = c.facilities?.length > 0 ? `\n   🏪 ${c.facilities.join(" · ")}` : "";
               const operator = c.operator ? `\n   🏢 ${c.operator}` : "";
-              return `${i + 1}. **${c.name}**${dist}${status}${speed}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink}) · [Zap-Map Live](${c.zapMapLink})`;
+              const rating = isGoogleFallback && c.rating ? ` · ${c.rating}★` : "";
+              const open = isGoogleFallback ? (c.openNow === true ? " · Open now" : c.openNow === false ? " · Closed" : "") : "";
+              const zapLink = c.zapMapLink ? ` · [Zap-Map Live](${c.zapMapLink})` : "";
+              return `${i + 1}. **${c.name}**${dist}${status}${rating}${open}${speed}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink})${zapLink}`;
             }).join("\n\n");
 
             const connectorNote = !connectorType ? "\n\n🔌 **Need a specific connector?** Ask me for CCS, CHAdeMO, or Type 2 chargers." : "";
-            return `⚡ **EV Chargers near ${locLabel}:**\n\n${list}${connectorNote}\n\n📡 Tap "Zap-Map Live" for real-time availability and queue times.`;
+            const zapNote = "\n\n📡 Tap **Zap-Map Live** for real-time availability and queue times.";
+            const googleNote = isGoogleFallback ? "\n\n_ℹ️ Basic results shown — connector details unavailable. Check Zap-Map for full info._" : "";
+            return `⚡ **EV Chargers near ${locLabel}:**\n\n${list}${connectorNote}${zapNote}${googleNote}`;
           }
         } catch (e) { /* fallback below */ }
         return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
