@@ -246,9 +246,84 @@ export function generatePackingSuggestions(trip, intelligence) {
     if (days >= 5) DURATION_ITEMS.long.forEach(i => add(i.item, i.category, `Long trip (${days} days)`));
   }
 
-  // Foreign destination
+  // Foreign destination — detect if destination country differs from start location
   if (intelligence?.language) {
     FOREIGN_ITEMS.forEach(i => add(i.item, i.category, `Travelling to ${intelligence.language.lang}-speaking area`));
+  }
+
+  // International travel detection — compare start location country to destination countries
+  const COUNTRY_KEYWORDS = [
+    "France", "Spain", "Italy", "Germany", "Portugal", "Netherlands", "Belgium", "Austria", "Switzerland",
+    "Greece", "Croatia", "Turkey", "Morocco", "Egypt", "Thailand", "Japan", "China", "India", "Australia",
+    "New Zealand", "Canada", "USA", "United States", "Mexico", "Brazil", "Argentina", "Colombia",
+    "South Africa", "Kenya", "Iceland", "Norway", "Sweden", "Denmark", "Finland", "Poland", "Czech",
+    "Hungary", "Romania", "Ireland", "Scotland", "Wales", "England", "UK", "United Kingdom",
+    "Singapore", "Malaysia", "Indonesia", "Vietnam", "Cambodia", "Philippines", "South Korea", "Taiwan",
+    "Dubai", "UAE", "Qatar", "Oman", "Sri Lanka", "Nepal", "Maldives", "Fiji", "Cuba", "Jamaica",
+    "Costa Rica", "Peru", "Chile", "Cyprus", "Malta", "Montenegro", "Albania", "Slovenia",
+    "Bali", "Tenerife", "Mallorca", "Ibiza", "Crete", "Santorini", "Mykonos", "Corfu",
+    "Marrakech", "Bangkok", "Tokyo", "Paris", "Rome", "Barcelona", "Amsterdam", "Berlin", "Lisbon",
+    "Prague", "Budapest", "Vienna", "Dubrovnik", "Istanbul", "Reykjavik", "Oslo", "Stockholm",
+    "Copenhagen", "Helsinki", "Krakow", "Bucharest", "Athens", "Naples", "Florence", "Venice",
+    "Milan", "Nice", "Lyon", "Bordeaux", "Seville", "Valencia", "Munich", "Hamburg", "Zurich",
+    "Geneva", "Brussels", "Bruges", "Porto", "Lagos", "Faro", "Algarve",
+  ];
+  // Map well-known cities/regions to their country for comparison
+  const CITY_TO_COUNTRY = {
+    "bali": "Indonesia", "tenerife": "Spain", "mallorca": "Spain", "ibiza": "Spain",
+    "crete": "Greece", "santorini": "Greece", "mykonos": "Greece", "corfu": "Greece",
+    "marrakech": "Morocco", "bangkok": "Thailand", "tokyo": "Japan", "paris": "France",
+    "rome": "Italy", "barcelona": "Spain", "amsterdam": "Netherlands", "berlin": "Germany",
+    "lisbon": "Portugal", "prague": "Czech Republic", "budapest": "Hungary", "vienna": "Austria",
+    "dubrovnik": "Croatia", "istanbul": "Turkey", "reykjavik": "Iceland", "oslo": "Norway",
+    "stockholm": "Sweden", "copenhagen": "Denmark", "helsinki": "Finland", "krakow": "Poland",
+    "bucharest": "Romania", "athens": "Greece", "naples": "Italy", "florence": "Italy",
+    "venice": "Italy", "milan": "Italy", "nice": "France", "lyon": "France", "bordeaux": "France",
+    "seville": "Spain", "valencia": "Spain", "munich": "Germany", "hamburg": "Germany",
+    "zurich": "Switzerland", "geneva": "Switzerland", "brussels": "Belgium", "bruges": "Belgium",
+    "porto": "Portugal", "lagos": "Portugal", "faro": "Portugal", "algarve": "Portugal",
+    "dubai": "UAE", "singapore": "Singapore", "edinburgh": "Scotland", "london": "England",
+    "manchester": "England", "birmingham": "England", "cardiff": "Wales", "belfast": "Northern Ireland",
+    "glasgow": "Scotland", "new york": "USA", "los angeles": "USA", "sydney": "Australia",
+    "melbourne": "Australia", "auckland": "New Zealand", "toronto": "Canada", "vancouver": "Canada",
+  };
+  const UK_COUNTRIES = ["england", "scotland", "wales", "northern ireland", "uk", "united kingdom"];
+  const resolveCountry = (locStr) => {
+    if (!locStr) return null;
+    const lower = locStr.toLowerCase();
+    // Check city-to-country mapping first
+    for (const [city, country] of Object.entries(CITY_TO_COUNTRY)) {
+      if (lower.includes(city)) return country.toLowerCase();
+    }
+    // Check direct country name matches
+    for (const c of COUNTRY_KEYWORDS) {
+      if (lower.includes(c.toLowerCase())) return c.toLowerCase();
+    }
+    return null;
+  };
+  const isSameCountryGroup = (c1, c2) => {
+    if (!c1 || !c2) return false;
+    if (c1 === c2) return true;
+    // Treat UK constituent countries as same
+    if (UK_COUNTRIES.includes(c1) && UK_COUNTRIES.includes(c2)) return true;
+    return false;
+  };
+  if (!intelligence?.language) {
+    const startCountry = resolveCountry(trip.startLocation);
+    const destPlaces = trip.places || [];
+    const destCountries = destPlaces.map(p => resolveCountry(p)).filter(Boolean);
+    const isForeign = startCountry && destCountries.length > 0 && destCountries.some(dc => !isSameCountryGroup(dc, startCountry));
+    if (isForeign) {
+      const foreignDest = destPlaces.find(p => {
+        const dc = resolveCountry(p);
+        return dc && !isSameCountryGroup(dc, startCountry);
+      }) || destPlaces[0];
+      add("Passport", "documents", `International travel to ${foreignDest}`);
+      add("Travel insurance docs", "documents", `International travel to ${foreignDest}`);
+      add("Foreign currency / travel card", "documents", `International travel to ${foreignDest}`);
+      add("Plug adapter", "electronics", `International travel to ${foreignDest}`);
+      add("Copies of booking confirmations", "documents", `International travel to ${foreignDest}`);
+    }
   }
 
   return suggestions;

@@ -1074,8 +1074,8 @@ export function CreatedTripScreen() {
                         return { ...t, polls: (t.polls || []).map(p => {
                           if (p.id !== poll.id) return p;
                           const updated = p.options.map((o, j) => j === i ? { ...o, voted: !o.voted, voters: o.voted ? o.voters.filter(v => v !== "You") : [...(o.voters||[]), "You"] } : o);
-                          const totalVotes = updated.reduce((s, o) => s + (o.voters?.length || 0), 0);
-                          return { ...p, options: updated.map(o => ({ ...o, pct: totalVotes > 0 ? Math.round((o.voters?.length || 0) / totalVotes * 100) : 0 })) };
+                          const denominator = totalTravellers > 0 ? totalTravellers : 1;
+                          return { ...p, options: updated.map(o => ({ ...o, pct: Math.round((o.voters?.length || 0) / denominator * 100) })) };
                         }) };
                       }));
                     }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: `.5px solid ${opt.voted ? T.a : T.border}`, borderRadius: T.rs, marginBottom: 6, cursor: poll.status === "closed" ? "default" : "pointer", position: "relative", overflow: "hidden", background: opt.voted ? T.al : T.s }}>
@@ -1094,8 +1094,12 @@ export function CreatedTripScreen() {
                     <span>{poll.options.reduce((s, o) => s + (o.voters?.length || 0), 0)} votes · by {poll.by}</span>
                     <div style={{ display: "flex", gap: 6 }}>
                       {poll.status === "active" && (
-                        <button onClick={(e) => { e.stopPropagation(); setCreatedTrips(prev => prev.map(t => t.id !== trip.id ? t : { ...t, polls: (t.polls || []).map(p => p.id === poll.id ? { ...p, status: "closed" } : p) })); logActivity(trip.id, "🗳️", `Poll closed: "${poll.q}"`, "poll"); showToast("Poll closed"); }}
-                          style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", color: T.red, borderColor: T.red }}>Close poll</button>
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); shareToWhatsApp(trip.name, `🗳️ Vote on: "${poll.q}"\n${poll.options.map(o => `• ${o.text}`).join("\n")}`, trip.dbId || trip.id, { tab: "polls" }); }}
+                            style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", background: "#25D366", color: "#fff", borderColor: "#25D366" }}>Share in WhatsApp</button>
+                          <button onClick={(e) => { e.stopPropagation(); setCreatedTrips(prev => prev.map(t => t.id !== trip.id ? t : { ...t, polls: (t.polls || []).map(p => p.id === poll.id ? { ...p, status: "closed" } : p) })); logActivity(trip.id, "🗳️", `Poll closed: "${poll.q}"`, "poll"); showToast("Poll closed"); }}
+                            style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 8px", color: T.red, borderColor: T.red }}>Close poll</button>
+                        </>
                       )}
                       {poll.status === "closed" && (() => {
                         const winner = [...poll.options].sort((a, b) => (b.voters?.length || 0) - (a.voters?.length || 0))[0];
@@ -1862,7 +1866,7 @@ export function CreatedTripScreen() {
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rs, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
                     <span style={{ fontSize: 16 }}>💬</span> Share trip
                   </button>
-                  <button onClick={() => { const activePolls = (trip.polls || []).filter(p => p.status === "active"); if (!activePolls.length) { showToast("No active polls to share"); return; } shareToWhatsApp(trip.name, `🗳️ Vote on: "${activePolls[0].q}"\n${activePolls[0].options.map(o => `• ${o.text}`).join("\n")}`, trip.dbId || trip.id); }}
+                  <button onClick={() => { const activePolls = (trip.polls || []).filter(p => p.status === "active"); if (!activePolls.length) { showToast("No active polls to share"); return; } shareToWhatsApp(trip.name, `🗳️ Vote on: "${activePolls[0].q}"\n${activePolls[0].options.map(o => `• ${o.text}`).join("\n")}`, trip.dbId || trip.id, { tab: "polls" }); }}
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px", background: "#128C7E", color: "#fff", border: "none", borderRadius: T.rs, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
                     <span style={{ fontSize: 16 }}>🗳️</span> Share poll
                   </button>

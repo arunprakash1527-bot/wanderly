@@ -292,6 +292,49 @@ export function ChatProvider({ children }) {
       return;
     }
 
+    // ── Handle "add to itinerary" commands locally BEFORE API call ──
+    // This ensures the timeline is actually mutated, not just acknowledged in text.
+    if (/\b(add|include|plug)\b/i.test(lower)) {
+      const dayMatch = lower.match(/day\s*(\d+)/);
+      const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
+      const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
+      const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
+      if (itemTitle && itemTitle.length > 2) {
+        const smartSlot = findSmartSlot(tripId, targetDay, lower);
+        const newItem = { time: smartSlot.time, title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
+        const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+        let replacedTitle = null;
+        setCreatedTrips(prev => prev.map(t => {
+          if (t.id !== tripId) return t;
+          const tl = t.timeline || {};
+          let dayTl = [...(tl[targetDay] || [])];
+          const slotMins = parseT(smartSlot.time);
+          const existIdx = dayTl.findIndex(it => Math.abs(parseT(it.time) - slotMins) < 30);
+          if (existIdx >= 0) {
+            replacedTitle = dayTl[existIdx].title;
+            dayTl[existIdx] = { ...dayTl[existIdx], ...newItem };
+          } else {
+            dayTl = [...dayTl, newItem];
+          }
+          dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
+          return { ...t, timeline: { ...tl, [targetDay]: dayTl } };
+        }));
+        if (replacedTitle) {
+          logActivity(tripId, "🔄", `Replaced "${replacedTitle}" with "${itemTitle}" on Day ${targetDay} · ${smartSlot.time}`, "itinerary");
+        } else {
+          logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
+        }
+        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+        const addReply = replacedTitle
+          ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust.`
+          : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: addReply }]);
+        saveChatMessage(trip?.dbId, 'ai', addReply);
+        return;
+      }
+    }
+
     // Try Claude API first for richer, context-aware responses
     try {
       const res = await authFetch(API.CHAT, {
