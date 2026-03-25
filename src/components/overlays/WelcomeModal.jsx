@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { useNavigation } from '../../contexts/NavigationContext';
@@ -10,7 +10,16 @@ export function WelcomeModal() {
   const { createdTrips } = useTrip();
   const { resetWizard, setWizStep } = useWizard();
 
-  if (!showWelcome || screen !== "home" || createdTrips.length !== 0) return null;
+  const isVisible = showWelcome && screen === "home" && createdTrips.length === 0;
+  useEffect(() => {
+    if (isVisible) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [isVisible]);
+
+  if (!isVisible) return null;
 
   const dismiss = () => { setShowWelcome(false); localStorage.setItem('twm_welcomed', 'true'); };
 

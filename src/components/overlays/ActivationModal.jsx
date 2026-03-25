@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { useTrip } from '../../contexts/TripContext';
@@ -12,6 +12,15 @@ export function ActivationModal() {
     getSmartRouteOrder,
     confirmActivation,
   } = useTrip();
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showActivationModal) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [showActivationModal]);
 
   if (!showActivationModal) return null;
 
