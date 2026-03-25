@@ -35,6 +35,7 @@ export function TripMap({ places, routePolyline, height, onDirectionsLoaded, tra
       streetViewControl: false,
       fullscreenControl: false,
       zoomControl: true,
+      gestureHandling: "cooperative", // requires 2-finger to pan/zoom — prevents stealing page scroll
       styles: [
         { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
         { featureType: "transit", stylers: [{ visibility: "off" }] },
