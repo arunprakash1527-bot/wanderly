@@ -1290,7 +1290,7 @@ export function CreatedTripScreen() {
                     )}
 
                     {/* Save button */}
-                    <button onClick={() => saveExpense(trip)} style={{ ...css.btn, ...css.btnP, width: "100%", padding: "14px 0", borderRadius: T.rs, fontSize: 14, fontWeight: 600 }}>
+                    <button onClick={() => saveExpense(trip)} style={{ ...css.btn, ...css.btnP, width: "100%", padding: "14px 0", borderRadius: T.rs, fontSize: 14, fontWeight: 600, justifyContent: "center" }}>
                       {editingExpense ? "Update Expense" : "Add Expense"}
                     </button>
                   </div>
