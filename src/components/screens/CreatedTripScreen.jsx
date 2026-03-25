@@ -1916,7 +1916,7 @@ export function CreatedTripScreen() {
                       <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{a.by} · {formatAgo(a.time)}</p>
                     </div>
                     {(a.type === "poll" || a.type === "itinerary") && (
-                      <button onClick={() => shareToWhatsApp(trip.name, `${a.icon} ${a.text}`, trip.dbId || trip.id)}
+                      <button onClick={() => shareToWhatsApp(trip.name, `${a.icon} ${a.text}`, trip.dbId || trip.id, a.type === "poll" ? { tab: "polls" } : {})}
                         style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", opacity: 0.5, flexShrink: 0, padding: 4 }} title="Share on WhatsApp">💬</button>
                     )}
                   </div>

@@ -519,6 +519,7 @@ export function TripDataProvider({ children }) {
     createdTrips, setCreatedTrips,
     selectedCreatedTrip, setSelectedCreatedTrip,
     joinShareCode, setJoinShareCode,
+    joinTab, setJoinTab,
     joinedSlot, setJoinedSlot,
     saving, setSaving,
     syncing, setSyncing,

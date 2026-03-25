@@ -10,7 +10,7 @@ import { useTrip } from '../../contexts/TripContext';
 export function JoinPreviewScreen() {
   const { user } = useAuth();
   const { navigate, showToast } = useNavigation();
-  const { selectedCreatedTrip, createdTrips, setCreatedTrips, setSelectedCreatedTrip, joinedSlot, setJoinedSlot, joinTripAsTraveller } = useTrip();
+  const { selectedCreatedTrip, createdTrips, setCreatedTrips, setSelectedCreatedTrip, joinedSlot, setJoinedSlot, joinTripAsTraveller, joinTab, setJoinTab, tripDetailTab, setTripDetailTab } = useTrip();
   const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
@@ -18,7 +18,7 @@ export function JoinPreviewScreen() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { setJoinedSlot(null); navigate("createdTrip"); }}>Back</button>
+        <button style={{ ...css.btn, ...css.btnSm }} onClick={() => { setJoinedSlot(null); if (joinTab) { setTripDetailTab(joinTab); setJoinTab(null); } navigate("createdTrip"); }}>Back</button>
         <h2 style={{ fontFamily: T.fontD, fontSize: 17, fontWeight: 400 }}>Join preview</h2>
         <div />
       </div>
@@ -74,9 +74,10 @@ export function JoinPreviewScreen() {
               }
               setSelectedCreatedTrip(trip);
               setJoinedSlot(null);
+              if (joinTab) { setTripDetailTab(joinTab); setJoinTab(null); }
               navigate("createdTrip");
             }} style={{ ...css.btn, ...css.btnP, width: "100%", marginTop: 12, padding: "10px 16px", justifyContent: "center", fontSize: 13, fontWeight: 500, gap: 6 }}>
-              📋 View full itinerary
+              {joinTab === "polls" ? "🗳️ View polls" : "📋 View full itinerary"}
             </button>
           </div>
         )}
