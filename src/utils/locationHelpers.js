@@ -141,6 +141,20 @@ export function estimateTravelHours(from, to, mode) {
   return adjustForMode(drivingHrs, mode, km);
 }
 
+// Estimate straight-line distance in miles between two locations
+export function estimateDistanceMiles(from, to) {
+  if (!from || !to) return null;
+  const a = from.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  const b = to.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  if (a === b) return 0;
+  const coordA = findCoords(a), coordB = findCoords(b);
+  if (coordA && coordB) return Math.round(haversineKm(coordA, coordB) * 0.621);
+  // Fallback: estimate from driving hours × avg speed
+  // Use a lower speed for fallback to avoid overestimating short unknown routes
+  const hrs = estimateTravelHours(from, to);
+  return Math.round(hrs * 45);
+}
+
 export function getLocationActivities(place) {
   const key = place.toLowerCase();
   if (LOCATION_ACTIVITIES[key]) return LOCATION_ACTIVITIES[key];

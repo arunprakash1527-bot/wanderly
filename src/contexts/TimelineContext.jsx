@@ -2,7 +2,7 @@ import React, { createContext, useContext, useCallback } from "react";
 import { T } from "../styles/tokens";
 import { API } from "../constants/api";
 import { generateMultiDayTimeline } from "../utils/timelineGenerator";
-import { estimateTravelHours } from "../utils/locationHelpers";
+import { estimateTravelHours, estimateDistanceMiles } from "../utils/locationHelpers";
 import { useTripData } from "./TripDataContext";
 import { useTripUI } from "./TripUIContext";
 import { useAuth } from "./AuthContext";
@@ -130,17 +130,27 @@ export function TimelineProvider({ children }) {
     const places = getSmartRouteOrder(trip);
     const startLoc = trip?.startLocation || "";
     const autoStops = [];
+    const EV_CHARGE_THRESHOLD_MILES = 50; // Only suggest charging for legs > 50 miles
+    const REST_THRESHOLD_MILES = 60;      // Only suggest rest stops for legs > 60 miles
+
     if (isDriving && places.length > 0 && startLoc) {
-      if (isEV) {
-        autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: true });
-      } else {
-        autoStops.push({ type: "rest", label: "Rest & coffee stop", desc: `Between ${startLoc} and ${places[0]}`, time: "~1.5 hrs into journey", enabled: true, combineMeal: false });
+      const firstLegMiles = estimateDistanceMiles(startLoc, places[0]) || 100;
+      const firstLegHrs = estimateTravelHours(startLoc, places[0]);
+      const timeLabel = firstLegHrs >= 1.5 ? `~${Math.round(firstLegHrs * 10) / 10} hrs into journey` : `~${Math.round(firstLegHrs * 60)} min drive`;
+
+      if (isEV && firstLegMiles >= EV_CHARGE_THRESHOLD_MILES) {
+        autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${startLoc} and ${places[0]} (~${firstLegMiles} mi)`, time: timeLabel, enabled: true, combineMeal: true });
+      } else if (!isEV && firstLegMiles >= REST_THRESHOLD_MILES) {
+        autoStops.push({ type: "rest", label: "Rest & coffee stop", desc: `Between ${startLoc} and ${places[0]} (~${firstLegMiles} mi)`, time: timeLabel, enabled: true, combineMeal: false });
       }
     }
     if (isDriving) {
       for (let i = 0; i < places.length - 1; i++) {
-        if (isEV) {
-          autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${places[i]} and ${places[i + 1]}`, time: "En route", enabled: true, combineMeal: true });
+        const legMiles = estimateDistanceMiles(places[i], places[i + 1]) || 100;
+        const legHrs = estimateTravelHours(places[i], places[i + 1]);
+        if (isEV && legMiles >= EV_CHARGE_THRESHOLD_MILES) {
+          const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
+          autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${places[i]} and ${places[i + 1]} (~${legMiles} mi)`, time: legLabel, enabled: true, combineMeal: true });
         }
       }
     }
