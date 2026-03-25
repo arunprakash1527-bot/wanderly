@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
 import { Tag } from '../common/Tag';
@@ -9,11 +9,13 @@ import { getLocationVibes, getRegion } from '../../utils/locationHelpers';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useTrip } from '../../contexts/TripContext';
 import { useWizard } from '../../contexts/WizardContext';
+import { EV_MODELS, calculateRealisticRange } from '../../utils/evPlanner';
 
 export function CreateScreen() {
   const { navigate, showToast } = useNavigation();
   const { createTrip } = useTrip();
   const { wizStep, setWizStep, wizTrip, setWizTrip, wizShowErrors, setWizShowErrors, wizTravellers, setWizTravellers, wizStays, setWizStays, wizPrefs, setWizPrefs, placeInput, setPlaceInput, placeSuggestionsOpen, setPlaceSuggestionsOpen, staySearch, setStaySearch, staySearchOpen, setStaySearchOpen, stayPlacesResults, setStayPlacesResults, staySearching, handleStaySearchChange, foodSearch, setFoodSearch, adultActSearch, setAdultActSearch, olderActSearch, setOlderActSearch, youngerActSearch, setYoungerActSearch, expandedPrefSections, setExpandedPrefSections, placesFood, placesActivities, REGION_SUGGESTIONS, editingTripId, setEditingTripId } = useWizard();
+  const [evProfile, setEvProfile] = useState(() => { try { return JSON.parse(localStorage.getItem("twm_ev_profile")); } catch { return null; } });
   const wizSteps = ["Destination", "Dates & Travel", "Travellers", "Stays", "Preferences", "Review"];
 
   // ─── Shared wizard styles ───
@@ -196,6 +198,31 @@ export function CreateScreen() {
               );
             })}
           </div>
+          {wizTrip.travel.has("EV vehicle") && (
+            <div style={{ marginTop: 12, padding: "12px 16px", borderRadius: 12, background: T.greenL, border: `.5px solid ${T.border}` }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: T.ad, marginBottom: 8 }}>⚡ EV Vehicle Profile</p>
+              <select
+                value={evProfile?.id || ""}
+                onChange={e => {
+                  const selected = EV_MODELS.find(m => m.id === e.target.value);
+                  if (selected) {
+                    setEvProfile(selected);
+                    localStorage.setItem("twm_ev_profile", JSON.stringify(selected));
+                  }
+                }}
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `.5px solid ${T.border}`, fontSize: 13, fontFamily: T.font, background: T.s }}>
+                <option value="">Select your vehicle...</option>
+                {EV_MODELS.map(m => (
+                  <option key={m.id} value={m.id}>{m.make} {m.model} ({m.rangeMiles} mi range)</option>
+                ))}
+              </select>
+              {evProfile && (
+                <p style={{ fontSize: 11, color: T.t2, marginTop: 6 }}>
+                  {evProfile.make} {evProfile.model} · {calculateRealisticRange(evProfile).realisticRange} mi realistic range · {evProfile.connectors?.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Budget ── */}

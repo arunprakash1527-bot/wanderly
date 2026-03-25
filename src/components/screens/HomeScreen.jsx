@@ -149,7 +149,7 @@ export function HomeScreen() {
           </div>
         ))}
 
-        <div className="w-card" style={{ ...css.card, cursor: "pointer", position: "relative", overflow: "hidden" }} onClick={() => { setSelectedDay(1); navigate("trip"); }}>
+        <div className="w-card" style={{ ...css.card, cursor: "pointer", position: "relative", overflow: "hidden" }} onClick={() => setShowDemo(true)}>
           <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${T.al} 0%, transparent 70%)`, pointerEvents: "none" }} />
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
             <div>

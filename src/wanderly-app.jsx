@@ -7,12 +7,6 @@ import { AuthScreen } from './components/screens/AuthScreen';
 import { HomeScreen } from './components/screens/HomeScreen';
 import { CreateScreen } from './components/screens/CreateScreen';
 import { CreatedTripScreen } from './components/screens/CreatedTripScreen';
-import { TripScreen } from './components/screens/TripScreen';
-import { ChatScreen } from './components/screens/ChatScreen';
-import { VoteScreen } from './components/screens/VoteScreen';
-import { MemoriesScreen } from './components/screens/MemoriesScreen';
-import { ShareScreen } from './components/screens/ShareScreen';
-import { ExploreScreen } from './components/screens/ExploreScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { JoinPreviewScreen } from './components/screens/JoinPreviewScreen';
 
@@ -197,7 +191,7 @@ function DesktopSidePanel({ screen }) {
   }
 
   // Created trip overview
-  if ((screen === "createdTrip" || screen === "chat") && selectedCreatedTrip) {
+  if (screen === "createdTrip" && selectedCreatedTrip) {
     const trip = selectedCreatedTrip;
     const numDays = trip.timeline ? Object.keys(trip.timeline).length : 0;
     const totalItems = trip.timeline ? Object.values(trip.timeline).flat().length : 0;
@@ -434,12 +428,6 @@ function AppShell() {
           {screen === "home" && <HomeScreen />}
           {screen === "create" && <CreateScreen />}
           {screen === "createdTrip" && <CreatedTripScreen />}
-          {screen === "trip" && <TripScreen />}
-          {screen === "chat" && <ChatScreen />}
-          {screen === "vote" && <VoteScreen />}
-          {screen === "memories" && <MemoriesScreen />}
-          {screen === "share" && <ShareScreen />}
-          {screen === "explore" && <ExploreScreen />}
           {screen === "settings" && <SettingsScreen />}
           {screen === "joinPreview" && <JoinPreviewScreen />}
         </main>

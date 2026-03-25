@@ -39,10 +39,23 @@ export function CreatedTripScreen() {
   const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, wrappedPlaying, setWrappedPlaying, memoriesView, setMemoriesView, autoOrderEnabled, setAutoOrderEnabled, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
 
   const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const [showLateOptions, setShowLateOptions] = useState(false);
 
   // Packing list state
-  const [packingItems, setPackingItems] = useState([]);
-  const [packingGenerated, setPackingGenerated] = useState(false);
+  const [packingItems, setPackingItems] = useState(() => {
+    if (trip?.id) {
+      const saved = localStorage.getItem(`twm_packing_${trip.id}`);
+      if (saved) try { return JSON.parse(saved); } catch {}
+    }
+    return [];
+  });
+  const [packingGenerated, setPackingGenerated] = useState(() => {
+    if (trip?.id) {
+      const saved = localStorage.getItem(`twm_packing_${trip.id}`);
+      if (saved) try { JSON.parse(saved); return true; } catch {}
+    }
+    return false;
+  });
   const [newPackingItem, setNewPackingItem] = useState("");
   const [packingFilter, setPackingFilter] = useState("all"); // "all", "packed", "unpacked", person name
 
@@ -91,6 +104,13 @@ export function CreatedTripScreen() {
       setConflicts(detectConflicts(trip));
     }
   }, [trip?.timeline, selectedDay]); // eslint-disable-line
+
+  // Persist packing check state to localStorage
+  useEffect(() => {
+    if (trip?.id && packingItems.length > 0) {
+      localStorage.setItem(`twm_packing_${trip.id}`, JSON.stringify(packingItems));
+    }
+  }, [packingItems, trip?.id]); // eslint-disable-line
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const isLive = trip.status === "live";
   const isCompleted = trip.status === "completed";
@@ -462,6 +482,22 @@ export function CreatedTripScreen() {
                           <span style={{ fontSize: 11, color: T.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             Next: {nextInfo.item.title} <span style={{ color: nextInfo.overdue ? T.red : nextInfo.mins < 15 ? T.amber : T.t3, fontWeight: 600 }}>{nextInfo.overdue ? `⚠️ ${nextInfo.label}` : `in ${nextInfo.label}`}</span>
                           </span>
+                        )}
+                        {!prog.allDone && !showLateOptions && (
+                          <button onClick={() => setShowLateOptions(true)} style={{ marginLeft: "auto", flexShrink: 0, padding: "2px 8px", fontSize: 10, fontWeight: 600, borderRadius: 10, border: `.5px solid ${T.border}`, background: T.bg, color: T.t2, cursor: "pointer", fontFamily: T.font, whiteSpace: "nowrap" }}>
+                            ⏰ Late?
+                          </button>
+                        )}
+                        {!prog.allDone && showLateOptions && (
+                          <div style={{ marginLeft: "auto", display: "flex", gap: 4, flexShrink: 0 }}>
+                            {[15, 30, 45, 60].map(mins => (
+                              <button key={mins} onClick={() => { markRunningLate(trip, selectedDay, mins, setCreatedTrips, logActivity); setShowLateOptions(false); showToast(`Schedule adjusted by ${mins}m`); }}
+                                style={{ padding: "2px 6px", fontSize: 10, fontWeight: 600, borderRadius: 8, border: `.5px solid ${T.a}`, background: T.al, color: T.ad, cursor: "pointer", fontFamily: T.font }}>
+                                {mins}m
+                              </button>
+                            ))}
+                            <button onClick={() => setShowLateOptions(false)} style={{ padding: "2px 6px", fontSize: 10, borderRadius: 8, border: `.5px solid ${T.border}`, background: T.bg, color: T.t3, cursor: "pointer", fontFamily: T.font }}>✕</button>
+                          </div>
                         )}
                       </div>
                     );
@@ -1456,45 +1492,6 @@ export function CreatedTripScreen() {
                       fontSize: 12, fontFamily: T.font, outline: "none", minHeight: 36 }} />
                   <button onClick={addCustomItem} style={{ ...css.btn, ...css.btnP, ...css.btnSm, borderRadius: 10 }}>+</button>
                 </div>
-
-                {/* EV vehicle profile (show if EV travel mode) */}
-                {trip.travel?.some(m => /ev|electric/i.test(m)) && (
-                  <div style={{ margin: "0 20px 8px", padding: "10px 14px", borderRadius: 12, background: T.greenL,
-                    border: `.5px solid ${T.border}`, fontSize: 11 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontWeight: 600, color: T.ad }}>⚡ EV Vehicle Profile</span>
-                      <button onClick={() => setShowEvSetup(!showEvSetup)}
-                        style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "3px 10px" }}>
-                        {evProfile ? "Change" : "Set up"}
-                      </button>
-                    </div>
-                    {evProfile && !showEvSetup && (
-                      <p style={{ color: T.t2, marginTop: 4 }}>
-                        {evProfile.make} {evProfile.model} · {calculateRealisticRange(evProfile).realisticRange} mi real range · {evProfile.connectors?.join(", ")}
-                      </p>
-                    )}
-                    {showEvSetup && (
-                      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                        <select
-                          value={evProfile?.id || ""}
-                          onChange={e => {
-                            const selected = EV_MODELS.find(m => m.id === e.target.value);
-                            if (selected) {
-                              setEvProfile(selected);
-                              localStorage.setItem("twm_ev_profile", JSON.stringify(selected));
-                              setShowEvSetup(false);
-                            }
-                          }}
-                          style={{ padding: "8px 12px", borderRadius: 8, border: `.5px solid ${T.border}`, fontSize: 12, fontFamily: T.font }}>
-                          <option value="">Select your vehicle...</option>
-                          {EV_MODELS.map(m => (
-                            <option key={m.id} value={m.id}>{m.make} {m.model} ({m.rangeMiles} mi)</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* Grouped items */}
                 <div style={{ padding: "0 20px 100px" }}>

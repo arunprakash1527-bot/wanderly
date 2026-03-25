@@ -15,7 +15,6 @@ export function TabBar({ active, onNav }) {
   const tabs = [
     { id: "trip", label: "Timeline", screen: "trip" },
     { id: "chat", label: "Chat", screen: "chat" },
-    { id: "explore", label: "Explore", screen: "explore" },
     { id: "memories", label: "Memories", screen: "memories" },
     { id: "settings", label: "Settings", screen: "settings" },
   ];
