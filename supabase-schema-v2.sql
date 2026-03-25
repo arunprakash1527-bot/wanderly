@@ -47,6 +47,7 @@ create table public.trips (
   status text default 'draft' check (status in ('draft', 'live', 'completed')),
   share_code text unique default upper(substr(md5(random()::text), 1, 6)),
   lead_user_id uuid references public.profiles(id),
+  timeline jsonb default null,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

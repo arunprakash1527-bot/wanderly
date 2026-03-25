@@ -17,6 +17,7 @@ export function TripDataProvider({ children }) {
   const [createdTrips, setCreatedTrips] = useState([]);
   const [selectedCreatedTrip, setSelectedCreatedTrip] = useState(null);
   const [joinShareCode, setJoinShareCode] = useState("");
+  const [joinTab, setJoinTab] = useState(null);
   const [joinedSlot, setJoinedSlot] = useState(null);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -126,6 +127,16 @@ export function TripDataProvider({ children }) {
       console.error('Error saving trip:', err);
       showToast("Failed to save — check connection", "error");
       return tripData;
+    }
+  };
+
+  // ─── Supabase: Save Timeline ───
+  const saveTimelineToDB = async (tripId, timeline) => {
+    if (!user || user.id === 'demo' || !tripId) return;
+    try {
+      await supabase.from('trips').update({ timeline, updated_at: new Date().toISOString() }).eq('id', tripId);
+    } catch (err) {
+      console.error('Error saving timeline:', err);
     }
   };
 
@@ -302,8 +313,11 @@ export function TripDataProvider({ children }) {
   };
 
   // ─── WhatsApp Share Helper ───
-  const shareToWhatsApp = (tripName, message, tripId) => {
-    const link = `${window.location.origin}/join/${tripId}`;
+  const shareToWhatsApp = (tripName, message, shareCodeOrId, options = {}) => {
+    const trip = createdTrips.find(t => t.dbId === shareCodeOrId || t.id === shareCodeOrId);
+    const code = trip?.shareCode || shareCodeOrId;
+    let link = `${window.location.origin}?join=${code}`;
+    if (options.tab) link += `&tab=${options.tab}`;
     const text = `${message}\n\n${tripName} on TripWithMe\n${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
@@ -333,6 +347,8 @@ export function TripDataProvider({ children }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const joinCode = params.get('join');
+    const tab = params.get('tab');
+    if (tab) setJoinTab(tab);
     if (joinCode) {
       setJoinShareCode(joinCode);
       lookupTripByShareCode(joinCode).then(data => {
@@ -344,6 +360,8 @@ export function TripDataProvider({ children }) {
           navigate('joinPreview');
         }
       });
+      // Clean up URL params without reload
+      try { window.history.replaceState({}, '', window.location.origin + window.location.pathname); } catch {}
     }
   }, []);
 
@@ -510,6 +528,7 @@ export function TripDataProvider({ children }) {
     allRecentActivity,
     loadTripsFromDB,
     saveTripToDB,
+    saveTimelineToDB,
     updateTripStatusInDB,
     lookupTripByShareCode,
     joinTripAsTraveller,

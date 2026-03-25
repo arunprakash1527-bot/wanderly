@@ -16,7 +16,7 @@ export function TimelineProvider({ children }) {
   const { showToast, navigate } = useNavigation();
   const {
     createdTrips, setCreatedTrips, selectedCreatedTrip, setSelectedCreatedTrip,
-    logActivity, updateTripStatusInDB, setShowNotifications,
+    logActivity, updateTripStatusInDB, setShowNotifications, saveTimelineToDB,
   } = useTripData();
   const {
     selectedDay, setSelectedDay, setTripDetailTab,
@@ -71,6 +71,11 @@ export function TimelineProvider({ children }) {
       if (t.id !== id) return t;
       return { ...t, timeline };
     }));
+
+    // Persist timeline to Supabase
+    const dbId = trip.dbId || trip.id;
+    saveTimelineToDB(dbId, timeline);
+
     showToast("Itinerary generated!");
   };
 
@@ -206,6 +211,11 @@ export function TimelineProvider({ children }) {
       if (t.id !== id) return { ...t, status: t.status === "live" ? "new" : t.status };
       return updated;
     }));
+
+    // Persist timeline to Supabase
+    const dbId = trip.dbId || trip.id;
+    saveTimelineToDB(dbId, updated.timeline);
+
     logActivity(id, "🚀", "Trip activated — itinerary generated!", "milestone");
     setShowActivationModal(false);
     setPendingActivationTripId(null);
@@ -257,13 +267,22 @@ export function TimelineProvider({ children }) {
     return { time: "2:00 PM", mins: 840, label: "Activity" };
   }, [createdTrips]);
 
+  // ─── Helper: persist timeline after local mutation ───
+  const persistTimeline = (tripId, newTimeline) => {
+    const trip = createdTrips.find(t => t.id === tripId);
+    const dbId = trip?.dbId || tripId;
+    saveTimelineToDB(dbId, newTimeline);
+  };
+
   // ─── Timeline Editing Functions ───
   const updateTimelineItem = (tripId, idx, field, value) => {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
       const tl = t.timeline || {};
       const dayItems = (tl[selectedDay] || []).map((item, i) => i === idx ? { ...item, [field]: value } : item);
-      return { ...t, timeline: { ...tl, [selectedDay]: dayItems } };
+      const newTimeline = { ...tl, [selectedDay]: dayItems };
+      persistTimeline(tripId, newTimeline);
+      return { ...t, timeline: newTimeline };
     }));
   };
 
@@ -283,6 +302,7 @@ export function TimelineProvider({ children }) {
       if (t.id !== tripId) return t;
       const tl = { ...(t.timeline || {}) };
       tl[dayKey] = [...(tl[dayKey] || [])].filter((_, i) => i !== idx);
+      persistTimeline(tripId, tl);
       return { ...t, timeline: tl };
     }));
     setEditingTimelineIdx(null);
@@ -297,7 +317,9 @@ export function TimelineProvider({ children }) {
       const newIdx = idx + direction;
       if (newIdx < 0 || newIdx >= items.length) return t;
       [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
-      return { ...t, timeline: { ...tl, [selectedDay]: items } };
+      const newTimeline = { ...tl, [selectedDay]: items };
+      persistTimeline(tripId, newTimeline);
+      return { ...t, timeline: newTimeline };
     }));
     setEditingTimelineIdx(null);
   };
@@ -310,7 +332,9 @@ export function TimelineProvider({ children }) {
       const existing = tl[selectedDay] || [];
       newIdx = existing.length;
       const newItem = { time: "12:00 PM", title: "New activity", desc: "Tap to edit details", group: "Everyone", color: T.blue };
-      return { ...t, timeline: { ...tl, [selectedDay]: [...existing, newItem] } };
+      const newTimeline = { ...tl, [selectedDay]: [...existing, newItem] };
+      persistTimeline(tripId, newTimeline);
+      return { ...t, timeline: newTimeline };
     }));
     setEditingTimelineIdx(newIdx);
     setTimeout(() => {

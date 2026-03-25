@@ -1,6 +1,6 @@
 /**
  * Export trip itinerary as a print-friendly PDF using browser print dialog.
- * Opens a new window with clean, print-optimized HTML and auto-triggers print.
+ * Uses a hidden iframe to avoid popup blockers, then triggers print.
  */
 export function exportItineraryAsPDF(trip, tripStart) {
   if (!trip) return;
@@ -222,17 +222,31 @@ export function exportItineraryAsPDF(trip, tripStart) {
 
   <div class="footer">Exported from Wanderly</div>
 
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); }, 400);
-    };
-  </script>
 </body>
 </html>`;
 
-  const printWindow = window.open("", "_blank");
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
-  }
+  // Use hidden iframe + print to avoid popup blockers
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Wait for content to render, then print
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    // Clean up after print dialog closes
+    setTimeout(() => {
+      try { document.body.removeChild(iframe); } catch (e) { /* already removed */ }
+    }, 1000);
+  }, 500);
 }

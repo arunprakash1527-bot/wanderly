@@ -61,7 +61,7 @@ export function mapTripFromDB(t) {
     } : { food: [], adultActs: [], olderActs: [], youngerActs: [], instructions: "", activities: [] },
     createdAt: t.created_at,
     dbId: t.id,
-    timeline: [],
+    timeline: t.timeline || [],
     polls: t.polls || [],
     activity: t.activity || [],
   };
