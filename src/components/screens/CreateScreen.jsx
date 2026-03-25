@@ -553,13 +553,19 @@ export function CreateScreen() {
             <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
               <button onClick={() => {
                 const q = staySearch.trim() || (locationName ? `hotels near ${locationName}` : "hotels");
-                window.open(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(q)}`, "_blank");
+                let url = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(q)}`;
+                if (wizTrip.start) url += `&checkin=${wizTrip.start}`;
+                if (wizTrip.end) url += `&checkout=${wizTrip.end}`;
+                window.open(url, "_blank");
               }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
                 Search Booking.com
               </button>
               <button onClick={() => {
                 const q = staySearch.trim() || (locationName ? `accommodation near ${locationName}` : "accommodation");
-                window.open(`https://www.google.com/travel/hotels?q=${encodeURIComponent(q)}`, "_blank");
+                let url = `https://www.google.com/travel/hotels?q=${encodeURIComponent(q)}`;
+                if (wizTrip.start) url += `&checkin=${wizTrip.start}`;
+                if (wizTrip.end) url += `&checkout=${wizTrip.end}`;
+                window.open(url, "_blank");
               }} style={{ ...css.btn, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
                 Google Hotels
               </button>

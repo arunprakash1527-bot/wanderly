@@ -668,7 +668,7 @@ export function CreatedTripScreen() {
 
           {/* ── CHAT TAB ── */}
           {tripDetailTab === "chat" && (() => {
-            const tripDays = trip.start && trip.end ? Math.max(1, Math.ceil((new Date(trip.end) - new Date(trip.start)) / 86400000) + 1) : Object.keys(trip.timeline || {}).length || 5;
+            const tripDays = trip.rawStart && trip.rawEnd ? Math.max(1, Math.ceil((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1) : Object.keys(trip.timeline || {}).length || 5;
             const currentLoc = trip.places?.[(selectedDay - 1) % (trip.places?.length || 1)] || "this area";
 
             // Parse structured suggestion cards from AI messages
@@ -1523,8 +1523,8 @@ export function CreatedTripScreen() {
 
           {/* ── MEMORIES TAB ── */}
           {tripDetailTab === "memories" && (() => {
-            const photoDayCount = trip.start && trip.end
-              ? Math.max(1, Math.ceil((new Date(trip.end) - new Date(trip.start)) / 86400000) + 1)
+            const photoDayCount = trip.rawStart && trip.rawEnd
+              ? Math.max(1, Math.ceil((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1)
               : Object.keys(trip.timeline || {}).length || 5;
             const dayGroups = Array.from({ length: Math.min(photoDayCount, 30) }, (_, i) => `Day ${i + 1}`);
             const taggedByDay = {};

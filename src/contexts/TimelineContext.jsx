@@ -125,7 +125,7 @@ export function TimelineProvider({ children }) {
   // ─── Make Trip Live (opens activation modal) ───
   const makeTripLive = (id) => {
     const trip = createdTrips.find(t => t.id === id);
-    const isEV = trip?.travel?.some(m => /ev\s*vehicle/i.test(m));
+    const isEV = trip?.travel?.some(m => /\bev\b/i.test(m) && !/non[\s-]*ev/i.test(m));
     const isDriving = isEV || trip?.travel?.some(m => /non-ev\s*vehicle/i.test(m));
     const places = getSmartRouteOrder(trip);
     const startLoc = trip?.startLocation || "";

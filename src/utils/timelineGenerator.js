@@ -43,7 +43,7 @@ export function generateMultiDayTimeline(trip) {
   const startMin = prefs.startTime ? parseInt(prefs.startTime.split(":")[1] || "0") : 0;
   const isPacked = prefs.dayOnePace === "packed";
   const isRelaxed = prefs.dayOnePace === "relaxed";
-  const isEV = trip.travel?.some(m => /ev/i.test(m));
+  const isEV = trip.travel?.some(m => /\bev\b/i.test(m) && !/non[\s-]*ev/i.test(m));
   const enabledStops = (prefs.stopovers || []).filter(s => s.enabled);
   const tags = (base) => { const t = [base]; if (wantsDogFriendly) t.push("🐕 Dog-friendly"); if (wantsAccessible) t.push("♿ Accessible"); return t.join(" · "); };
   const fmtTime = (h, m = 0) => { const hh = Math.floor(h); const mm = m || Math.round((h - hh) * 60); const suffix = hh >= 12 ? "PM" : "AM"; const hr = hh > 12 ? hh - 12 : hh === 0 ? 12 : hh; return `${hr}:${mm.toString().padStart(2, "0")} ${suffix}`; };

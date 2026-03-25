@@ -1223,12 +1223,18 @@ export default function WanderlyApp() {
 
     const openLiveSearch = () => {
       const query = staySearch.trim() || (locationName ? `hotels near ${locationName}` : "hotels");
-      window.open(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(query)}`, "_blank");
+      let url = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(query)}`;
+      if (wizTrip.start) url += `&checkin=${wizTrip.start}`;
+      if (wizTrip.end) url += `&checkout=${wizTrip.end}`;
+      window.open(url, "_blank");
     };
 
     const openGoogleSearch = () => {
       const query = staySearch.trim() || (locationName ? `accommodation near ${locationName}` : "accommodation");
-      window.open(`https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`, "_blank");
+      let url = `https://www.google.com/travel/hotels?q=${encodeURIComponent(query)}`;
+      if (wizTrip.start) url += `&checkin=${wizTrip.start}`;
+      if (wizTrip.end) url += `&checkout=${wizTrip.end}`;
+      window.open(url, "_blank");
     };
 
     return (
