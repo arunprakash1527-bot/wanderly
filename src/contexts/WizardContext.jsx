@@ -1,19 +1,36 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { REGION_SUGGESTIONS } from "../constants/regions";
 import { API } from "../constants/api";
+import { useAuth } from "./AuthContext";
 
 const WizardContext = createContext(null);
 
 export function WizardProvider({ children }) {
+  const { user } = useAuth();
+  const userDisplayName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "You";
+
   // ─── Wizard Step ───
   const [wizStep, setWizStep] = useState(0);
 
   // ─── New Trip Wizard State ───
   const [wizTrip, setWizTrip] = useState({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "", startLocation: "" });
-  const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [], infants: [] });
+  const [wizTravellers, setWizTravellers] = useState({ adults: [{ name: userDisplayName, email: "", isLead: true }], olderKids: [], youngerKids: [], infants: [] });
   const [wizStays, setWizStays] = useState([]);
   const [wizPrefs, setWizPrefs] = useState({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
   const [wizShowErrors, setWizShowErrors] = useState(false);
+
+  // Update lead adult name when user auth resolves
+  useEffect(() => {
+    if (userDisplayName && userDisplayName !== "You") {
+      setWizTravellers(prev => {
+        const lead = prev.adults[0];
+        if (lead?.isLead && (lead.name === "You" || !lead.name)) {
+          return { ...prev, adults: [{ ...lead, name: userDisplayName }, ...prev.adults.slice(1)] };
+        }
+        return prev;
+      });
+    }
+  }, [userDisplayName]);
 
   // ─── Place Input (Details step) ───
   const [placeInput, setPlaceInput] = useState("");
@@ -136,7 +153,7 @@ export function WizardProvider({ children }) {
   // ─── Reset Wizard ───
   const resetWizard = useCallback(() => {
     setWizTrip({ name: "", brief: "", start: "", end: "", places: [], travel: new Set(), budget: "", startLocation: "" });
-    setWizTravellers({ adults: [{ name: "You", email: "", isLead: true }], olderKids: [], youngerKids: [], infants: [] });
+    setWizTravellers({ adults: [{ name: userDisplayName, email: "", isLead: true }], olderKids: [], youngerKids: [], infants: [] });
     setWizStays([]);
     setWizPrefs({ food: new Set(), adultActs: new Set(), olderActs: new Set(), youngerActs: new Set(), instructions: "" });
     setStaySearch("");

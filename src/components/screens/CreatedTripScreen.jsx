@@ -1888,10 +1888,11 @@ export function CreatedTripScreen() {
                     const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
                     const status = a.isLead ? "Organiser" : a.dbId ? "Joined" : "Pending";
                     const statusColor = a.isLead ? T.ad : a.dbId ? T.blue : T.t3;
+                    const displayName = (a.name === "You" && a.isLead && user) ? (user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || a.name) : (a.name || `Adult ${i + 1}`);
                     return (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < (trip.travellers?.adults?.length || 0) - 1 ? `.5px solid ${T.border}` : "none" }}>
-                        <Avatar bg={adultColors[i % adultColors.length]} label={getInit(a.name)} size={24} />
-                        <p style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{a.name || `Adult ${i + 1}`}</p>
+                        <Avatar bg={adultColors[i % adultColors.length]} label={getInit(displayName)} size={24} />
+                        <p style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{displayName}</p>
                         <p style={{ fontSize: 10, color: statusColor }}>{status}</p>
                       </div>
                     );
