@@ -24,6 +24,7 @@ import { EV_MODELS, calculateRealisticRange, planChargingStops } from '../../uti
 import { checkInActivity, markRunningLate, getDayProgress, getTimeToNext } from '../../utils/liveTrip';
 import { checkWeatherAlerts } from '../../utils/weatherAlerts';
 import { exportItineraryAsPDF } from '../../utils/exportItinerary';
+import { TimelineItemSkeleton } from '../common/Skeleton';
 
 const fmtDate = (iso) => {
   if (!iso) return "";
@@ -436,13 +437,22 @@ export function CreatedTripScreen() {
           {tripDetailTab === "itinerary" && (
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
               {!tripHasTimeline && (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 36, marginBottom: 8 }}>✨</div>
                     <p style={{ fontSize: 14, fontWeight: 500, color: T.ad, marginBottom: 4 }}>Your itinerary is being prepared</p>
                     <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.5, marginBottom: 12, fontStyle: "italic" }}>Your adventure starts here -- generate a plan or add activities manually.</p>
                     <button onClick={() => { generateAndSetTimeline(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm }}>Generate itinerary</button>
                   </div>
+                  {trip.status === "live" && (
+                    <div style={{ width: "100%", padding: "16px 20px", marginTop: 16 }}>
+                      <TimelineItemSkeleton />
+                      <TimelineItemSkeleton />
+                      <TimelineItemSkeleton />
+                      <TimelineItemSkeleton />
+                      <TimelineItemSkeleton />
+                    </div>
+                  )}
                 </div>
               )}
               {tripHasTimeline && (

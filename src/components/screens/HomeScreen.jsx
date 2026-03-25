@@ -8,6 +8,7 @@ import { TabBar } from '../common/TabBar';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useTrip } from '../../contexts/TripContext';
 import { useWizard } from '../../contexts/WizardContext';
+import { TripCardSkeleton } from '../common/Skeleton';
 
 const fmtDate = (iso) => {
   if (!iso) return "";
@@ -17,7 +18,7 @@ const fmtDate = (iso) => {
 
 export function HomeScreen() {
   const { navigate, setShowDemo, setDemoSlide } = useNavigation();
-  const { createdTrips, viewCreatedTrip, makeTripLive, deleteCreatedTrip, showNotifications, setShowNotifications, totalUnread, lastSeenActivity, allRecentActivity, getUnreadCount, markTripSeen, setSelectedDay, setTripDetailTab } = useTrip();
+  const { createdTrips, syncing, viewCreatedTrip, makeTripLive, deleteCreatedTrip, showNotifications, setShowNotifications, totalUnread, lastSeenActivity, allRecentActivity, getUnreadCount, markTripSeen, setSelectedDay, setTripDetailTab } = useTrip();
   const { resetWizard } = useWizard();
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
@@ -72,7 +73,14 @@ export function HomeScreen() {
         </div>
       </>}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        {createdTrips.length === 0 ? (
+        {syncing && createdTrips.length === 0 ? (
+          <>
+            <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>Loading your trips...</p>
+            <TripCardSkeleton />
+            <TripCardSkeleton />
+            <TripCardSkeleton />
+          </>
+        ) : createdTrips.length === 0 ? (
           <div style={{ textAlign: "center", marginBottom: 20 }}>
             <p style={{ fontFamily: T.fontD, fontSize: 20, fontWeight: 400, color: T.t1, marginBottom: 4 }}>Welcome aboard</p>
             <p style={{ fontSize: 13, color: T.t3 }}>Explore the demo below or create your first trip</p>
