@@ -43,9 +43,10 @@ export function ExpenseProvider({ children }) {
 
   const saveExpense = async (trip, { selectedCreatedTrip, createdTrips } = {}) => {
     const amount = parseFloat(expenseAmount);
-    if (!expenseDesc.trim() || isNaN(amount) || amount <= 0 || !expensePaidBy || expenseParticipants.length === 0) {
-      showToast("Fill in all fields", "error"); return;
-    }
+    if (isNaN(amount) || amount <= 0) { showToast("Enter an amount", "error"); return; }
+    if (!expenseDesc.trim()) { showToast("Add a description", "error"); return; }
+    if (!expensePaidBy) { showToast("Select who paid", "error"); return; }
+    if (expenseParticipants.length === 0) { showToast("Select who to split with", "error"); return; }
     const tripDbId = trip.dbId || trip.id;
     let splits;
     const selected = expenseParticipants;

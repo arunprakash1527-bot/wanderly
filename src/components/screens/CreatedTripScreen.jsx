@@ -1161,7 +1161,7 @@ export function CreatedTripScreen() {
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {/* Add Expense Modal — bottom sheet style */}
               {showAddExpense && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 100, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+                <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
                   onClick={(e) => { if (e.target === e.currentTarget) resetExpenseForm(); }}>
                   <div style={{ background: T.bg, borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, maxHeight: "88vh", overflowY: "auto", padding: "8px 20px 30px", animation: "demoSlideUp .25s ease-out" }}>
                     {/* Drag handle */}
