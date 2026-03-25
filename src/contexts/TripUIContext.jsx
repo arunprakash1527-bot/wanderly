@@ -9,7 +9,7 @@ export function TripUIProvider({ children }) {
   const [editingTimelineIdx, setEditingTimelineIdx] = useState(null);
   const [expandedSections, setExpandedSections] = useState({});
   const [bookingStates, setBookingStates] = useState({});
-  const [showMap, setShowMap] = useState(true);
+  const [showMap, setShowMap] = useState(false);
   const [tripDirections, setTripDirections] = useState(null);
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [activationPrefs, setActivationPrefs] = useState({ startTime: "08:00", dayOnePace: "balanced", notes: "", stopovers: [] });

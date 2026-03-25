@@ -416,248 +416,145 @@ export function CreatedTripScreen() {
                     })}
                   </div>
 
-                  {/* Live Trip Progress — only show time-sensitive info when selected day is today */}
+                  {/* Live Trip Progress — compact single line, only for today */}
                   {isLive && (() => {
                     const prog = getDayProgress(trip.timeline, selectedDay);
                     if (prog.total === 0) return null;
-                    // Check if selected day is actually today
                     const dayDate = tripStart ? new Date(tripStart.getTime() + (selectedDay - 1) * 86400000) : null;
                     const today = new Date(); today.setHours(0,0,0,0);
                     const isToday = dayDate && dayDate.toDateString() === today.toDateString();
-                    const isFuture = dayDate && dayDate > today;
-                    const nextInfo = isToday ? getTimeToNext(trip.timeline, selectedDay) : null;
+                    if (!isToday) return null;
+                    const nextInfo = getTimeToNext(trip.timeline, selectedDay);
                     return (
-                      <div style={{ margin: "8px 20px 0", padding: "10px 14px", borderRadius: 12,
-                        background: prog.allDone ? T.greenL : `linear-gradient(135deg, ${T.al}, ${T.s})`,
-                        border: `.5px solid ${prog.allDone ? T.green : T.a}30` }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: prog.allDone ? T.green : T.ad }}>
-                            {prog.allDone ? "✅ Day complete!" : `📍 Day ${selectedDay} Progress`}
-                          </span>
-                          <span style={{ fontSize: 11, color: T.t3 }}>{prog.done}/{prog.total} done</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 20px", background: prog.allDone ? T.greenL : T.al, borderBottom: `.5px solid ${T.border}` }}>
+                        <div style={{ width: 32, height: 4, borderRadius: 2, background: T.s2, overflow: "hidden", flexShrink: 0 }}>
+                          <div style={{ height: "100%", borderRadius: 2, background: prog.allDone ? T.green : T.a, width: `${prog.percent}%` }} />
                         </div>
-                        <div style={{ height: 4, borderRadius: 2, background: T.s2, overflow: "hidden", marginBottom: 6 }}>
-                          <div style={{ height: "100%", borderRadius: 2, background: prog.allDone ? T.green : T.a,
-                            width: `${prog.percent}%`, transition: "width .3s" }} />
-                        </div>
+                        <span style={{ fontSize: 11, color: prog.allDone ? T.green : T.ad, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {prog.allDone ? "✅ Done" : `${prog.done}/${prog.total}`}
+                        </span>
                         {nextInfo && !prog.allDone && (
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 11, color: T.t2 }}>
-                              Next: <strong>{nextInfo.item.title}</strong> at {nextInfo.item.time}
-                            </span>
-                            <span style={{ fontSize: 11, fontWeight: 600,
-                              color: nextInfo.overdue ? T.red : nextInfo.mins < 15 ? T.amber : T.t3 }}>
-                              {nextInfo.overdue ? `⚠️ ${nextInfo.label}` : `in ${nextInfo.label}`}
-                            </span>
-                          </div>
-                        )}
-                        {!prog.allDone && isToday && (
-                          <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-                            <button onClick={() => markRunningLate(trip, selectedDay, 15, setCreatedTrips, logActivity)}
-                              style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", color: T.amber, borderColor: T.amber }}>
-                              ⏰ Running 15 min late
-                            </button>
-                            <button onClick={() => markRunningLate(trip, selectedDay, 30, setCreatedTrips, logActivity)}
-                              style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", color: T.coral, borderColor: T.coral }}>
-                              ⏰ Running 30 min late
-                            </button>
-                          </div>
-                        )}
-                        {isFuture && !prog.allDone && (
-                          <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>Progress tracking activates on the day</p>
+                          <span style={{ fontSize: 11, color: T.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            Next: {nextInfo.item.title} <span style={{ color: nextInfo.overdue ? T.red : nextInfo.mins < 15 ? T.amber : T.t3, fontWeight: 600 }}>{nextInfo.overdue ? `⚠️ ${nextInfo.label}` : `in ${nextInfo.label}`}</span>
+                          </span>
                         )}
                       </div>
                     );
                   })()}
 
-                  {/* School Holiday Warning */}
-                  {trip.rawStart && trip.rawEnd && (() => {
-                    const hol = checkSchoolHolidays(trip.rawStart, trip.rawEnd);
-                    return hol.warnings.length > 0 ? (
-                      <div style={{ padding: "6px 20px 0", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {/* Compact info strip — weather, conflicts, map toggle, tips */}
+                  {(() => {
+                    const tripStartDate = trip.rawStart ? new Date(trip.rawStart + "T00:00:00") : null;
+                    const daysUntilTrip = tripStartDate ? Math.floor((tripStartDate - new Date()) / 86400000) : 999;
+                    const showWeather = daysUntilTrip <= 7 && daysUntilTrip >= -30;
+                    const hol = (trip.rawStart && trip.rawEnd) ? checkSchoolHolidays(trip.rawStart, trip.rawEnd) : { warnings: [] };
+                    const dayConflicts = conflicts.filter(c => !c.dayNum || c.dayNum === selectedDay);
+                    const hasPills = showWeather || dayConflicts.length > 0 || hol.warnings.length > 0 || trip.places?.length > 0 || smartTips.length > 0;
+                    if (!hasPills) return null;
+                    return (
+                      <div style={{ display: "flex", gap: 6, padding: "6px 20px", overflowX: "auto", borderBottom: `.5px solid ${T.border}`, WebkitOverflowScrolling: "touch" }}>
+                        {/* Weather pill */}
+                        {showWeather && intelligence?.weather?.current && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 14, background: T.blueL, fontSize: 10, color: T.blue, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0 }}>
+                            {intelligence.signals?.find(s => s.type === "weather")?.icon || "🌤️"} {intelligence.signals?.find(s => s.type === "weather")?.label || ""}
+                          </span>
+                        )}
+                        {/* Driving pill */}
+                        {tripDirections && (() => {
+                          const legs = tripDirections.legs || [];
+                          return legs.length > 0 ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 14, background: T.s2, fontSize: 10, color: T.t2, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0 }}>
+                              🚗 {tripDirections.totalDistance} · {tripDirections.totalDuration}
+                            </span>
+                          ) : null;
+                        })()}
+                        {/* Conflict pill */}
+                        {dayConflicts.length > 0 && (
+                          <button onClick={() => setShowConflicts(!showConflicts)}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 14, background: dayConflicts.some(c => c.severity === "error") ? T.redL : T.amberL, fontSize: 10, color: dayConflicts.some(c => c.severity === "error") ? T.red : T.amber, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, border: "none", cursor: "pointer", fontFamily: T.font }}>
+                            ⚠️ {dayConflicts.length} {dayConflicts.length === 1 ? "issue" : "issues"}
+                          </button>
+                        )}
+                        {/* Holiday pills */}
                         {hol.warnings.map((w, i) => (
-                          <div key={i} style={{ padding: "8px 12px", borderRadius: 10,
-                            background: w.severity === "positive" ? T.greenL : w.severity === "warning" ? T.amberL : T.blueL,
-                            fontSize: 11, color: w.severity === "positive" ? T.green : w.severity === "warning" ? T.amber : T.blue,
-                            display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 14 }}>{w.icon}</span>
-                            <span><strong>{w.title}</strong> — {w.message}</span>
-                          </div>
+                          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "4px 10px", borderRadius: 14, background: w.severity === "positive" ? T.greenL : w.severity === "warning" ? T.amberL : T.blueL, fontSize: 10, color: w.severity === "positive" ? T.green : w.severity === "warning" ? T.amber : T.blue, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0 }}>
+                            {w.icon} {w.title}
+                          </span>
+                        ))}
+                        {/* Map toggle pill */}
+                        {trip.places?.length > 0 && (
+                          <button onClick={() => setShowMap(!showMap)}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "4px 10px", borderRadius: 14, background: showMap ? T.al : T.s2, fontSize: 10, color: showMap ? T.ad : T.t3, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0, border: "none", cursor: "pointer", fontFamily: T.font }}>
+                            🗺️ Map
+                          </button>
+                        )}
+                        {/* Tips pill */}
+                        {showWeather && smartTips.length > 0 && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "4px 10px", borderRadius: 14, background: T.s2, fontSize: 10, color: T.t3, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0, cursor: "pointer" }}
+                            onClick={() => { const el = document.getElementById('smart-tips-panel'); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }}>
+                            💡 {smartTips.length} tips
+                          </span>
+                        )}
+                        {/* Currency pill */}
+                        {showWeather && intelligence?.currency?.rates && Object.entries(intelligence.currency.rates).slice(0, 1).map(([code, info]) => (
+                          <span key={code} style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "4px 10px", borderRadius: 14, background: T.s2, fontSize: 10, color: T.t2, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0 }}>
+                            💱 {info.example}
+                          </span>
                         ))}
                       </div>
-                    ) : null;
+                    );
                   })()}
 
-                  {/* Conflict Alerts */}
-                  {conflicts.length > 0 && (
-                    <div style={{ padding: "6px 20px 0" }}>
-                      <button onClick={() => setShowConflicts(!showConflicts)}
-                        style={{ ...css.btn, ...css.btnSm, width: "100%", justifyContent: "space-between",
-                          background: conflicts.some(c => c.severity === "error") ? T.redL : T.amberL,
-                          color: conflicts.some(c => c.severity === "error") ? T.red : T.amber,
-                          borderColor: "transparent", fontSize: 11 }}>
-                        <span>⚠️ {conflicts.length} schedule {conflicts.length === 1 ? "issue" : "issues"} detected</span>
-                        <span>{showConflicts ? "▲" : "▼"}</span>
-                      </button>
-                      {showConflicts && (
-                        <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
-                          {conflicts.filter(c => !c.dayNum || c.dayNum === selectedDay).map((c, i) => (
-                            <div key={i} style={{ padding: "8px 12px", borderRadius: 8, background: T.s,
-                              border: `.5px solid ${c.severity === "error" ? T.red : c.severity === "warning" ? T.amber : T.border}`,
-                              fontSize: 11, color: T.t2, display: "flex", alignItems: "flex-start", gap: 8 }}>
-                              <span style={{ fontSize: 14, flexShrink: 0 }}>{c.icon}</span>
-                              <span>{c.message}</span>
-                            </div>
-                          ))}
-                          {conflicts.filter(c => c.dayNum && c.dayNum !== selectedDay).length > 0 && (
-                            <p style={{ fontSize: 10, color: T.t3, padding: "4px 0" }}>
-                              + {conflicts.filter(c => c.dayNum && c.dayNum !== selectedDay).length} issues on other days
-                            </p>
-                          )}
+                  {/* Conflict details — collapsible */}
+                  {showConflicts && conflicts.filter(c => !c.dayNum || c.dayNum === selectedDay).length > 0 && (
+                    <div style={{ padding: "4px 20px 4px", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {conflicts.filter(c => !c.dayNum || c.dayNum === selectedDay).map((c, i) => (
+                        <div key={i} style={{ padding: "6px 10px", borderRadius: 8, background: T.s,
+                          border: `.5px solid ${c.severity === "error" ? T.red : c.severity === "warning" ? T.amber : T.border}`,
+                          fontSize: 10, color: T.t2, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                          <span style={{ fontSize: 12, flexShrink: 0 }}>{c.icon}</span>
+                          <span>{c.message}</span>
                         </div>
-                      )}
+                      ))}
                     </div>
                   )}
 
-                  {/* Smart Tips + Weather — only show for trips starting within 7 days */}
-                  {(() => {
-                    const tripStart = trip.rawStart ? new Date(trip.rawStart + "T00:00:00") : null;
-                    const daysUntilTrip = tripStart ? Math.floor((tripStart - new Date()) / 86400000) : 999;
-                    const showWeather = daysUntilTrip <= 7 && daysUntilTrip >= -30; // during or up to 7 days before
-                    return (<>
-                      {showWeather && smartTips.length > 0 && (
-                        <div style={{ padding: "8px 20px 0" }}>
-                          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-                            {smartTips.slice(0, 4).map((tip, i) => (
-                              <div key={i} style={{ minWidth: 220, maxWidth: 260, flexShrink: 0, padding: "10px 14px", borderRadius: 12,
-                                background: `linear-gradient(135deg, ${T.s}, ${T.s2})`, border: `.5px solid ${T.border}`,
-                                fontSize: 11, color: T.t2, lineHeight: 1.4, display: "flex", gap: 8, alignItems: "flex-start" }}>
-                                <span style={{ fontSize: 16, flexShrink: 0 }}>{tip.icon}</span>
-                                <span>{tip.tip}</span>
-                              </div>
-                            ))}
+                  {/* Smart tips panel — hidden by default, toggled by pill */}
+                  <div id="smart-tips-panel" style={{ display: "none" }}>
+                    {smartTips.length > 0 && (
+                      <div style={{ padding: "4px 20px", display: "flex", gap: 6, overflowX: "auto" }}>
+                        {smartTips.slice(0, 4).map((tip, i) => (
+                          <div key={i} style={{ minWidth: 200, flexShrink: 0, padding: "8px 12px", borderRadius: 10,
+                            background: T.s2, border: `.5px solid ${T.border}`, fontSize: 10, color: T.t2, lineHeight: 1.4, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>{tip.icon}</span>
+                            <span>{tip.tip}</span>
                           </div>
-                        </div>
-                      )}
-                      {showWeather && intelligence?.weather?.current && (
-                        <div style={{ margin: "8px 20px 0", padding: "8px 14px", borderRadius: 10, background: T.blueL,
-                          fontSize: 11, color: T.t2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          {intelligence.signals?.filter(s => s.type === "weather" || s.type === "directions" || s.type === "ev").map((s, i) => (
-                            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{s.icon} {s.label}</span>
-                          ))}
-                          {intelligence.currency?.rates && Object.entries(intelligence.currency.rates).slice(0, 1).map(([code, info]) => (
-                            <span key={code} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>💱 {info.example}</span>
-                          ))}
-                        </div>
-                      )}
-                    </>);
-                  })()}
-
-                  {/* Embedded Map */}
-                  {showMap && trip.places?.length > 0 && (
-                    <div style={{ padding: "10px 20px 0" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                        <p style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: 0.5 }}>🗺️ Route Map</p>
-                        <button onClick={() => setShowMap(false)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, opacity: 0.5, padding: "3px 8px" }}>Hide</button>
+                        ))}
                       </div>
+                    )}
+                  </div>
+
+                  {/* Embedded Map — hidden by default, toggled by pill */}
+                  {showMap && trip.places?.length > 0 && (
+                    <div style={{ padding: "6px 20px 4px" }}>
                       <TripMap
                         places={(() => {
                           const route = getFullRouteFromStays(trip);
                           const stops = trip.startLocation ? [trip.startLocation, ...route] : route;
-                          // Add return leg: append startLocation at end for full loop
-                          if (trip.startLocation && stops.length > 1 && stops[stops.length - 1].toLowerCase() !== trip.startLocation.toLowerCase()) {
-                            stops.push(trip.startLocation);
-                          }
+                          if (trip.startLocation && stops.length > 1 && stops[stops.length - 1].toLowerCase() !== trip.startLocation.toLowerCase()) stops.push(trip.startLocation);
                           return stops;
                         })()}
-                        height={180}
+                        height={160}
                         onDirectionsLoaded={setTripDirections}
                         travelMode={trip.travel?.[0] || trip.travel?.values?.().next?.().value || ""}
                       />
-                      {tripDirections && (() => {
-                        const travelIcon = (() => { const m = (trip.travel?.[0] || "").toLowerCase(); if (/train|transit/.test(m)) return "🚂"; if (/walk/.test(m)) return "🚶"; if (/bicy|bike/.test(m)) return "🚴"; if (/flight|fly/.test(m)) return "✈️"; if (/ev/i.test(m)) return "⚡🚗"; return "🚗"; })();
-                        const legs = tripDirections.legs || [];
-                        const nDays = numDays || legs.length || 1;
-
-                        // Map legs to days: spread legs evenly across trip days
-                        const getDayLegs = () => {
-                          if (legs.length === 0) return [];
-                          if (legs.length <= nDays) {
-                            const legIdx = selectedDay - 1;
-                            if (legIdx < legs.length) return [legs[legIdx]];
-                            return []; // Rest day — no driving
-                          }
-                          // More legs than days — divide evenly
-                          const legsPerDay = Math.ceil(legs.length / nDays);
-                          const startIdx = (selectedDay - 1) * legsPerDay;
-                          return legs.slice(startIdx, startIdx + legsPerDay);
-                        };
-
-                        const dayLegs = getDayLegs();
-                        const hasDayDriving = dayLegs.length > 0;
-
-                        // Parse distance/duration text to numbers for day totals
-                        const parseMiles = (text) => { const m = text?.match(/([\d,.]+)\s*mi/); return m ? parseFloat(m[1].replace(",", "")) : 0; };
-                        const parseDuration = (text) => {
-                          const hrs = text?.match(/(\d+)\s*hr/); const mins = text?.match(/(\d+)\s*min/);
-                          return (hrs ? parseInt(hrs[1]) * 60 : 0) + (mins ? parseInt(mins[1]) : 0);
-                        };
-                        const fmtDuration = (totalMins) => {
-                          const h = Math.floor(totalMins / 60), m = totalMins % 60;
-                          return h > 0 ? `${h} hr ${m} min` : `${m} min`;
-                        };
-
-                        const dayDist = dayLegs.reduce((s, l) => s + parseMiles(l.distance), 0);
-                        const dayDur = dayLegs.reduce((s, l) => s + parseDuration(l.duration), 0);
-                        const dayRoute = dayLegs.length > 0 ? `${dayLegs[0].start.split(",")[0]} → ${dayLegs[dayLegs.length - 1].end.split(",")[0]}` : "";
-
-                        return (
-                          <div style={{ padding: "6px 0 2px" }}>
-                            {hasDayDriving ? (
-                              <div style={{ textAlign: "center" }}>
-                                <p style={{ fontSize: 10, color: T.t3, marginBottom: 4, fontWeight: 500 }}>Day {selectedDay} driving</p>
-                                <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-                                  <span style={{ fontSize: 11, color: T.t2 }}>{travelIcon} <b>{dayDist.toFixed(1)} mi</b></span>
-                                  <span style={{ fontSize: 11, color: T.t2 }}>⏱️ <b>{fmtDuration(dayDur)}</b></span>
-                                </div>
-                                <p style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{dayRoute}</p>
-                              </div>
-                            ) : (
-                              <p style={{ fontSize: 10, color: T.t3, textAlign: "center" }}>No driving today — rest & explore</p>
-                            )}
-                            <details style={{ textAlign: "center", marginTop: 4 }}>
-                              <summary style={{ fontSize: 10, color: T.t3, cursor: "pointer", listStyle: "none" }}>
-                                <span style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>Full trip: {tripDirections.totalDistance} · {tripDirections.totalDuration}</span>
-                              </summary>
-                              <div style={{ display: "flex", gap: 8, justifyContent: "center", padding: "4px 0", flexWrap: "wrap" }}>
-                                {legs.map((l, i) => (
-                                  <span key={i} style={{ fontSize: 9, color: i === selectedDay - 1 ? T.a : T.t3, fontWeight: i === selectedDay - 1 ? 600 : 400 }}>
-                                    Leg {i + 1}: {l.distance}
-                                  </span>
-                                ))}
-                              </div>
-                            </details>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                  {!showMap && trip.places?.length > 0 && (
-                    <div style={{ padding: "4px 20px" }}>
-                      <button onClick={() => setShowMap(true)} style={{ ...css.btn, ...css.btnSm, fontSize: 10, color: T.a }}>🗺️ Show map</button>
                     </div>
                   )}
 
-                  {/* Chat nudge banner */}
-                  <div onClick={() => setTripDetailTab("chat")} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 20px", background: `${T.a}10`, borderBottom: `.5px solid ${T.border}`, cursor: "pointer" }}>
-                    <span style={{ fontSize: 14 }}>💬</span>
-                    <p style={{ fontSize: 11, color: T.a, fontWeight: 500, margin: 0 }}>Not quite right? Switch to <b>Chat</b> to refine this itinerary with AI</p>
-                    <span style={{ marginLeft: "auto", fontSize: 11, color: T.a }}>→</span>
-                  </div>
 
                   {/* Timeline items for selected day */}
-                  <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ flex: 1, overflowY: "auto", padding: "10px 20px 20px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>
                         Day {selectedDay}
                         {(() => { const dd = tripStart ? new Date(tripStart.getTime() + (selectedDay - 1) * 86400000) : null; return dd ? ` — ${dd.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}` : ""; })()}
