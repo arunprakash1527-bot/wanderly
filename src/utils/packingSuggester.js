@@ -175,13 +175,25 @@ export function generatePackingSuggestions(trip, intelligence) {
   // Base essentials
   for (const e of BASE_ESSENTIALS) add(e.item, e.category, "Essential");
 
-  // Weather-based
-  if (intelligence?.weather?.today) {
+  // Weather-based — scan all forecast days for the trip, not just today
+  const forecastDays = intelligence?.weather?.daily || [];
+  if (forecastDays.length > 0) {
+    const maxHigh = Math.max(...forecastDays.map(d => d.high));
+    const minLow = Math.min(...forecastDays.map(d => d.low));
+    const totalRain = forecastDays.reduce((sum, d) => sum + (d.rainMm || 0), 0);
+    const rainyDays = forecastDays.filter(d => d.rainMm > 1);
+
+    if (maxHigh >= 28) WEATHER_ITEMS.hot.forEach(i => add(i.item, i.category, `Hot weather expected (up to ${maxHigh}°C)`));
+    if (minLow <= 5) WEATHER_ITEMS.cold.forEach(i => add(i.item, i.category, `Cold weather expected (lows of ${minLow}°C)`));
+    if (maxHigh < 28 && minLow > 5) WEATHER_ITEMS.mild.forEach(i => add(i.item, i.category, "Mild weather forecast"));
+
+    if (rainyDays.length > 0) WEATHER_ITEMS.rainy.forEach(i => add(i.item, i.category, `Rain on ${rainyDays.length} day${rainyDays.length > 1 ? "s" : ""} (${Math.round(totalRain)}mm total)`));
+  } else if (intelligence?.weather?.today) {
+    // Fallback to single-day if no forecast array
     const w = intelligence.weather.today;
     if (w.high >= 28) WEATHER_ITEMS.hot.forEach(i => add(i.item, i.category, `Hot weather (${w.high}°C)`));
     else if (w.high <= 5) WEATHER_ITEMS.cold.forEach(i => add(i.item, i.category, `Cold weather (${w.low}°C)`));
     else WEATHER_ITEMS.mild.forEach(i => add(i.item, i.category, "Mild weather"));
-
     if (w.rainMm > 1) WEATHER_ITEMS.rainy.forEach(i => add(i.item, i.category, `Rain forecast (${w.rainMm}mm)`));
   }
 
