@@ -229,6 +229,18 @@ export function TimelineProvider({ children }) {
     }, 1500);
   };
 
+  // ─── Sort day items by time (chronological order) ───
+  const sortByTime = (items) => {
+    const parseTime = (t) => {
+      const m = t?.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!m) return 9999;
+      let h = parseInt(m[1]); const min = parseInt(m[2]); const ampm = m[3].toUpperCase();
+      if (ampm === "PM" && h !== 12) h += 12; if (ampm === "AM" && h === 12) h = 0;
+      return h * 60 + min;
+    };
+    return [...items].sort((a, b) => parseTime(a.time) - parseTime(b.time));
+  };
+
   // ─── Smart Time Slot Finder ───
   const findSmartSlot = useCallback((tripId, day, itemType) => {
     const trip = createdTrips.find(t => t.id === tripId);
@@ -280,7 +292,8 @@ export function TimelineProvider({ children }) {
       if (t.id !== tripId) return t;
       const tl = t.timeline || {};
       const dayItems = (tl[selectedDay] || []).map((item, i) => i === idx ? { ...item, [field]: value } : item);
-      const newTimeline = { ...tl, [selectedDay]: dayItems };
+      const sorted = field === "time" ? sortByTime(dayItems) : dayItems;
+      const newTimeline = { ...tl, [selectedDay]: sorted };
       persistTimeline(tripId, newTimeline);
       return { ...t, timeline: newTimeline };
     }));
@@ -326,13 +339,15 @@ export function TimelineProvider({ children }) {
 
   const addTimelineItem = (tripId) => {
     let newIdx = 0;
+    const newItem = { time: "12:00 PM", title: "New activity", desc: "Tap to edit details", group: "Everyone", color: T.blue, _isNew: true };
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
       const tl = t.timeline || {};
       const existing = tl[selectedDay] || [];
-      newIdx = existing.length;
-      const newItem = { time: "12:00 PM", title: "New activity", desc: "Tap to edit details", group: "Everyone", color: T.blue };
-      const newTimeline = { ...tl, [selectedDay]: [...existing, newItem] };
+      const sorted = sortByTime([...existing, newItem]);
+      newIdx = sorted.findIndex(item => item._isNew);
+      sorted[newIdx] = { ...sorted[newIdx] }; delete sorted[newIdx]._isNew;
+      const newTimeline = { ...tl, [selectedDay]: sorted };
       persistTimeline(tripId, newTimeline);
       return { ...t, timeline: newTimeline };
     }));
