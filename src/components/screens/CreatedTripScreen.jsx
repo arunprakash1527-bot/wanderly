@@ -14,6 +14,7 @@ import { useWizard } from '../../contexts/WizardContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useExpenses } from '../../contexts/ExpenseContext';
 import { useMemories } from '../../contexts/MemoriesContext';
+import { usePins } from '../../contexts/PinContext';
 import { curateReelPhotos } from '../../utils/reelCurator';
 import { REEL_TRACKS } from '../../utils/reelMusic';
 import { detectMood, generateAutoCaption, buildMemoryTimeline } from '../../utils/aiMemories';
@@ -63,6 +64,7 @@ export function CreatedTripScreen() {
   const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages, intelligence, smartTips } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
   const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, wrappedPlaying, setWrappedPlaying, memoriesView, setMemoriesView, autoOrderEnabled, setAutoOrderEnabled, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
+  const { pins, pinsLoading, showAddPin, setShowAddPin, loadPins, addPin, toggleReaction, deletePin } = usePins();
 
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [showLateOptions, setShowLateOptions] = useState(false);
@@ -141,6 +143,9 @@ export function CreatedTripScreen() {
       localStorage.setItem(`twm_packing_${trip.id}`, JSON.stringify(packingItems));
     }
   }, [packingItems, trip?.id]); // eslint-disable-line
+
+  // Load pins when pins tab is selected
+  useEffect(() => { if (tripDetailTab === "pins") loadPins(); }, [tripDetailTab, loadPins]); // eslint-disable-line
   if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not found. <button onClick={() => navigate("home")} style={css.btn}>Go home</button></div>;
   const isLive = trip.status === "live";
   const isCompleted = trip.status === "completed";
@@ -448,6 +453,7 @@ export function CreatedTripScreen() {
             <button className="w-tab" style={tripTabStyle("itinerary")} onClick={() => setTripDetailTab("itinerary")}>Itinerary</button>
             <button className="w-tab" style={tripTabStyle("chat")} onClick={() => setTripDetailTab("chat")}>Chat</button>
             <button className="w-tab" style={tripTabStyle("polls")} onClick={() => setTripDetailTab("polls")}>Polls</button>
+            <button className="w-tab" style={tripTabStyle("pins")} onClick={() => setTripDetailTab("pins")}>📌 Pins</button>
             <button className="w-tab" style={tripTabStyle("expenses")} onClick={() => setTripDetailTab("expenses")}>Expenses</button>
             <button className="w-tab" style={tripTabStyle("packing")} onClick={() => setTripDetailTab("packing")}>Packing</button>
             <button className="w-tab" style={tripTabStyle("memories")} onClick={() => setTripDetailTab("memories")}>Memories</button>
@@ -1118,6 +1124,200 @@ export function CreatedTripScreen() {
               ))}
             </div>
           )}
+
+          {/* ── PINS TAB ── */}
+          {tripDetailTab === "pins" && (() => {
+            return (
+              <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
+                {/* Add pin button */}
+                <div style={{ padding: "16px 20px 8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <p style={{ fontSize: 14, fontWeight: 600 }}>Pinboard</p>
+                    <button onClick={() => setShowAddPin(true)}
+                      style={{ ...css.btn, ...css.btnP, ...css.btnSm, borderRadius: 20 }}>
+                      + Add pin
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>
+                    Save links, ideas & inspiration for the group
+                  </p>
+                </div>
+
+                {/* Add pin form (shown when showAddPin is true) */}
+                {showAddPin && (() => {
+                  return (
+                    <div style={{ margin: "0 20px 12px", padding: 16, borderRadius: 14, background: T.s, border: `1px solid ${T.border}` }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        {[["link", "🔗 Link"], ["note", "📝 Note"], ["photo", "📷 Photo"]].map(([t, label]) => (
+                          <button key={t} id={`pin-type-${t}`}
+                            onClick={e => {
+                              document.querySelectorAll('[id^="pin-type-"]').forEach(b => { b.style.background = T.s2; b.style.color = T.t2; b.style.borderColor = T.border; });
+                              e.target.style.background = T.al; e.target.style.color = T.ad; e.target.style.borderColor = T.a;
+                              document.getElementById('pin-form-type').value = t;
+                              document.getElementById('pin-url-row').style.display = t === 'link' ? 'block' : 'none';
+                              document.getElementById('pin-photo-row').style.display = t === 'photo' ? 'block' : 'none';
+                            }}
+                            style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: `.5px solid ${t === 'link' ? T.a : T.border}`,
+                              background: t === 'link' ? T.al : T.s2, color: t === 'link' ? T.ad : T.t2,
+                              fontSize: 12, cursor: "pointer", fontFamily: T.font, fontWeight: 500 }}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <input type="hidden" id="pin-form-type" defaultValue="link" />
+                      <div id="pin-url-row" style={{ marginBottom: 8 }}>
+                        <input id="pin-url" placeholder="Paste a URL..."
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `.5px solid ${T.border}`, fontSize: 13, fontFamily: T.font, outline: "none", boxSizing: "border-box" }}
+                          onBlur={async (e) => {
+                            const url = e.target.value.trim();
+                            if (!url || !url.startsWith('http')) return;
+                            try {
+                              const { authFetch } = await import('../../utils/authFetch');
+                              const res = await authFetch('/api/og-preview', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ url }),
+                              });
+                              const og = await res.json();
+                              if (og.title) document.getElementById('pin-title').value = og.title;
+                              if (og.description) document.getElementById('pin-content').value = og.description;
+                              if (og.image) document.getElementById('pin-og-image').value = og.image;
+                            } catch {}
+                          }} />
+                      </div>
+                      <input id="pin-title" placeholder="Title" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `.5px solid ${T.border}`, fontSize: 13, fontFamily: T.font, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
+                      <textarea id="pin-content" placeholder="Description or note..." rows={2}
+                        style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `.5px solid ${T.border}`, fontSize: 13, fontFamily: T.font, outline: "none", resize: "vertical", marginBottom: 8, boxSizing: "border-box" }} />
+                      <div id="pin-photo-row" style={{ display: "none", marginBottom: 8 }}>
+                        <input id="pin-image-url" placeholder="Image URL..."
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `.5px solid ${T.border}`, fontSize: 13, fontFamily: T.font, outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                      <input type="hidden" id="pin-og-image" />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => setShowAddPin(false)}
+                          style={{ ...css.btn, ...css.btnSm, flex: 1 }}>Cancel</button>
+                        <button onClick={() => {
+                          const type = document.getElementById('pin-form-type').value;
+                          const title = document.getElementById('pin-title').value;
+                          const content = document.getElementById('pin-content').value;
+                          const url = document.getElementById('pin-url')?.value || '';
+                          const ogImage = document.getElementById('pin-og-image')?.value || '';
+                          const photoUrl = document.getElementById('pin-image-url')?.value || '';
+                          const imageUrl = ogImage || photoUrl || '';
+                          if (!title && !content && !url) { showToast("Add a title or content", "error"); return; }
+                          addPin({ type, title, content, url, imageUrl });
+                        }}
+                          style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1 }}>Save pin</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Pins list */}
+                <div style={{ padding: "0 20px 100px" }}>
+                  {pinsLoading && pins.length === 0 && (
+                    <div style={{ textAlign: "center", padding: 40, color: T.t3 }}>
+                      <p style={{ fontSize: 13 }}>Loading pins...</p>
+                    </div>
+                  )}
+                  {!pinsLoading && pins.length === 0 && (
+                    <div style={{ textAlign: "center", padding: 40, color: T.t3 }}>
+                      <div style={{ fontSize: 40, marginBottom: 8 }}>📌</div>
+                      <p style={{ fontSize: 13 }}>No pins yet</p>
+                      <p style={{ fontSize: 11, marginTop: 4 }}>Save links, notes & inspiration for the trip</p>
+                    </div>
+                  )}
+                  {pins.map(pin => {
+                    const reactionCounts = {};
+                    Object.values(pin.reactions || {}).forEach(emoji => {
+                      reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
+                    });
+                    const myReaction = user ? (pin.reactions || {})[user.id] : null;
+                    const isOwner = user && pin.user_id === user.id;
+                    const isLead = user && trip.travellers?.adults?.[0]?.isLead && trip.travellers?.adults?.[0]?.email === user.email;
+                    const timeAgo = (() => {
+                      const diff = Date.now() - new Date(pin.created_at).getTime();
+                      const mins = Math.floor(diff / 60000);
+                      if (mins < 60) return `${mins}m ago`;
+                      const hrs = Math.floor(mins / 60);
+                      if (hrs < 24) return `${hrs}h ago`;
+                      return `${Math.floor(hrs / 24)}d ago`;
+                    })();
+
+                    return (
+                      <div key={pin.id} style={{ padding: 14, marginBottom: 10, borderRadius: 14, background: T.s, border: `1px solid ${T.border}` }}>
+                        {/* Header: type icon + who + when */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, color: T.t3 }}>
+                            {pin.type === 'link' ? '🔗' : pin.type === 'note' ? '📝' : '📷'} {pin.added_by_name} · {timeAgo}
+                          </span>
+                          {(isOwner || isLead) && (
+                            <button onClick={() => { if (window.confirm("Remove this pin?")) deletePin(pin.id); }}
+                              style={{ background: "none", border: "none", fontSize: 14, color: T.t3, cursor: "pointer", padding: 4 }}>×</button>
+                          )}
+                        </div>
+
+                        {/* Image preview */}
+                        {pin.image_url && (
+                          <div style={{ marginBottom: 8, borderRadius: 10, overflow: "hidden", maxHeight: 160 }}>
+                            <img src={pin.image_url} alt="" style={{ width: "100%", height: "auto", maxHeight: 160, objectFit: "cover", display: "block" }}
+                              onError={e => { e.target.style.display = 'none'; }} />
+                          </div>
+                        )}
+
+                        {/* Title */}
+                        {pin.title && (
+                          <p style={{ fontSize: 14, fontWeight: 600, color: T.t1, marginBottom: 4 }}>
+                            {pin.url ? (
+                              <a href={pin.url} target="_blank" rel="noopener noreferrer" style={{ color: T.ad, textDecoration: "none" }}>
+                                {pin.title} ↗
+                              </a>
+                            ) : pin.title}
+                          </p>
+                        )}
+
+                        {/* Content/description */}
+                        {pin.content && (
+                          <p style={{ fontSize: 12, color: T.t2, marginBottom: 8, lineHeight: 1.4 }}>
+                            {pin.content.length > 150 ? pin.content.substring(0, 150) + '...' : pin.content}
+                          </p>
+                        )}
+
+                        {/* Reactions + actions */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          {['👍', '❤️', '🔥', '💡'].map(emoji => {
+                            const count = reactionCounts[emoji] || 0;
+                            const isActive = myReaction === emoji;
+                            return (
+                              <button key={emoji} onClick={() => toggleReaction(pin.id, emoji)}
+                                style={{ padding: "3px 8px", borderRadius: 12, border: `.5px solid ${isActive ? T.a : T.border}`,
+                                  background: isActive ? T.al : "transparent", fontSize: 12, cursor: "pointer",
+                                  display: "flex", alignItems: "center", gap: 3, fontFamily: T.font }}>
+                                {emoji}{count > 0 && <span style={{ fontSize: 10, color: T.t2 }}>{count}</span>}
+                              </button>
+                            );
+                          })}
+
+                          {/* Add to itinerary action */}
+                          <button onClick={() => {
+                            const title = pin.title || pin.content?.substring(0, 40) || 'Pinned item';
+                            const desc = pin.url ? `${pin.content || ''}\n${pin.url}`.trim() : (pin.content || '');
+                            if (typeof addTimelineItem === 'function') {
+                              addTimelineItem(selectedDay, { title, description: desc, time: '', group: 'Everyone' });
+                              showToast(`Added "${title}" to Day ${selectedDay}`);
+                            }
+                          }}
+                            style={{ marginLeft: "auto", padding: "3px 10px", borderRadius: 12, border: `.5px solid ${T.border}`,
+                              background: "transparent", fontSize: 10, color: T.t2, cursor: "pointer", fontFamily: T.font }}>
+                            + Day {selectedDay}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── EXPENSES TAB ── */}
           {tripDetailTab === "expenses" && (() => {

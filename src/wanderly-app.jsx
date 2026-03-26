@@ -26,6 +26,7 @@ import { WizardProvider, useWizard } from './contexts/WizardContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { ExpenseProvider } from './contexts/ExpenseContext';
 import { MemoriesProvider } from './contexts/MemoriesContext';
+import { PinProvider } from './contexts/PinContext';
 
 
 // ─── Main App: thin provider composition ───
@@ -38,7 +39,9 @@ export default function TripWithMeApp() {
             <ChatProvider>
               <ExpenseProvider>
                 <MemoriesProvider>
-                  <AppShell />
+                  <PinProvider>
+                    <AppShell />
+                  </PinProvider>
                 </MemoriesProvider>
               </ExpenseProvider>
             </ChatProvider>
