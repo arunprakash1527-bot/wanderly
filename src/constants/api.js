@@ -9,4 +9,5 @@ export const API = {
   CURRENCY: '/api/currency',
   ENRICH: '/api/enrich',
   EV_CHARGERS: '/api/ev-chargers',
+  OG_PREVIEW: '/api/og-preview',
 };
