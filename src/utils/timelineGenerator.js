@@ -1,5 +1,6 @@
 import { T } from "../styles/tokens";
 import { getLocationActivities, estimateTravelHours } from "./locationHelpers";
+import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 /**
  * Pure function: generates a multi-day timeline object { 1: [...], 2: [...], ... }
@@ -39,10 +40,17 @@ export function generateMultiDayTimeline(trip) {
   const wantsPubs = /pub|pubs|tavern|inn/.test(ctxLower);
   const wantsAvoidSteep = /avoid.*steep|no.*steep|gentle|easy.*walk|flat/.test(ctxLower);
   const prefs = trip.activationPrefs || {};
-  const startHour = prefs.startTime ? parseInt(prefs.startTime.split(":")[0]) : 8;
-  const startMin = prefs.startTime ? parseInt(prefs.startTime.split(":")[1] || "0") : 0;
-  const isPacked = prefs.dayOnePace === "packed";
-  const isRelaxed = prefs.dayOnePace === "relaxed";
+  const templateProfile = TEMPLATE_PROFILES[trip.templateKey] || null;
+  const userExplicitStart = prefs.startTime;
+  const tpStartHour = templateProfile?.startTime ? parseInt(templateProfile.startTime.split(":")[0]) : null;
+  const tpStartMin = templateProfile?.startTime ? parseInt(templateProfile.startTime.split(":")[1] || "0") : null;
+  const startHour = userExplicitStart ? parseInt(userExplicitStart.split(":")[0]) : (tpStartHour != null ? tpStartHour : 8);
+  const startMin = userExplicitStart ? parseInt(userExplicitStart.split(":")[1] || "0") : (tpStartMin != null ? tpStartMin : 0);
+  const userExplicitPace = prefs.dayOnePace;
+  let isPacked = userExplicitPace === "packed" || (!userExplicitPace && templateProfile?.pace === "packed");
+  let isRelaxed = userExplicitPace === "relaxed" || (!userExplicitPace && templateProfile?.pace === "relaxed");
+  const tpDinnerTime = templateProfile?.dinnerTime || 19;
+  const tpMaxActivities = templateProfile?.maxActivitiesPerDay || null;
   const isEV = trip.travel?.some(m => /\bev\b/i.test(m) && !/non[\s-]*ev/i.test(m));
   const enabledStops = (prefs.stopovers || []).filter(s => s.enabled);
   const tags = (base) => { const t = [base]; if (wantsDogFriendly) t.push("🐕 Dog-friendly"); if (wantsAccessible) t.push("♿ Accessible"); return t.join(" · "); };
@@ -182,20 +190,26 @@ export function generateMultiDayTimeline(trip) {
     const locPools = getLocPools(loc);
     const kidPool = locPools.kids || [`Family activity in ${loc}`, "Nature walk", "Playground"];
 
+    // Template day shape adjustments
+    const dayStartHour = (isFirst && templateProfile?.firstDayShape === "late-start") ? startHour + 2 : startHour;
+    const dayStartMin = (isFirst && templateProfile?.firstDayShape === "late-start") ? startMin : startMin;
+
     if (isFirst) {
+      const effectiveStartHour = dayStartHour;
+      const effectiveStartMin = dayStartMin;
       const travelHrs = estimateTravelHours(trip.startLocation || "", loc, travelMode);
       const evTime = isEV ? (enabledStops.filter(s => s.type === "ev_charge" && s.enabled).length * 0.5) : 0;
       const totalTravelHrs = travelHrs + evTime;
-      const arrivalHour = Math.min(Math.floor(startHour + startMin / 60 + totalTravelHrs), 22);
+      const arrivalHour = Math.min(Math.floor(effectiveStartHour + effectiveStartMin / 60 + totalTravelHrs), 22);
       const arrivalMin = Math.round((totalTravelHrs % 1) * 60);
       const remainingHours = 22 - arrivalHour;
 
       if (trip.startLocation) {
         const tLabel = travelHrs >= 1 ? `~${Math.round(travelHrs * 10) / 10} hrs` : `~${Math.round(travelHrs * 60)} min`;
-        items.push({ time: fmtTime(startHour, startMin), title: `Depart ${trip.startLocation}`, desc: `${travelMode} · ${tLabel} to ${loc}${isEV ? " · Full charge before departure" : ""}`, group: "Everyone", color: T.a });
+        items.push({ time: fmtTime(effectiveStartHour, effectiveStartMin), title: `Depart ${trip.startLocation}`, desc: `${travelMode} · ${tLabel} to ${loc}${isEV ? " · Full charge before departure" : ""}`, group: "Everyone", color: T.a });
       }
 
-      const midHour = startHour + Math.floor(travelHrs / 2);
+      const midHour = effectiveStartHour + Math.floor(travelHrs / 2);
       const firstLegStops = enabledStops.filter(s => s.desc && s.desc.includes(trip.startLocation) && s.desc.includes(loc));
       firstLegStops.filter(s => s.type === "ev_charge").forEach((stop, si) => {
         items.push({ time: fmtTime(Math.max(Math.min(midHour + si, arrivalHour - 1), startHour + 1)), title: `⚡ Charge & Refresh`, desc: `${stop.desc} · ~30 min rapid charge · Grab coffee & snacks while charging`, group: "Everyone", color: T.amber, evSearch: { from: trip.startLocation, to: loc } });
@@ -236,15 +250,19 @@ export function generateMultiDayTimeline(trip) {
       const departureStay = dayInfo.isBaseCamp ? dayInfo.baseStayName : stayName;
       const returnHrs = estimateTravelHours(departureLoc, trip.startLocation || "", travelMode);
       const rLabel = returnHrs >= 1 ? `~${Math.round(returnHrs * 10) / 10} hrs` : `~${Math.round(returnHrs * 60)} min`;
+      const earlyFinish = templateProfile?.lastDayShape === "early-finish";
       items.push({ time: fmtTime(8), title: "Breakfast", desc: departureStay, group: "Everyone", color: T.coral });
       items.push({ time: fmtTime(9, 30), title: "Check out & pack", desc: `${departureStay} · Bags ready`, group: "Everyone", color: T.t3 });
-      const lastAct = pickAct(locPools.morning, nextActIdx(departureLoc, "m"), steepTest) || `Farewell stroll in ${departureLoc}`;
-      items.push({ time: fmtTime(10), title: lastAct, desc: tags(`${departureLoc} · Final morning`), group: "Everyone", color: T.blue });
-      if (hasKids) {
-        const kidAct = pickAct(kidPool, nextActIdx(departureLoc, "k"), null);
-        if (kidAct) items.push({ time: fmtTime(10), title: kidAct, desc: tags(`${departureLoc} · Last day fun`), group: "Kids", color: T.pink });
+      if (!earlyFinish) {
+        const lastAct = pickAct(locPools.morning, nextActIdx(departureLoc, "m"), steepTest) || `Farewell stroll in ${departureLoc}`;
+        items.push({ time: fmtTime(10), title: lastAct, desc: tags(`${departureLoc} · Final morning`), group: "Everyone", color: T.blue });
+        if (hasKids) {
+          const kidAct = pickAct(kidPool, nextActIdx(departureLoc, "k"), null);
+          if (kidAct) items.push({ time: fmtTime(10), title: kidAct, desc: tags(`${departureLoc} · Last day fun`), group: "Kids", color: T.pink });
+        }
       }
-      items.push({ time: fmtTime(12), title: "Lunch & depart", desc: `${foodLabel} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home (${rLabel})`, group: "Everyone", color: T.coral });
+      const lunchDepartHr = earlyFinish ? 10 : 12;
+      items.push({ time: fmtTime(lunchDepartHr), title: earlyFinish ? "Quick brunch & depart" : "Lunch & depart", desc: `${foodLabel} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home (${rLabel})`, group: "Everyone", color: T.coral });
       if (trip.startLocation) {
         items.push({ time: fmtTime(14), title: `🚗 ${travelMode} home`, desc: `${departureLoc} → ${trip.startLocation} · ${rLabel}${isEV ? " · Plan charging stop" : ""}`, group: "Everyone", color: T.a });
         if (isEV) {
@@ -319,29 +337,53 @@ export function generateMultiDayTimeline(trip) {
           items.push({ time: fmtTime(freeHr), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
       } else {
-        items.push({ time: fmtTime(8), title: "Breakfast", desc: stayName, group: "Everyone", color: T.coral });
-        const mIdx = nextActIdx(loc, "m");
-        const morningAct = pickAct(locPools.morning, mIdx, steepTest) || `Explore ${loc}`;
+        // ─── Template-aware regular day ───
+        const tpKey = templateProfile?.key;
+        const eatLabel = templateProfile?.budgetBias === "budget" ? "street food spot" : (wantsPubs ? "pub" : "restaurant");
+        const morningDesc = tpKey === "romantic" ? `${loc} · Leisurely morning` : tags(`${loc} · ${budgetTier.label}`);
+        const pmDesc = tpKey === "romantic" ? `${loc} · Scenic afternoon` : tags(`${loc} · Afternoon`);
+        const morningPrefix = tpKey === "adventure" ? "outdoor" : "m";
+
+        items.push({ time: fmtTime(startHour), title: "Breakfast", desc: stayName, group: "Everyone", color: T.coral });
+        const mIdx = nextActIdx(loc, morningPrefix);
+        const morningAct = pickAct(tpKey === "adventure" ? (locPools.morning.filter(a => /hik|trail|climb|trek|kayak|cycl|outdoor/i.test(a)).length > 0 ? locPools.morning.filter(a => /hik|trail|climb|trek|kayak|cycl|outdoor/i.test(a)) : locPools.morning) : locPools.morning, mIdx, steepTest) || (tpKey === "romantic" ? `Leisurely explore ${loc}` : `Explore ${loc}`);
         if (hasKids) {
-          items.push({ time: fmtTime(10), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Adults", color: T.blue });
+          items.push({ time: fmtTime(startHour + 2), title: morningAct, desc: morningDesc, group: "Adults", color: T.blue });
           const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
-          items.push({ time: fmtTime(10), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          items.push({ time: fmtTime(startHour + 2), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         } else {
-          items.push({ time: fmtTime(10), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: "Everyone", color: T.blue });
+          items.push({ time: fmtTime(startHour + 2), title: morningAct, desc: morningDesc, group: "Everyone", color: T.blue });
         }
-        items.push({ time: fmtTime(12, 30), title: `Lunch — ${foodLabel}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
-        const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || "Afternoon activity";
-        if (hasKids) {
-          items.push({ time: fmtTime(14, 30), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Adults", color: T.blue });
-          const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
-          items.push({ time: fmtTime(14, 30), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
-        } else {
-          items.push({ time: fmtTime(14, 30), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
+
+        // Packed templates: add a second morning activity
+        if (isPacked && tpMaxActivities && tpMaxActivities >= 6) {
+          const m2Idx = nextActIdx(loc, "m");
+          const morningAct2 = pickAct(locPools.morning, m2Idx, steepTest) || `More of ${loc}`;
+          items.push({ time: fmtTime(startHour + 3.5), title: morningAct2, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
+        }
+
+        items.push({ time: fmtTime(12, 30), title: `Lunch — ${foodLabel}`, desc: `${budgetTier.label} ${eatLabel} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+
+        // Family rest break
+        if (templateProfile?.restBreak && !isFirst && !isLast) {
+          items.push({ time: fmtTime(templateProfile.restBreak.from), title: "Rest / quiet time", desc: `Back at ${stayName} · Nap or relax`, group: "Everyone", color: T.t3 });
+        }
+
+        // Relaxed templates with max 3 activities: skip afternoon activity
+        if (!(isRelaxed && tpMaxActivities && tpMaxActivities <= 3)) {
+          const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || (tpKey === "romantic" ? `Scenic stroll in ${loc}` : "Afternoon activity");
+          if (hasKids) {
+            items.push({ time: fmtTime(14, 30), title: pmAct, desc: pmDesc, group: "Adults", color: T.blue });
+            const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
+            items.push({ time: fmtTime(14, 30), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
+          } else {
+            items.push({ time: fmtTime(14, 30), title: pmAct, desc: pmDesc, group: "Everyone", color: T.blue });
+          }
         }
         items.push({ time: fmtTime(17), title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
       }
 
-      items.push({ time: fmtTime(19), title: buildDinnerTitle(loc, d - 1), desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+      items.push({ time: fmtTime(tpDinnerTime), title: buildDinnerTitle(loc, d - 1), desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
     }
 
     days[d] = items;

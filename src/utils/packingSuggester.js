@@ -7,7 +7,9 @@
  * - Traveller ages (kids, infants)
  * - Travel mode (EV, flight)
  * - Destination type
+ * - Trip template profile
  */
+import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const BASE_ESSENTIALS = [
   { item: "Passport / ID", category: "documents", forAll: true },
@@ -324,6 +326,53 @@ export function generatePackingSuggestions(trip, intelligence) {
       add("Plug adapter", "electronics", `International travel to ${foreignDest}`);
       add("Travel adapter (universal)", "electronics", `Different plug types in ${foreignDest}`);
       add("Copies of booking confirmations", "documents", `International travel to ${foreignDest}`);
+    }
+  }
+
+  // ─── Template-specific packing ───
+  const profile = TEMPLATE_PROFILES[trip.templateKey];
+  if (profile) {
+    if (profile.packingTags.includes("light")) {
+      add("Weekend bag (not suitcase)", "essentials", "Weekend trip — pack light");
+    }
+    if (profile.packingTags.includes("backpacking")) {
+      add("Quick-dry clothes", "clothing", "Backpacking essentials");
+      add("Daypack", "essentials", "Backpacking essentials");
+      add("Padlock (for hostel lockers)", "essentials", "Backpacking essentials");
+      add("Travel towel", "essentials", "Backpacking essentials");
+    }
+    if (profile.packingTags.includes("smart-casual")) {
+      add("Smart casual outfit", "clothing", "Romantic trip attire");
+      add("Evening wear / dress shoes", "clothing", "Romantic trip attire");
+    }
+    if (profile.packingTags.includes("nightlife")) {
+      add("Going-out clothes", "clothing", "Nightlife essentials");
+      add("Hangover recovery kit", "health", "Nightlife essentials");
+    }
+    if (profile.packingTags.includes("road-trip")) {
+      add("Car snacks & drinks", "essentials", "Road trip essentials");
+      add("Car phone mount", "electronics", "Road trip essentials");
+      add("Aux cable / car charger", "electronics", "Road trip essentials");
+    }
+    if (profile.packingTags.includes("adventure")) {
+      add("Hiking boots", "clothing", "Adventure gear");
+      add("Sports layers (base + mid + shell)", "clothing", "Adventure gear");
+      add("High-energy snacks (bars, nuts)", "essentials", "Adventure fuel");
+      add("First aid kit", "health", "Adventure safety");
+      add("Head torch", "essentials", "Adventure gear");
+    }
+    if (profile.packingTags.includes("cultural")) {
+      add("Comfortable walking shoes", "clothing", "Cultural explorer essentials");
+      add("Notebook / sketchbook", "essentials", "Cultural explorer essentials");
+      add("Portable charger (for photos)", "electronics", "Cultural explorer essentials");
+    }
+    if (profile.packingTags.includes("family")) {
+      add("Wet wipes (bulk)", "essentials", "Family travel essentials");
+      add("Snack boxes for kids", "essentials", "Family travel essentials");
+      add("Travel games / entertainment", "essentials", "Family travel essentials");
+    }
+    if (profile.packingTags.includes("evening-wear")) {
+      add("Swimwear (if spa)", "clothing", "Romantic trip extras");
     }
   }
 

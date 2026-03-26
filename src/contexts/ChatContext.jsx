@@ -7,6 +7,7 @@ import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
 import { fetchTripIntelligence, buildSmartGreeting, buildSmartTips } from "../utils/tripIntelligence";
+import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const ChatContext = createContext(null);
 
@@ -353,6 +354,7 @@ export function ChatProvider({ children }) {
             budget,
             currentLocation: firstLoc,
             currentDay: selectedDay,
+            templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),
           },
           intelligence: intelligenceRef.current, // Real-time signals from connectors
           chatHistory: tripChatMessages.slice(-30),

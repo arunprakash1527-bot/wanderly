@@ -56,10 +56,15 @@ export function CreateScreen() {
       { icon: "👨‍👩‍👧‍👦", name: "Family Holiday", desc: "Kid-friendly adventures", prefill: { budget: "Mid-range" }, addKids: true },
       { icon: "🎒", name: "Backpacking", desc: "Multi-stop on a budget", prefill: { budget: "Budget", travel: new Set(["Train"]) } },
       { icon: "💍", name: "Romantic Trip", desc: "Just the two of you", prefill: { budget: "Luxury" } },
+      { icon: "🎉", name: "Lads/Girls Trip", desc: "Friends & fun", prefill: { budget: "Mid-range" } },
+      { icon: "🚗", name: "Road Trip", desc: "Multi-stop drive", prefill: { budget: "Mid-range", travel: new Set(["Non-EV vehicle"]) } },
+      { icon: "🏔️", name: "Active Adventure", desc: "Outdoor & sporty", prefill: { budget: "Mid-range" } },
+      { icon: "🏛️", name: "Cultural Explorer", desc: "History & art", prefill: { budget: "Mid-range" } },
     ];
     const applyTemplate = (t) => {
-      setWizTrip(prev => ({ ...prev, ...t.prefill, travel: t.prefill.travel || prev.travel }));
+      setWizTrip(prev => ({ ...prev, ...t.prefill, travel: t.prefill.travel || prev.travel, templateKey: t.name }));
       if (t.addKids) setWizTravellers(prev => ({ ...prev, youngerKids: prev.youngerKids.length === 0 ? [{ name: "", age: 6 }] : prev.youngerKids }));
+      if (t.name === "Romantic Trip") setWizTravellers(prev => prev.adults.length < 2 ? { ...prev, adults: [...prev.adults, { name: "", email: "" }] } : prev);
     };
     return (
       <>
@@ -71,16 +76,18 @@ export function CreateScreen() {
 
         {/* Quick-start templates */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-          {templates.map(t => (
+          {templates.map(t => {
+            const isSelected = wizTrip.templateKey === t.name;
+            return (
             <div key={t.name} onClick={() => applyTemplate(t)}
-              style={{ padding: "14px 12px", borderRadius: T.r, border: `.5px solid ${T.border}`, background: T.s, cursor: "pointer", transition: "all .15s", textAlign: "center" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = T.a; e.currentTarget.style.background = T.al; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.s; }}>
+              style={{ padding: "14px 12px", borderRadius: T.r, border: isSelected ? `2px solid ${T.a}` : `.5px solid ${T.border}`, background: isSelected ? T.al : T.s, cursor: "pointer", transition: "all .15s", textAlign: "center" }}
+              onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.borderColor = T.a; e.currentTarget.style.background = T.al; } }}
+              onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.s; } }}>
               <span style={{ fontSize: 28, display: "block", marginBottom: 6 }}>{t.icon}</span>
               <p style={{ fontSize: 13, fontWeight: 600, color: T.t1, fontFamily: T.font }}>{t.name}</p>
               <p style={{ fontSize: 11, color: T.t3, fontFamily: T.font }}>{t.desc}</p>
             </div>
-          ))}
+          ); })}
         </div>
 
         <div style={cardStyle}>
