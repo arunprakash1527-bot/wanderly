@@ -9,6 +9,10 @@ export function exportItineraryAsPDF(trip, tripStart) {
     if (trip.rawStart && trip.rawEnd) {
       return Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1);
     }
+    if (trip.timeline && typeof trip.timeline === "object" && !Array.isArray(trip.timeline)) {
+      const keys = Object.keys(trip.timeline).map(Number).filter(n => !isNaN(n));
+      return keys.length > 0 ? Math.max(...keys) : 1;
+    }
     return trip.timeline ? Math.max(...trip.timeline.map(t => t.day || 1), 1) : 1;
   })();
 
@@ -40,7 +44,15 @@ export function exportItineraryAsPDF(trip, tripStart) {
   // Build days HTML
   let daysHtml = "";
   for (let day = 1; day <= numDays; day++) {
-    const dayItems = (trip.timeline || []).filter(item => item.day === day).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    const dayItems = (() => {
+      const tl = trip.timeline;
+      if (!tl) return [];
+      // Support both object-keyed {1: [...], 2: [...]} and flat array [{day: 1, ...}] formats
+      if (typeof tl === "object" && !Array.isArray(tl)) {
+        return (tl[day] || []).slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+      }
+      return tl.filter(item => item.day === day).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    })();
     daysHtml += `
       <div class="day-section">
         <h2>Day ${day}${formatDayDate(day) ? ` &mdash; ${formatDayDate(day)}` : ""}</h2>

@@ -9,7 +9,7 @@ import { TripMap } from '../map/TripMap';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useTrip } from '../../contexts/TripContext';
 
-const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, onSkip, onCostUpdate }) => {
+const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, onSkip, onCostUpdate, onRemove }) => {
   const forMap = { all: "Everyone", adults: "Adults", kids: "Max & Ella", older: "Max (12)", younger: "Ella (8)" };
   return (
     <div style={{ position: "relative", marginBottom: 12, cursor: "pointer" }} onClick={onToggle}>
@@ -56,7 +56,7 @@ const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, o
             <button style={{ ...css.btn, ...css.btnSm }} onClick={() => alert(`Calling ${item.title}...`)}>Call</button>
             <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+reviews`, "_blank")}>Reviews</button>
             <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+menu`, "_blank")}>Menu</button>
-            <button style={{ ...css.btn, ...css.btnSm, color: T.red }} onClick={() => alert(`${item.title} removed from itinerary.`)}>Remove</button>
+            <button style={{ ...css.btn, ...css.btnSm, color: T.red }} onClick={() => { if (window.confirm(`Remove "${item.title}" from the itinerary?`)) { onRemove?.(); } }}>Remove</button>
           </div>
         </div>
       )}
@@ -67,8 +67,10 @@ const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, o
 export function TripScreen() {
   const { navigate } = useNavigation();
   const { selectedDay, setSelectedDay, expandedItem, setExpandedItem, bookingStates, setBookingStates } = useTrip();
+  const [removedItems, setRemovedItems] = React.useState(new Set());
   const day = DAYS[selectedDay - 1];
-  const items = TIMELINE[selectedDay] || [];
+  const allItems = TIMELINE[selectedDay] || [];
+  const items = allItems.filter((item, i) => !removedItems.has(`${selectedDay}-${item.title}`));
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Hero */}
@@ -128,7 +130,8 @@ export function TripScreen() {
               bookingState={bookingStates[`${selectedDay}-${i}`]}
               onBook={() => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { status: "booked", cost: "" } }))}
               onSkip={() => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { status: "skipped" } }))}
-              onCostUpdate={(cost) => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { ...prev[`${selectedDay}-${i}`], cost } }))} />
+              onCostUpdate={(cost) => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { ...prev[`${selectedDay}-${i}`], cost } }))}
+              onRemove={() => setRemovedItems(prev => new Set([...prev, `${selectedDay}-${item.title}`]))} />
           ))}
         </div>
 

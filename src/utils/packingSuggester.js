@@ -322,6 +322,7 @@ export function generatePackingSuggestions(trip, intelligence) {
       add("Travel insurance docs", "documents", `International travel to ${foreignDest}`);
       add("Foreign currency / travel card", "documents", `International travel to ${foreignDest}`);
       add("Plug adapter", "electronics", `International travel to ${foreignDest}`);
+      add("Travel adapter (universal)", "electronics", `Different plug types in ${foreignDest}`);
       add("Copies of booking confirmations", "documents", `International travel to ${foreignDest}`);
     }
   }

@@ -355,9 +355,9 @@ export function ChatProvider({ children }) {
             currentDay: selectedDay,
           },
           intelligence: intelligenceRef.current, // Real-time signals from connectors
-          chatHistory: tripChatMessages.slice(-20),
-          chatSummary: tripChatMessages.length > 20 ? (() => {
-            const earlier = tripChatMessages.slice(0, -20);
+          chatHistory: tripChatMessages.slice(-30),
+          chatSummary: tripChatMessages.length > 30 ? (() => {
+            const earlier = tripChatMessages.slice(0, -30);
             const topics = [...new Set(earlier.filter(m => m.role === 'user').map(m => m.text).filter(Boolean).map(t => t.slice(0, 60)))].slice(-5);
             return `Earlier in this conversation (${earlier.length} messages), topics discussed: ${topics.join('; ') || 'general trip planning'}`;
           })() : null,

@@ -583,6 +583,10 @@ export function CreateScreen() {
                 let url = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(q)}`;
                 if (wizTrip.start) url += `&checkin=${wizTrip.start}`;
                 if (wizTrip.end) url += `&checkout=${wizTrip.end}`;
+                const numAdults = wizTravellers.adults?.length || 1;
+                const numChildren = (wizTravellers.olderKids?.length || 0) + (wizTravellers.youngerKids?.length || 0) + (wizTravellers.infants?.length || 0);
+                url += `&group_adults=${numAdults}`;
+                if (numChildren > 0) url += `&group_children=${numChildren}`;
                 window.open(url, "_blank");
               }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, flex: 1, justifyContent: "center", fontSize: 11 }}>
                 Search Booking.com
