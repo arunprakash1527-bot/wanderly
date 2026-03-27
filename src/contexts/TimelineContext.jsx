@@ -378,10 +378,10 @@ export function TimelineProvider({ children }) {
   };
 
   // ─── View Created Trip (needs both TripData + TripUI state) ───
-  const viewCreatedTrip = (trip) => {
+  const viewCreatedTrip = (trip, initialTab = "itinerary") => {
     setSelectedCreatedTrip(trip);
     setEditingTimelineIdx(null);
-    setTripDetailTab("itinerary");
+    setTripDetailTab(initialTab);
     setSelectedDay(1);
     setShowNotifications(false);
     navigate("createdTrip");

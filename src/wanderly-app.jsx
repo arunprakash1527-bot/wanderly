@@ -30,25 +30,50 @@ import { PinProvider } from './contexts/PinContext';
 
 
 // ─── Main App: thin provider composition ───
+// ─── Error Boundary ───
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err, info) { console.error("App error:", err, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", fontFamily: "'DM Sans', sans-serif", textAlign: "center", padding: 32, background: "#FAFAF8" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>😵</div>
+          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>Something went wrong</h2>
+          <p style={{ fontSize: 14, color: "#666", marginBottom: 24 }}>The app hit an unexpected error.</p>
+          <button onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
+            style={{ padding: "10px 24px", borderRadius: 20, background: "#1B8F6A", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            Reload App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function TripWithMeApp() {
   return (
-    <AuthProvider>
-      <NavigationProvider>
-        <TripProvider>
-          <WizardProvider>
-            <ChatProvider>
-              <ExpenseProvider>
-                <MemoriesProvider>
-                  <PinProvider>
-                    <AppShell />
-                  </PinProvider>
-                </MemoriesProvider>
-              </ExpenseProvider>
-            </ChatProvider>
-          </WizardProvider>
-        </TripProvider>
-      </NavigationProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <NavigationProvider>
+          <TripProvider>
+            <WizardProvider>
+              <ChatProvider>
+                <ExpenseProvider>
+                  <MemoriesProvider>
+                    <PinProvider>
+                      <AppShell />
+                    </PinProvider>
+                  </MemoriesProvider>
+                </ExpenseProvider>
+              </ChatProvider>
+            </WizardProvider>
+          </TripProvider>
+        </NavigationProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -69,7 +94,7 @@ function useIsDesktop() {
 // ─── Desktop Side Panel ───
 function DesktopSidePanel({ screen }) {
   const { wizTrip, wizTravellers, wizStays, wizStep } = useWizard();
-  const { selectedCreatedTrip, createdTrips } = useTrip();
+  const { selectedCreatedTrip, createdTrips, viewCreatedTrip } = useTrip();
 
   const WIZARD_STEPS = ["Destination", "Dates & Travel", "Travellers", "Stays", "Preferences", "Review"];
 
@@ -304,7 +329,7 @@ function DesktopSidePanel({ screen }) {
           <div>
             <p style={{ fontSize: 11, fontWeight: 500, color: T.a, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 12 }}>Upcoming Trips</p>
             {upcoming.map(trip => (
-              <div key={trip.id} style={{ padding: 16, borderRadius: 14, background: T.s, border: `1px solid ${T.border}`, marginBottom: 10 }}>
+              <div key={trip.id} onClick={() => viewCreatedTrip(trip)} style={{ padding: 16, borderRadius: 14, background: T.s, border: `1px solid ${T.border}`, marginBottom: 10, cursor: "pointer", transition: "all .15s" }}>
                 <p style={{ fontSize: 15, fontWeight: 600, color: T.t1 }}>{trip.name}</p>
                 {trip.places?.length > 0 && <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>📍 {trip.places.join(", ")}</p>}
                 {trip.rawStart && <p style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>📅 {new Date(trip.rawStart + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>}

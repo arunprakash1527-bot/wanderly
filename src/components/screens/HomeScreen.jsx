@@ -134,7 +134,7 @@ export function HomeScreen() {
                   { icon: "🎒", label: "Packing", tab: "packing" },
                   { icon: "📸", label: "Memories", tab: "memories" },
                 ].map(f => (
-                  <span key={f.tab} onClick={e => { e.stopPropagation(); viewCreatedTrip(trip); setTripDetailTab(f.tab); }}
+                  <span key={f.tab} onClick={e => { e.stopPropagation(); viewCreatedTrip(trip, f.tab); }}
                     style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, color: T.t2, background: T.s2, padding: "3px 8px", borderRadius: 10, cursor: "pointer", fontFamily: T.font, transition: "all .15s" }}>
                     {f.icon} {f.label}
                   </span>
@@ -151,7 +151,7 @@ export function HomeScreen() {
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {trip.status !== "live" && trip.status !== "completed" && <button onClick={e => { e.stopPropagation(); makeTripLive(trip.id); }} style={{ ...css.btn, ...css.btnP, ...css.btnSm, fontSize: 12 }}>Activate trip</button>}
-              <button onClick={e => { e.stopPropagation(); if (window.confirm(`Remove "${trip.name}"? This cannot be undone.`)) deleteCreatedTrip(trip.id); }}
+              <button onClick={e => { e.stopPropagation(); deleteCreatedTrip(trip.id); }}
                 style={{ ...css.btn, ...css.btnSm, fontSize: 12, color: T.red, borderColor: "rgba(200,50,50,.2)" }}>Remove</button>
             </div>
           </div>
