@@ -127,8 +127,20 @@ export function ChatProvider({ children }) {
     // Helper: resolve location for a specific day (not just selectedDay)
     const locForDay = (dayNum) => {
       const stays = trip?.stays || [];
+      const places = trip?.places || [];
+      const inferLoc = (s) => s.location || (s.name && places.find(p => s.name.toLowerCase().includes(p.toLowerCase()))) || places[0] || "";
       if (stays.length > 0 && trip?.rawStart) {
-        const sorted = [...stays].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+        const sorted = [...stays].filter(s => s.checkIn).map(s => ({ ...s, location: inferLoc(s) })).filter(s => s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+        const uniqueStayLocs = [...new Set(sorted.map(s => s.location.toLowerCase().trim()))];
+        const isBaseCamp = sorted.length >= 1 && uniqueStayLocs.length === 1 && places.length > 1;
+        if (isBaseCamp) {
+          const baseLoc = sorted[0].location;
+          const dayTrips = places.filter(p => p.toLowerCase().trim() !== baseLoc.toLowerCase().trim());
+          const numDays = trip.timeline ? Object.keys(trip.timeline).length : Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1);
+          if (dayNum === 1 || dayNum === numDays) return baseLoc;
+          if (dayTrips.length > 0) return dayTrips[(dayNum - 2) % dayTrips.length];
+          return baseLoc;
+        }
         const tripStart = new Date(trip.rawStart + "T12:00:00");
         const dayDateStr = new Date(tripStart.getTime() + (dayNum - 1) * 86400000).toISOString().split("T")[0];
         let matched = sorted.find(s => s.checkIn <= dayDateStr && s.checkOut > dayDateStr);
@@ -136,7 +148,6 @@ export function ChatProvider({ children }) {
         if (!matched && dayNum === 1) matched = sorted[0];
         if (matched?.location) return matched.location;
       }
-      const places = trip?.places || [];
       if (places.length > 0) return places[(dayNum - 1) % places.length];
       return firstLoc;
     };

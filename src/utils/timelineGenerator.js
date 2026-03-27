@@ -91,7 +91,13 @@ export function generateMultiDayTimeline(trip) {
   const fmtTime = (h, m = 0) => { const hh = Math.floor(h); const mm = m || Math.round((h - hh) * 60); const suffix = hh >= 12 ? "PM" : "AM"; const hr = hh > 12 ? hh - 12 : hh === 0 ? 12 : hh; return `${hr}:${mm.toString().padStart(2, "0")} ${suffix}`; };
 
   // ─── BUILD DAY-TO-PLACE MAP ───
-  const sortedStays = [...(trip.stays || [])].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+  const inferLocation = (stay) => {
+    if (stay.location) return stay.location;
+    const name = (stay.name || "").toLowerCase();
+    const match = (trip.places || []).find(p => name.includes(p.toLowerCase()));
+    return match || (trip.places || [])[0] || "";
+  };
+  const sortedStays = [...(trip.stays || [])].filter(s => s.checkIn).map(s => ({ ...s, location: inferLocation(s) })).filter(s => s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
   const tripStartDate = trip.rawStart ? new Date(trip.rawStart + "T12:00:00") : new Date();
   const places = trip.places || [];
 
@@ -153,7 +159,7 @@ export function generateMultiDayTimeline(trip) {
       const prevDay = dayMap[d - 1];
       const prevPlace = prevDay ? prevDay.place : null;
       const isTransit = prevPlace && prevPlace.toLowerCase() !== place.toLowerCase();
-      dayMap[d] = { place, stayName, prevPlace, isTransit };
+      dayMap[d] = { place, stayName, prevPlace, isTransit, isBaseCamp: false, isDayTrip: false };
     }
   } else if (places.length > 0) {
     const daysPerPlace = Math.floor(numDays / places.length);
@@ -165,13 +171,13 @@ export function generateMultiDayTimeline(trip) {
         const prevDay = dayMap[dayIdx - 1];
         const prevPlace = prevDay ? prevDay.place : null;
         const isTransit = prevPlace && prevPlace.toLowerCase() !== places[p].toLowerCase();
-        dayMap[dayIdx] = { place: places[p], stayName: `accommodation in ${places[p]}`, prevPlace, isTransit };
+        dayMap[dayIdx] = { place: places[p], stayName: `accommodation in ${places[p]}`, prevPlace, isTransit, isBaseCamp: false, isDayTrip: false };
         dayIdx++;
       }
     }
   } else {
     for (let d = 1; d <= numDays; d++) {
-      dayMap[d] = { place: "your destination", stayName: "accommodation", prevPlace: null, isTransit: false };
+      dayMap[d] = { place: "your destination", stayName: "accommodation", prevPlace: null, isTransit: false, isBaseCamp: false, isDayTrip: false };
     }
   }
 
@@ -192,7 +198,9 @@ export function generateMultiDayTimeline(trip) {
     if (locActs?.dinner?.length > 0) return locActs.dinner[dayIdx % locActs.dinner.length];
     if (food.length > 0 && food[0] !== "Local cuisine") {
       const cuisine = food[dayIdx % food.length];
-      return `${cuisine} ${wantsPubs ? "pub" : "restaurant"} in ${loc}`;
+      const cuisineLower = cuisine.toLowerCase();
+      const venue = (wantsPubs && !cuisineLower.includes("pub")) ? "pub" : (!wantsPubs ? "restaurant" : "spot");
+      return `${cuisine} ${venue} in ${loc}`;
     }
     return wantsPubs ? "Dinner at local pub" : `Dinner in ${loc}`;
   };
@@ -431,7 +439,8 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(17), title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
       }
 
-      items.push({ time: fmtTime(tpDinnerTime), title: buildDinnerTitle(loc, d - 1), desc: `${foodForDay(d - 1)} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+      const dinnerLoc = dayMap[d]?.isDayTrip && dayMap[d]?.baseLoc ? dayMap[d].baseLoc : loc;
+      items.push({ time: fmtTime(tpDinnerTime), title: buildDinnerTitle(dinnerLoc, d - 1), desc: `${foodForDay(d - 1)} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
     }
 
     days[d] = items;

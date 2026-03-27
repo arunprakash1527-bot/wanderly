@@ -578,7 +578,7 @@ export function CreateScreen() {
 
             {/* Custom add option */}
             {staySearch.trim().length >= 2 && (
-              <div onClick={() => addStay({ name: staySearch.trim(), type: "Custom", tags: [], rating: null, price: null, address: "", location: "" })}
+              <div onClick={() => addStay({ name: staySearch.trim(), type: "Custom", tags: [], rating: null, price: null, address: "", location: wizTrip.places.find(p => staySearch.toLowerCase().includes(p.toLowerCase())) || wizTrip.places[0] || "" })}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: "pointer", borderRadius: T.rs, border: `1.5px dashed ${T.a}`, marginBottom: 8, background: T.al, transition: "background .15s" }}>
                 <div style={{ width: 40, height: 40, borderRadius: 8, background: T.a, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0, color: "#fff" }}>+</div>
                 <div style={{ flex: 1 }}>
