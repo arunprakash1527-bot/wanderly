@@ -7,7 +7,7 @@ import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
 import { fetchTripIntelligence, buildSmartGreeting, buildSmartTips } from "../utils/tripIntelligence";
-import { getLocationActivities } from "../utils/locationHelpers";
+import { getLocationActivities, estimateTravelHours } from "../utils/locationHelpers";
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const ChatContext = createContext(null);
@@ -124,6 +124,22 @@ export function ChatProvider({ children }) {
       return "your destination";
     })();
     const firstLoc = currentDayLoc;
+    // Helper: resolve location for a specific day (not just selectedDay)
+    const locForDay = (dayNum) => {
+      const stays = trip?.stays || [];
+      if (stays.length > 0 && trip?.rawStart) {
+        const sorted = [...stays].filter(s => s.checkIn && s.location).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+        const tripStart = new Date(trip.rawStart + "T12:00:00");
+        const dayDateStr = new Date(tripStart.getTime() + (dayNum - 1) * 86400000).toISOString().split("T")[0];
+        let matched = sorted.find(s => s.checkIn <= dayDateStr && s.checkOut > dayDateStr);
+        if (!matched) matched = sorted.find(s => s.checkIn === dayDateStr);
+        if (!matched && dayNum === 1) matched = sorted[0];
+        if (matched?.location) return matched.location;
+      }
+      const places = trip?.places || [];
+      if (places.length > 0) return places[(dayNum - 1) % places.length];
+      return firstLoc;
+    };
     const budget = trip?.budget || "";
     const summary = trip?.summary || buildTripSummary(trip || {});
     const instructions = trip?.prefs?.instructions || "";
@@ -151,7 +167,11 @@ export function ChatProvider({ children }) {
       if (picked) {
         setTripChatFlow(null);
         const smartSlot = findSmartSlot(tripId, targetDay, "add " + picked.toLowerCase());
-        const newItem = { time: smartSlot.time, title: picked, desc: `${flowLoc} · Added via chat`, group: "Everyone", color: T.blue };
+        // Include distance from stay/base if applicable
+        const baseLoc = trip?.stays?.[0]?.location || trip?.startLocation || flowLoc;
+        const distHrs = flowLoc !== baseLoc ? estimateTravelHours(baseLoc, flowLoc, trip?.travel?.[0] || "car") : 0;
+        const distDesc = distHrs >= 0.5 ? ` · ~${distHrs >= 1 ? Math.round(distHrs * 10) / 10 + " hrs" : Math.round(distHrs * 60) + " min"} from ${baseLoc}` : "";
+        const newItem = { time: smartSlot.time, title: picked, desc: `${flowLoc}${distDesc}`, group: "Everyone", color: T.blue };
         const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
         setCreatedTrips(prev => prev.map(t => {
           if (t.id !== tripId) return t;
@@ -335,20 +355,26 @@ export function ChatProvider({ children }) {
       // For generic/vague items — present location-specific options for the user to pick
       const isGeneric = itemTitle && /^(famous|popular|top|best|must.?see|local|nearby|good)\s+(attraction|activit|restaurant|place|thing|spot|sight|landmark|experience)/i.test(itemTitle);
       if (isGeneric) {
-        const locActs = getLocationActivities(firstLoc);
-        const allOptions = locActs ? [...(locActs.morning || []), ...(locActs.afternoon || []), ...(locActs.kids || [])].slice(0, 6) : [`Explore ${firstLoc}`, `Walking tour of ${firstLoc}`, `Local market in ${firstLoc}`, `${firstLoc} sightseeing walk`, `Museum visit`, `Photography walk`];
+        const dayLoc = locForDay(targetDay);
+        const locActs = getLocationActivities(dayLoc);
+        const allOptions = locActs ? [...(locActs.morning || []), ...(locActs.afternoon || []), ...(locActs.kids || [])].slice(0, 6) : [`Explore ${dayLoc}`, `Walking tour of ${dayLoc}`, `Local market in ${dayLoc}`, `${dayLoc} sightseeing walk`, `Museum visit`, `Photography walk`];
         const uniqueOptions = [...new Set(allOptions)].slice(0, 6);
-        setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay, loc: firstLoc } });
+        // Include distance context if day location differs from base/start
+        const baseLoc = trip?.startLocation || firstLoc;
+        const distHrs = dayLoc !== baseLoc ? estimateTravelHours(baseLoc, dayLoc, trip?.travel?.[0] || "car") : 0;
+        const distNote = distHrs >= 1 ? `\n\n📍 ${dayLoc} is ~${Math.round(distHrs * 10) / 10} hrs from ${baseLoc}` : "";
+        setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay, loc: dayLoc } });
         const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
-        const reply = `Here are some popular attractions in **${firstLoc}** for Day ${targetDay}:\n\n${optionsList}\n\nReply with a number to add it to your itinerary, or type something specific!`;
+        const reply = `Here are popular attractions in **${dayLoc}** for Day ${targetDay}:\n\n${optionsList}${distNote}\n\nReply with a number to add it, or type something specific!`;
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
       }
       if (itemTitle && itemTitle.length > 2) {
+        const dayLoc = locForDay(targetDay);
         const smartSlot = findSmartSlot(tripId, targetDay, lower);
-        const newItem = { time: smartSlot.time, title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
+        const newItem = { time: smartSlot.time, title: itemTitle, desc: `${dayLoc} · Added via chat`, group: "Everyone", color: T.blue };
         const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
         let replacedTitle = null;
         setCreatedTrips(prev => prev.map(t => {
