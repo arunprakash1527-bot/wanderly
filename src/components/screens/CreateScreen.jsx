@@ -63,7 +63,12 @@ export function CreateScreen() {
     ];
     const applyTemplate = (t) => {
       setWizTrip(prev => ({ ...prev, ...t.prefill, travel: t.prefill.travel || prev.travel, templateKey: t.name }));
-      if (t.addKids) setWizTravellers(prev => ({ ...prev, youngerKids: prev.youngerKids.length === 0 ? [{ name: "", age: 7 }] : prev.youngerKids }));
+      if (t.addKids) {
+        setWizTravellers(prev => ({ ...prev, youngerKids: prev.youngerKids.length === 0 ? [{ name: "", age: 7 }] : prev.youngerKids }));
+      } else {
+        // Clear auto-added kids when switching away from Family Holiday
+        setWizTravellers(prev => ({ ...prev, youngerKids: prev.youngerKids.filter(k => k.name) }));
+      }
       if (t.name === "Romantic Trip") setWizTravellers(prev => prev.adults.length < 2 ? { ...prev, adults: [...prev.adults, { name: "", email: "" }] } : prev);
     };
     return (
