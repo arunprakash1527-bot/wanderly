@@ -107,7 +107,7 @@ export function ChatScreen() {
     const stay = TRIP.stays[0];
     const lastStay = TRIP.stays[TRIP.stays.length - 1];
     const travelMode = TRIP.travelMode || "car";
-    const isEV = travelMode.toLowerCase().includes("ev");
+    const isEV = /\bev\b/i.test(travelMode) && !/non[\s-]*ev/i.test(travelMode);
 
     // ─── Conversational Flow Handler ───
     if (chatFlowStep === "ask_start") {

@@ -25,7 +25,7 @@ export function ActivationModal() {
   if (!showActivationModal) return null;
 
   const pendTrip = createdTrips.find(t => t.id === pendingActivationTripId);
-  const isEV = pendTrip?.travel?.some(m => /ev/i.test(m));
+  const isEV = pendTrip?.travel?.some(m => /\bev\b/i.test(m) && !/non[\s-]*ev/i.test(m));
   const startLoc = pendTrip?.startLocation || "";
   const firstPlace = pendTrip?.places?.[0] || "";
   const routePlaces = pendTrip ? getSmartRouteOrder(pendTrip) : [];
