@@ -341,8 +341,10 @@ export function generateMultiDayTimeline(trip) {
           items.push({ time: fmtTime(evHr), title: `⚡ Charge & Coffee Stop`, desc: `En route to ${loc} · ~30 min rapid charge`, group: "Everyone", color: T.amber, evSearch: { from: dayInfo.baseLoc, to: loc } });
         }
 
-        const arriveHr = Math.min(Math.floor(departHr + 1 + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0)), 13);
-        items.push({ time: fmtTime(arriveHr), title: `Arrive ${loc}`, desc: `Day trip — exploring ${loc}`, group: "Everyone", color: T.a });
+        const rawArrival = departHr + 1 + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0);
+        const arriveHr = Math.min(Math.floor(rawArrival), 13);
+        const arriveMin = Math.round((rawArrival - Math.floor(rawArrival)) * 60);
+        items.push({ time: fmtTime(arriveHr, arriveMin), title: `Arrive ${loc}`, desc: `Day trip — exploring ${loc}`, group: "Everyone", color: T.a });
 
         const mIdx = nextActIdx(loc, "m");
         const morningAct = pickAct(locPools.morning, mIdx, steepTest) || `Explore ${loc}`;

@@ -370,10 +370,11 @@ export function ChatProvider({ children }) {
         const locActs = getLocationActivities(dayLoc);
         const allOptions = locActs ? [...(locActs.morning || []), ...(locActs.afternoon || []), ...(locActs.kids || [])].slice(0, 6) : [`Explore ${dayLoc}`, `Walking tour of ${dayLoc}`, `Local market in ${dayLoc}`, `${dayLoc} sightseeing walk`, `Museum visit`, `Photography walk`];
         const uniqueOptions = [...new Set(allOptions)].slice(0, 6);
-        // Include distance context if day location differs from base/start
-        const baseLoc = trip?.startLocation || firstLoc;
-        const distHrs = dayLoc !== baseLoc ? estimateTravelHours(baseLoc, dayLoc, trip?.travel?.[0] || "car") : 0;
-        const distNote = distHrs >= 1 ? `\n\n📍 ${dayLoc} is ~${Math.round(distHrs * 10) / 10} hrs from ${baseLoc}` : "";
+        // Include distance context if day location differs from base/stay
+        const stayBaseLoc = trip?.stays?.[0]?.location || (trip?.stays?.[0]?.name && places.find(p => trip.stays[0].name.toLowerCase().includes(p.toLowerCase()))) || null;
+        const distBase = stayBaseLoc || firstLoc;
+        const distHrs = dayLoc.toLowerCase() !== distBase.toLowerCase() ? estimateTravelHours(distBase, dayLoc, trip?.travel?.[0] || "car") : 0;
+        const distNote = distHrs >= 0.25 ? `\n\n📍 ${dayLoc} is ~${distHrs >= 1 ? Math.round(distHrs * 10) / 10 + " hrs" : Math.round(distHrs * 60) + " min"} from ${distBase}` : "";
         setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay, loc: dayLoc } });
         const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
         const reply = `Here are popular attractions in **${dayLoc}** for Day ${targetDay}:\n\n${optionsList}${distNote}\n\nReply with a number to add it, or type something specific!`;
