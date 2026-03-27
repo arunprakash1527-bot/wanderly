@@ -63,7 +63,7 @@ export function CreateScreen() {
     ];
     const applyTemplate = (t) => {
       setWizTrip(prev => ({ ...prev, ...t.prefill, travel: t.prefill.travel || prev.travel, templateKey: t.name }));
-      if (t.addKids) setWizTravellers(prev => ({ ...prev, youngerKids: prev.youngerKids.length === 0 ? [{ name: "", age: 6 }] : prev.youngerKids }));
+      if (t.addKids) setWizTravellers(prev => ({ ...prev, youngerKids: prev.youngerKids.length === 0 ? [{ name: "", age: 7 }] : prev.youngerKids }));
       if (t.name === "Romantic Trip") setWizTravellers(prev => prev.adults.length < 2 ? { ...prev, adults: [...prev.adults, { name: "", email: "" }] } : prev);
     };
     return (
@@ -281,7 +281,7 @@ export function CreateScreen() {
       setWizTravellers(prev => ({ ...prev, adults: prev.adults.filter((_, i) => i !== idx) }));
     };
     const addChild = (group) => {
-      setWizTravellers(prev => ({ ...prev, [group]: [...prev[group], { name: "", age: group === "olderKids" ? 14 : group === "infants" ? 0 : 6 }] }));
+      setWizTravellers(prev => ({ ...prev, [group]: [...prev[group], { name: "", age: group === "olderKids" ? 15 : group === "infants" ? 0 : 7 }] }));
     };
     const updateChild = (group, idx, field, val) => {
       setWizTravellers(prev => ({ ...prev, [group]: prev[group].map((c, i) => i === idx ? { ...c, [field]: val } : c) }));

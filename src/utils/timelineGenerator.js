@@ -2,6 +2,31 @@ import { T } from "../styles/tokens";
 import { getLocationActivities, estimateTravelHours } from "./locationHelpers";
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
+// ─── Country detection for smart travel mode ───
+const CITY_COUNTRY = {
+  "bali": "id", "tenerife": "es", "mallorca": "es", "ibiza": "es", "crete": "gr", "santorini": "gr",
+  "marrakech": "ma", "bangkok": "th", "tokyo": "jp", "paris": "fr", "rome": "it", "barcelona": "es",
+  "amsterdam": "nl", "berlin": "de", "lisbon": "pt", "prague": "cz", "budapest": "hu", "vienna": "at",
+  "dubrovnik": "hr", "istanbul": "tr", "reykjavik": "is", "oslo": "no", "stockholm": "se",
+  "copenhagen": "dk", "helsinki": "fi", "athens": "gr", "naples": "it", "florence": "it",
+  "venice": "it", "milan": "it", "nice": "fr", "lyon": "fr", "bordeaux": "fr", "seville": "es",
+  "valencia": "es", "munich": "de", "hamburg": "de", "zurich": "ch", "geneva": "ch",
+  "brussels": "be", "bruges": "be", "porto": "pt", "faro": "pt", "dubai": "ae", "singapore": "sg",
+  "edinburgh": "gb", "london": "gb", "manchester": "gb", "birmingham": "gb", "cardiff": "gb",
+  "belfast": "gb", "glasgow": "gb", "new york": "us", "los angeles": "us", "sydney": "au",
+  "melbourne": "au", "auckland": "nz", "toronto": "ca", "vancouver": "ca", "halifax": "ca",
+  "delhi": "in", "mumbai": "in", "goa": "in", "jaipur": "in", "lake district": "gb",
+  "cotswolds": "gb", "cornwall": "gb", "york": "gb", "bath": "gb", "brighton": "gb",
+};
+function resolveCountry(loc) {
+  if (!loc) return null;
+  const l = loc.toLowerCase();
+  for (const [city, cc] of Object.entries(CITY_COUNTRY)) {
+    if (l.includes(city)) return cc;
+  }
+  return null;
+}
+
 /**
  * Pure function: generates a multi-day timeline object { 1: [...], 2: [...], ... }
  * from a trip object. No React state dependencies.
@@ -29,7 +54,16 @@ export function generateMultiDayTimeline(trip) {
   }
   const food = trip.prefs.food.length > 0 ? trip.prefs.food : ["Local cuisine"];
   const foodLabel = food.join(" + ");
-  const travelMode = trip.travel[0] || "Travel";
+  const foodForDay = (dayIdx) => food[dayIdx % food.length];
+  const hasFlight = trip.travel?.some(m => /flight|fly|plane/i.test(m));
+  const hasCar = trip.travel?.some(m => /car|vehicle|driv/i.test(m));
+  const startCountry = resolveCountry(trip.startLocation);
+  const destCountries = (trip.places || []).map(p => resolveCountry(p)).filter(Boolean);
+  const isInternational = startCountry && destCountries.length > 0 && destCountries.some(dc => dc !== startCountry);
+  // For international trips with flight+car: use flight for long-haul, car locally
+  const longHaulMode = hasFlight && isInternational ? "Flight" : (trip.travel[0] || "Travel");
+  const localMode = hasCar ? (trip.travel.find(m => /car|vehicle|driv/i.test(m)) || trip.travel[0]) : longHaulMode;
+  const travelMode = isInternational && hasFlight ? longHaulMode : (trip.travel[0] || "Travel");
   const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || []), ...(trip.travellers?.infants || [])];
   const hasKids = allKids.length > 0;
   const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
@@ -163,8 +197,18 @@ export function generateMultiDayTimeline(trip) {
     return wantsPubs ? "Dinner at local pub" : `Dinner in ${loc}`;
   };
 
+  const usedActivities = new Set();
   const pickAct = (pool, dayIdx, avoid) => {
     if (!pool || pool.length === 0) return null;
+    // Try to find an unused activity starting from dayIdx
+    for (let offset = 0; offset < pool.length; offset++) {
+      const candidate = pool[(dayIdx + offset) % pool.length];
+      if (usedActivities.has(candidate)) continue;
+      if (avoid && avoid.test(candidate.toLowerCase())) continue;
+      usedActivities.add(candidate);
+      return candidate;
+    }
+    // All used — fall back to rotation (allow repeat)
     let act = pool[dayIdx % pool.length];
     if (avoid && avoid.test(act.toLowerCase())) {
       act = pool.find(a => !avoid.test(a.toLowerCase())) || act;
@@ -227,11 +271,11 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(exploreHr), title: act, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
           const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
-          items.push({ time: fmtTime(exploreHr), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          items.push({ time: fmtTime(exploreHr, 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
         if (isPacked && remainingHours >= 4) {
           const lunchHr = Math.min(exploreHr + 2, 15);
-          items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodLabel}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+          items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodForDay(d - 1)}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
           if (remainingHours >= 6) {
             const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Stroll around ${loc}`;
             items.push({ time: fmtTime(Math.min(lunchHr + 2, 17)), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
@@ -242,7 +286,7 @@ export function generateMultiDayTimeline(trip) {
       }
 
       const dinnerHr = Math.max(arrivalHour + 2, 18);
-      items.push({ time: fmtTime(Math.min(dinnerHr, 20)), title: buildDinnerTitle(loc, 0), desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+      items.push({ time: fmtTime(Math.min(dinnerHr, 20)), title: buildDinnerTitle(loc, 0), desc: `${foodForDay(0)} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
 
     } else if (isLast && numDays > 1) {
       const dayInfo = dayMap[d];
@@ -258,13 +302,14 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(10), title: lastAct, desc: tags(`${departureLoc} · Final morning`), group: "Everyone", color: T.blue });
         if (hasKids) {
           const kidAct = pickAct(kidPool, nextActIdx(departureLoc, "k"), null);
-          if (kidAct) items.push({ time: fmtTime(10), title: kidAct, desc: tags(`${departureLoc} · Last day fun`), group: "Kids", color: T.pink });
+          if (kidAct) items.push({ time: fmtTime(10, 30), title: kidAct, desc: tags(`${departureLoc} · Last day fun`), group: "Kids", color: T.pink });
         }
       }
       const lunchDepartHr = earlyFinish ? 10 : 12;
-      items.push({ time: fmtTime(lunchDepartHr), title: earlyFinish ? "Quick brunch & depart" : "Lunch & depart", desc: `${foodLabel} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home (${rLabel})`, group: "Everyone", color: T.coral });
+      items.push({ time: fmtTime(lunchDepartHr), title: earlyFinish ? "Quick brunch & depart" : "Lunch & depart", desc: `${foodForDay(d - 1)} · ${budgetTier.price} · Then ${travelMode.toLowerCase()} home (${rLabel})`, group: "Everyone", color: T.coral });
       if (trip.startLocation) {
-        items.push({ time: fmtTime(14), title: `🚗 ${travelMode} home`, desc: `${departureLoc} → ${trip.startLocation} · ${rLabel}${isEV ? " · Plan charging stop" : ""}`, group: "Everyone", color: T.a });
+        const returnIcon = /flight|fly|plane/i.test(travelMode) ? "✈️" : "🚗";
+        items.push({ time: fmtTime(14), title: `${returnIcon} ${travelMode} home`, desc: `${departureLoc} → ${trip.startLocation} · ${rLabel}${isEV ? " · Plan charging stop" : ""}`, group: "Everyone", color: T.a });
         if (isEV) {
           items.push({ time: fmtTime(14 + Math.floor(returnHrs / 2)), title: `⚡ Charge & Lunch Stop`, desc: `Service station en route · ~30 min rapid charge · Grab a meal while charging`, group: "Everyone", color: T.amber, evSearch: { from: departureLoc, to: trip.startLocation } });
         }
@@ -276,7 +321,7 @@ export function generateMultiDayTimeline(trip) {
       const dayInfo = dayMap[d];
 
       if (dayInfo.isDayTrip && dayInfo.baseLoc) {
-        const legHrs = estimateTravelHours(dayInfo.baseLoc, loc, travelMode);
+        const legHrs = estimateTravelHours(dayInfo.baseLoc, loc, localMode);
         const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
         const departHr = startHour;
 
@@ -296,16 +341,16 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(Math.min(arriveHr + 0.5, 12)), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
           const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
-          items.push({ time: fmtTime(Math.min(arriveHr + 0.5, 12)), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          items.push({ time: fmtTime(Math.min(arriveHr + 1, 12), 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
 
-        items.push({ time: fmtTime(13), title: `Lunch in ${loc}`, desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+        items.push({ time: fmtTime(13), title: `Lunch in ${loc}`, desc: `${foodForDay(d - 1)} · ${budgetTier.label} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
 
         const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Afternoon in ${loc}`;
         items.push({ time: fmtTime(14, 30), title: pmAct, desc: tags(`${loc} · Afternoon`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
           const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
-          items.push({ time: fmtTime(14, 30), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
+          items.push({ time: fmtTime(15), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
         }
 
         const returnDepartHr = 16;
@@ -317,11 +362,14 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(returnArriveHr), title: `Back at ${dayInfo.baseStayName}`, desc: `Freshen up · Relax`, group: "Everyone", color: T.t3 });
 
       } else if (isTransit) {
-        const legHrs = estimateTravelHours(prevPlace, loc, travelMode);
+        const prevCountry = resolveCountry(prevPlace);
+        const locCountry = resolveCountry(loc);
+        const transitMode = (prevCountry && locCountry && prevCountry !== locCountry && hasFlight) ? longHaulMode : localMode;
+        const legHrs = estimateTravelHours(prevPlace, loc, transitMode);
         const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
         const prevStay = dayMap[d - 1]?.stayName || "accommodation";
         items.push({ time: fmtTime(8), title: "Breakfast & check out", desc: `${prevStay} · Pack up & say goodbye to ${prevPlace}`, group: "Everyone", color: T.coral });
-        items.push({ time: fmtTime(9, 30), title: `${travelMode} to ${loc}`, desc: `${prevPlace} → ${loc} · ${legLabel}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
+        items.push({ time: fmtTime(9, 30), title: `${transitMode} to ${loc}`, desc: `${prevPlace} → ${loc} · ${legLabel}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
         if (isEV && legHrs >= 2) {
           const evHr = Math.min(9 + Math.floor(legHrs / 2), 13);
           items.push({ time: fmtTime(evHr, 30), title: `⚡ Charge & Coffee Stop`, desc: `Service station en route to ${loc} · ~30 min rapid charge · Stretch & refresh`, group: "Everyone", color: T.amber, evSearch: { from: prevPlace, to: loc } });
@@ -334,7 +382,7 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(freeHr), title: pmAct, desc: tags(`${loc} · First impressions`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
           const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
-          items.push({ time: fmtTime(freeHr), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          items.push({ time: fmtTime(freeHr, 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
       } else {
         // ─── Template-aware regular day ───
@@ -350,7 +398,7 @@ export function generateMultiDayTimeline(trip) {
         if (hasKids) {
           items.push({ time: fmtTime(startHour + 2), title: morningAct, desc: morningDesc, group: "Adults", color: T.blue });
           const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
-          items.push({ time: fmtTime(startHour + 2), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          items.push({ time: fmtTime(startHour + 2, 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         } else {
           items.push({ time: fmtTime(startHour + 2), title: morningAct, desc: morningDesc, group: "Everyone", color: T.blue });
         }
@@ -362,7 +410,7 @@ export function generateMultiDayTimeline(trip) {
           items.push({ time: fmtTime(startHour + 3.5), title: morningAct2, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         }
 
-        items.push({ time: fmtTime(12, 30), title: `Lunch — ${foodLabel}`, desc: `${budgetTier.label} ${eatLabel} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+        items.push({ time: fmtTime(12, 30), title: `Lunch — ${foodForDay(d - 1)}`, desc: `${budgetTier.label} ${eatLabel} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
 
         // Family rest break
         if (templateProfile?.restBreak && !isFirst && !isLast) {
@@ -375,7 +423,7 @@ export function generateMultiDayTimeline(trip) {
           if (hasKids) {
             items.push({ time: fmtTime(14, 30), title: pmAct, desc: pmDesc, group: "Adults", color: T.blue });
             const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
-            items.push({ time: fmtTime(14, 30), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
+            items.push({ time: fmtTime(15), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
           } else {
             items.push({ time: fmtTime(14, 30), title: pmAct, desc: pmDesc, group: "Everyone", color: T.blue });
           }
@@ -383,7 +431,7 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(17), title: `Return to ${stayName}`, desc: "Relax & freshen up", group: "Everyone", color: T.t3 });
       }
 
-      items.push({ time: fmtTime(tpDinnerTime), title: buildDinnerTitle(loc, d - 1), desc: `${foodLabel} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
+      items.push({ time: fmtTime(tpDinnerTime), title: buildDinnerTitle(loc, d - 1), desc: `${foodForDay(d - 1)} · ${budgetTier.label} · ${budgetTier.price}${wantsDogFriendly ? " · 🐕 Dog-friendly" : ""}`, group: "Everyone", color: T.coral });
     }
 
     days[d] = items;

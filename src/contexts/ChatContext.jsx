@@ -300,7 +300,9 @@ export function ChatProvider({ children }) {
       const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
       const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
       const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
-      if (itemTitle && itemTitle.length > 2) {
+      // Skip local handler for generic/vague items — let Claude API enrich them
+      const isGeneric = itemTitle && /^(famous|popular|top|best|must.?see|local|nearby|good)\s+(attraction|activit|restaurant|place|thing|spot|sight|landmark|experience)/i.test(itemTitle);
+      if (itemTitle && itemTitle.length > 2 && !isGeneric) {
         const smartSlot = findSmartSlot(tripId, targetDay, lower);
         const newItem = { time: smartSlot.time, title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
         const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };

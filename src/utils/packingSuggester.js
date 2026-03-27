@@ -12,11 +12,11 @@
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const BASE_ESSENTIALS = [
-  { item: "Passport / ID", category: "documents", forAll: true },
-  { item: "Phone charger", category: "electronics", forAll: true },
-  { item: "Medications", category: "health", forAll: true },
-  { item: "Travel insurance docs", category: "documents", forAll: true },
-  { item: "Cash + cards", category: "documents", forAll: true },
+  { item: "Passport / ID", category: "documents", perPerson: true },
+  { item: "Phone charger", category: "electronics" },
+  { item: "Medications", category: "health", perPerson: true },
+  { item: "Travel insurance docs", category: "documents", perPerson: true },
+  { item: "Cash + cards", category: "documents", perPerson: true },
 ];
 
 const WEATHER_ITEMS = {
@@ -174,8 +174,15 @@ export function generatePackingSuggestions(trip, intelligence) {
     suggestions.push({ item, category, reason, person: person || "everyone", checked: false, auto: true });
   };
 
-  // Base essentials
-  for (const e of BASE_ESSENTIALS) add(e.item, e.category, "Essential");
+  // Base essentials — per-person items get one entry per adult traveller
+  const adults = trip.travellers?.adults || [];
+  for (const e of BASE_ESSENTIALS) {
+    if (e.perPerson && adults.length > 1) {
+      adults.forEach(a => add(e.item, e.category, "Essential", a.name || "Adult"));
+    } else {
+      add(e.item, e.category, "Essential");
+    }
+  }
 
   // Weather-based — scan all forecast days for the trip, not just today
   const forecastDays = intelligence?.weather?.daily || [];

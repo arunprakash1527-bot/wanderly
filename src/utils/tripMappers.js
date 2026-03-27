@@ -32,13 +32,13 @@ export function mapTripFromDB(t) {
         })),
       olderKids: (t.trip_travellers || [])
         .filter(tr => tr.role === 'child_older' || tr.role === 'teen')
-        .map(tr => ({ name: tr.name, age: tr.age || 14, dbId: tr.id })),
+        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 15, dbId: tr.id })),
       youngerKids: (t.trip_travellers || [])
         .filter(tr => tr.role === 'child_younger' || tr.role === 'child')
-        .map(tr => ({ name: tr.name, age: tr.age || 6, dbId: tr.id })),
+        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 7, dbId: tr.id })),
       infants: (t.trip_travellers || [])
         .filter(tr => tr.role === 'infant')
-        .map(tr => ({ name: tr.name, age: tr.age || 0, dbId: tr.id })),
+        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 0, dbId: tr.id })),
     },
     stays: (t.trip_stays || []).map(s => ({
       name: s.name, type: s.type, tags: s.tags || [], rating: s.rating,
