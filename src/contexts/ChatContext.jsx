@@ -7,6 +7,7 @@ import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
 import { fetchTripIntelligence, buildSmartGreeting, buildSmartTips } from "../utils/tripIntelligence";
+import { getLocationActivities } from "../utils/locationHelpers";
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const ChatContext = createContext(null);
@@ -32,6 +33,7 @@ export function ChatProvider({ children }) {
   const [tripChatMessages, setTripChatMessages] = useState([]);
   const tripChatEndRef = useRef(null);
   const [tripChatTyping, setTripChatTyping] = useState(false);
+  const [tripChatFlow, setTripChatFlow] = useState(null); // { step, data }
 
   // Trip Intelligence state
   const [intelligence, setIntelligence] = useState(null);
@@ -139,6 +141,36 @@ export function ChatProvider({ children }) {
     const placesStr = trip?.places?.join(", ") || "your trip";
     const contextLine = "";
     const lower = msg.toLowerCase();
+
+    // ── Handle "pick attraction" flow — user selecting from suggested options ──
+    if (tripChatFlow?.step === "pick_attraction") {
+      const { options, targetDay, loc: flowLoc } = tripChatFlow.data;
+      // Check if user typed a number (1-based) or the attraction name
+      const numMatch = lower.match(/^(\d+)$/);
+      const picked = numMatch ? options[parseInt(numMatch[1]) - 1] : options.find(o => lower.includes(o.toLowerCase()));
+      if (picked) {
+        setTripChatFlow(null);
+        const smartSlot = findSmartSlot(tripId, targetDay, "add " + picked.toLowerCase());
+        const newItem = { time: smartSlot.time, title: picked, desc: `${flowLoc} · Added via chat`, group: "Everyone", color: T.blue };
+        const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+        setCreatedTrips(prev => prev.map(t => {
+          if (t.id !== tripId) return t;
+          const tl = t.timeline || {};
+          let dayTl = [...(tl[targetDay] || []), newItem];
+          dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
+          return { ...t, timeline: { ...tl, [targetDay]: dayTl } };
+        }));
+        logActivity(tripId, "📍", `Added "${picked}" to Day ${targetDay}`, "itinerary");
+        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+        const reply = `✅ Added **${picked}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Switching to your itinerary now!`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        saveChatMessage(trip?.dbId, 'ai', reply);
+        return;
+      } else {
+        setTripChatFlow(null); // Clear flow if user typed something else
+      }
+    }
 
     // ── EV charger queries — Open Charge Map for detailed results ──
     if (/ev|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
@@ -300,9 +332,21 @@ export function ChatProvider({ children }) {
       const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
       const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
       const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
-      // Skip local handler for generic/vague items — let Claude API enrich them
+      // For generic/vague items — present location-specific options for the user to pick
       const isGeneric = itemTitle && /^(famous|popular|top|best|must.?see|local|nearby|good)\s+(attraction|activit|restaurant|place|thing|spot|sight|landmark|experience)/i.test(itemTitle);
-      if (itemTitle && itemTitle.length > 2 && !isGeneric) {
+      if (isGeneric) {
+        const locActs = getLocationActivities(firstLoc);
+        const allOptions = locActs ? [...(locActs.morning || []), ...(locActs.afternoon || []), ...(locActs.kids || [])].slice(0, 6) : [`Explore ${firstLoc}`, `Walking tour of ${firstLoc}`, `Local market in ${firstLoc}`, `${firstLoc} sightseeing walk`, `Museum visit`, `Photography walk`];
+        const uniqueOptions = [...new Set(allOptions)].slice(0, 6);
+        setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay, loc: firstLoc } });
+        const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
+        const reply = `Here are some popular attractions in **${firstLoc}** for Day ${targetDay}:\n\n${optionsList}\n\nReply with a number to add it to your itinerary, or type something specific!`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        saveChatMessage(trip?.dbId, 'ai', reply);
+        return;
+      }
+      if (itemTitle && itemTitle.length > 2) {
         const smartSlot = findSmartSlot(tripId, targetDay, lower);
         const newItem = { time: smartSlot.time, title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
         const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
@@ -617,6 +661,7 @@ export function ChatProvider({ children }) {
     tripChatMessages, setTripChatMessages,
     tripChatEndRef,
     tripChatTyping, setTripChatTyping,
+    tripChatFlow,
     loadTripMessages,
     saveChatMessage,
     handleTripChat,

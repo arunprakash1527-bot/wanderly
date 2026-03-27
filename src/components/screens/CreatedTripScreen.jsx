@@ -61,7 +61,7 @@ export function CreatedTripScreen() {
   const { navigate, showToast } = useNavigation();
   const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections, endTrip } = useTrip();
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
-  const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages, intelligence, smartTips } = useChat();
+  const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages, intelligence, smartTips, tripChatFlow } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
   const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, wrappedPlaying, setWrappedPlaying, memoriesView, setMemoriesView, autoOrderEnabled, setAutoOrderEnabled, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
   const { pins, pinsLoading, showAddPin, setShowAddPin, loadPins, addPin, toggleReaction, deletePin } = usePins();
@@ -1005,12 +1005,20 @@ export function CreatedTripScreen() {
                 </div>
                 <span style={{ fontSize: 10, color: T.t2, fontWeight: 500, marginLeft: "auto" }}>{currentLoc}</span>
               </div>
+              {tripChatFlow?.step === "pick_attraction" && (
+                <div style={{ display: "flex", gap: 6, padding: "6px 16px", overflowX: "auto", borderTop: `.5px solid ${T.border}`, background: T.s2 }}>
+                  {tripChatFlow.data.options.map((opt, i) => (
+                    <button key={i} onClick={() => { setTripChatInput(`${i + 1}`); setTimeout(() => handleTripChat(trip.id), 50); }}
+                      style={{ ...css.chip, flexShrink: 0, fontSize: 11, padding: "5px 12px", background: T.al, borderColor: T.a, color: T.ad }}>{i + 1}. {opt}</button>
+                  ))}
+                </div>
+              )}
               <div style={{ padding: "10px 16px", borderTop: `.5px solid ${T.border}`, background: T.s }}>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input value={tripChatInput} onChange={e => setTripChatInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
                     style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 13, background: "#fff", outline: "none" }}
-                    placeholder={`Ask about ${currentLoc}...`} aria-label="Trip chat input" />
+                    placeholder={tripChatFlow?.step === "pick_attraction" ? "Pick a number or type your own..." : `Ask about ${currentLoc}...`} aria-label="Trip chat input" />
                   <button onClick={() => handleTripChat(trip.id)} aria-label="Send trip message" style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 16px", fontSize: 12 }}>Send</button>
                 </div>
               </div>
