@@ -361,7 +361,8 @@ export function TimelineProvider({ children }) {
       persistTimeline(tripId, newTimeline);
       return { ...t, timeline: newTimeline };
     }));
-    setEditingTimelineIdx(null);
+    // Keep editor open at the new position so user can continue moving
+    setEditingTimelineIdx(idx + direction);
   };
 
   const addTimelineItem = (tripId) => {
