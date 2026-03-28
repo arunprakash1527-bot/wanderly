@@ -218,7 +218,7 @@ function DesktopSidePanel({ screen }) {
 
   // Created trip overview
   if (screen === "createdTrip" && selectedCreatedTrip) {
-    const trip = selectedCreatedTrip;
+    const trip = createdTrips.find(t => t.id === selectedCreatedTrip?.id) || selectedCreatedTrip;
     const numDays = trip.timeline ? Object.keys(trip.timeline).length : 0;
     const totalItems = trip.timeline ? Object.values(trip.timeline).flat().length : 0;
     const allTravellers = [...(trip.travellers?.adults || []), ...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || []), ...(trip.travellers?.infants || [])];
