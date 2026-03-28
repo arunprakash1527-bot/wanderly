@@ -15,7 +15,7 @@ const ChatContext = createContext(null);
 export function ChatProvider({ children }) {
   const { user } = useAuth();
   const { screen, showToast, navigate } = useNavigation();
-  const { createdTrips, setCreatedTrips, selectedCreatedTrip, selectedDay, setSelectedDay, setTripDetailTab, findSmartSlot, addTimelineItem, logActivity, buildTripSummary, generateAndSetTimeline } = useTrip();
+  const { createdTrips, setCreatedTrips, selectedCreatedTrip, selectedDay, setSelectedDay, setTripDetailTab, findSmartSlot, addTimelineItem, logActivity, buildTripSummary, generateAndSetTimeline, saveTimelineToDB } = useTrip();
 
   // Chat state
   const [chatMessages, setChatMessages] = useState([]);
@@ -189,7 +189,9 @@ export function ChatProvider({ children }) {
           const tl = t.timeline || {};
           let dayTl = [...(tl[targetDay] || []), newItem];
           dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
-          return { ...t, timeline: { ...tl, [targetDay]: dayTl } };
+          const newTimeline = { ...tl, [targetDay]: dayTl };
+          saveTimelineToDB(t.dbId || t.id, newTimeline);
+          return { ...t, timeline: newTimeline };
         }));
         logActivity(tripId, "📍", `Added "${picked}" to Day ${targetDay}`, "itinerary");
         setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
@@ -402,7 +404,9 @@ export function ChatProvider({ children }) {
             dayTl = [...dayTl, newItem];
           }
           dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
-          return { ...t, timeline: { ...tl, [targetDay]: dayTl } };
+          const newTimeline = { ...tl, [targetDay]: dayTl };
+          saveTimelineToDB(t.dbId || t.id, newTimeline);
+          return { ...t, timeline: newTimeline };
         }));
         if (replacedTitle) {
           logActivity(tripId, "🔄", `Replaced "${replacedTitle}" with "${itemTitle}" on Day ${targetDay} · ${smartSlot.time}`, "itinerary");
@@ -550,7 +554,9 @@ export function ChatProvider({ children }) {
               dayTl = [...dayTl, newItem];
             }
             dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
-            return { ...t, timeline: { ...tl, [targetDay]: dayTl } };
+            const newTimeline = { ...tl, [targetDay]: dayTl };
+            saveTimelineToDB(t.dbId || t.id, newTimeline);
+            return { ...t, timeline: newTimeline };
           }));
           if (replacedTitle) {
             logActivity(tripId, "🔄", `Replaced "${replacedTitle}" with "${itemTitle}" on Day ${targetDay} · ${smartSlot.time}`, "itinerary");
