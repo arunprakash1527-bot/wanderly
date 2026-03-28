@@ -1534,7 +1534,7 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
             const filteredItems = packingFilter === "all" ? packingItems
               : packingFilter === "packed" ? packingItems.filter(p => p.checked)
               : packingFilter === "unpacked" ? packingItems.filter(p => !p.checked)
-              : packingItems.filter(p => p.person === packingFilter);
+              : packingItems.filter(p => p.person === packingFilter || (p.forNames && p.forNames.includes(packingFilter)));
 
             for (const item of filteredItems) {
               const cat = item.category || "essentials";
@@ -1542,8 +1542,13 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
               grouped[cat].push(item);
             }
 
-            // Get unique people for filter pills
-            const people = [...new Set(packingItems.map(p => p.person).filter(p => p && p !== "everyone"))];
+            // Get unique people for filter pills (include individual names from grouped items)
+            const people = [...new Set(packingItems.flatMap(p => {
+              const names = [];
+              if (p.person && p.person !== "everyone") names.push(p.person);
+              if (p.forNames) names.push(...p.forNames);
+              return names;
+            }).filter(Boolean))];
 
             return (
               <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
@@ -1607,9 +1612,15 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                                 {item.checked && "✓"}
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ fontSize: 13, textDecoration: item.checked ? "line-through" : "none", color: T.t1 }}>{item.item}</p>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <p style={{ fontSize: 13, textDecoration: item.checked ? "line-through" : "none", color: T.t1 }}>{item.item}</p>
+                                  {item.qty > 1 && (
+                                    <span style={{ fontSize: 10, fontWeight: 600, color: T.a, background: `${T.a}15`, borderRadius: 8, padding: "1px 6px" }}>×{item.qty}</span>
+                                  )}
+                                </div>
                                 <p style={{ fontSize: 10, color: T.t3 }}>
-                                  {item.person !== "everyone" && <span style={{ color: T.ad, marginRight: 4 }}>{item.person}</span>}
+                                  {item.forNames?.length > 1 && <span style={{ color: T.ad, marginRight: 4 }}>{item.forNames.join(", ")}</span>}
+                                  {!item.forNames && item.person !== "everyone" && <span style={{ color: T.ad, marginRight: 4 }}>{item.person}</span>}
                                   {item.reason}
                                 </p>
                               </div>

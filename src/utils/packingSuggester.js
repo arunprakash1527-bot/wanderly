@@ -167,18 +167,22 @@ export function generatePackingSuggestions(trip, intelligence) {
   const suggestions = [];
   const seen = new Set();
 
-  const add = (item, category, reason, person) => {
+  const add = (item, category, reason, person, qty, forNames) => {
     const key = (item + (person || "")).toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    suggestions.push({ item, category, reason, person: person || "everyone", checked: false, auto: true });
+    const entry = { item, category, reason, person: person || "everyone", checked: false, auto: true };
+    if (qty && qty > 1) entry.qty = qty;
+    if (forNames && forNames.length) entry.forNames = forNames;
+    suggestions.push(entry);
   };
 
-  // Base essentials — per-person items get one entry per adult traveller
+  // Base essentials — per-person items show once with quantity
   const adults = trip.travellers?.adults || [];
   for (const e of BASE_ESSENTIALS) {
     if (e.perPerson && adults.length > 1) {
-      adults.forEach(a => add(e.item, e.category, "Essential", a.name || "Adult"));
+      const names = adults.map(a => a.name || "Adult").filter(Boolean);
+      add(e.item, e.category, "Essential (per person)", "everyone", adults.length, names);
     } else {
       add(e.item, e.category, "Essential");
     }
@@ -223,23 +227,23 @@ export function generatePackingSuggestions(trip, intelligence) {
     }
   }
 
-  // Kid-specific
+  // Kid-specific — grouped by item, not duplicated per child
   const travellers = trip.travellers || {};
   if (travellers.infants?.length > 0) {
-    KID_ITEMS.infant.forEach(i => {
-      travellers.infants.forEach(inf => add(i.item, i.category, `For ${inf.name || "baby"}`, inf.name || "Baby"));
-    });
+    const names = travellers.infants.map(inf => inf.name || "Baby");
+    const label = names.length === 1 ? names[0] : "babies";
+    KID_ITEMS.infant.forEach(i => add(i.item, i.category, `For ${label}`, label, travellers.infants.length, names));
   }
   if (travellers.youngerKids?.length > 0) {
     const items = travellers.youngerKids.some(k => parseInt(k.age) <= 3) ? KID_ITEMS.toddler : KID_ITEMS.child;
-    items.forEach(i => {
-      travellers.youngerKids.forEach(kid => add(i.item, i.category, `For ${kid.name}`, kid.name));
-    });
+    const names = travellers.youngerKids.map(k => k.name);
+    const label = names.length === 1 ? names[0] : "kids";
+    items.forEach(i => add(i.item, i.category, `For ${label}`, label, travellers.youngerKids.length, names));
   }
   if (travellers.olderKids?.length > 0) {
-    KID_ITEMS.teen.forEach(i => {
-      travellers.olderKids.forEach(kid => add(i.item, i.category, `For ${kid.name}`, kid.name));
-    });
+    const names = travellers.olderKids.map(k => k.name);
+    const label = names.length === 1 ? names[0] : "teens";
+    KID_ITEMS.teen.forEach(i => add(i.item, i.category, `For ${label}`, label, travellers.olderKids.length, names));
   }
 
   // Travel mode
