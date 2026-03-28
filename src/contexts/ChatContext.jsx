@@ -782,23 +782,39 @@ export function ChatProvider({ children }) {
 
     // ── Handle "suggest/recommend activities" queries — show location activities ──
     const isSuggestQuery = /\b(suggest|recommend|what(?:'s| is| are| can)|show me|list|things to do|activities|attractions|places to visit|can be done|ideas|what.+do\b)/i.test(lower)
-      && /\b(activit|attraction|thing|place|do\b|done|visit|see|sight|experience|idea)/i.test(lower);
+      && /\b(activit|attraction|thing|place|do\b|done|visit|see|sight|experience|idea|option|lunch|dinner|breakfast|brunch|food|eat|restaurant|cafe|meal|snack|pub|bar)/i.test(lower);
     if (isSuggestQuery) {
       // Extract location from the query
-      const locMatch = lower.match(/\b(?:in|at|near|around|for)\s+([a-z\s]+?)(?:\s+(?:on|for|during)\s+day\s*\d+)?$/i);
+      const locMatch = lower.replace(/\s+(?:on|for|during)\s+day\s*\d+/i, '').match(/\b(?:in|at|near|around)\s+([a-z\s]+?)$/i);
       const dayMatch = lower.match(/day\s*(\d+)/);
       const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
       const queryLoc = locMatch ? locMatch[1].trim() : null;
       const dayLoc = locForDay(targetDay);
       const searchLoc = queryLoc || dayLoc;
 
+      const isFoodQuery = /\b(lunch|dinner|breakfast|brunch|food|eat|restaurant|cafe|pub|bar|meal|snack|dine|dining)/i.test(lower);
       const locActs = getLocationActivities(searchLoc) || getLocationActivities(dayLoc);
       if (locActs) {
         const hasKids = (trip?.travellers?.olderKids?.length || 0) + (trip?.travellers?.youngerKids?.length || 0) + (trip?.travellers?.infants?.length || 0) > 0;
-        const allOptions = [...(locActs.morning || []), ...(locActs.afternoon || []), ...(hasKids ? locActs.kids || [] : [])];
-        const uniqueOptions = [...new Set(allOptions)].slice(0, 8);
-        // Also include dinner suggestions if relevant
-        const dinnerOptions = locActs.dinner ? locActs.dinner.slice(0, 3) : [];
+
+        let uniqueOptions, headerEmoji, headerLabel;
+        if (isFoodQuery) {
+          // Prioritise food/dining suggestions
+          const foodOptions = [...(locActs.dinner || []), ...(locActs.lunch || [])];
+          uniqueOptions = [...new Set(foodOptions)].slice(0, 8);
+          if (uniqueOptions.length === 0) {
+            // Fallback to all activities if no food-specific entries
+            const allOptions = [...(locActs.morning || []), ...(locActs.afternoon || []), ...(hasKids ? locActs.kids || [] : [])];
+            uniqueOptions = [...new Set(allOptions)].slice(0, 8);
+          }
+          headerEmoji = "🍽️"; headerLabel = "Dining options";
+        } else {
+          const allOptions = [...(locActs.morning || []), ...(locActs.afternoon || []), ...(hasKids ? locActs.kids || [] : [])];
+          uniqueOptions = [...new Set(allOptions)].slice(0, 8);
+          headerEmoji = "🎯"; headerLabel = "Activities";
+        }
+        // Also include dinner suggestions if not already a food query
+        const dinnerOptions = !isFoodQuery && locActs.dinner ? locActs.dinner.slice(0, 3) : [];
 
         setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay, loc: dayLoc } });
         const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
@@ -806,7 +822,7 @@ export function ChatProvider({ children }) {
         const stayBaseLoc = trip?.stays?.[0]?.location || trip?.startLocation || dayLoc;
         const distHrs = dayLoc.toLowerCase() !== stayBaseLoc.toLowerCase() ? estimateTravelHours(stayBaseLoc, dayLoc, trip?.travel?.[0] || "car") : 0;
         const distNote = distHrs >= 0.25 ? `\n\n📍 ${searchLoc} is ~${distHrs >= 1 ? Math.round(distHrs * 10) / 10 + " hrs" : Math.round(distHrs * 60) + " min"} from ${stayBaseLoc}` : "";
-        const reply = `🎯 **Activities in ${searchLoc.charAt(0).toUpperCase() + searchLoc.slice(1)}** for Day ${targetDay}:\n\n${optionsList}${dinnerNote}${distNote}\n\nReply with a number to add it, or type your own activity!`;
+        const reply = `${headerEmoji} **${headerLabel} in ${searchLoc.charAt(0).toUpperCase() + searchLoc.slice(1)}** for Day ${targetDay}:\n\n${optionsList}${dinnerNote}${distNote}\n\nReply with a number to add it, or type your own activity!`;
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);

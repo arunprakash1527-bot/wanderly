@@ -161,6 +161,8 @@ const LOCATION_ALIASES = {
   ambleside: "lake district", grasmere: "lake district", keswick: "lake district",
   penrith: "lake district", coniston: "lake district", ullswater: "lake district",
   "bowness-on-windermere": "lake district", hawkshead: "lake district",
+  "roe island": "lake district", "roa island": "lake district", "barrow in furness": "lake district",
+  "barrow-in-furness": "lake district", "piel island": "lake district", "grange over sands": "lake district",
   penzance: "cornwall", "st ives": "cornwall", newquay: "cornwall", padstow: "cornwall", falmouth: "cornwall",
   portree: "isle of skye", dunvegan: "isle of skye",
   drumnadrochit: "loch ness", "fort augustus": "loch ness",
