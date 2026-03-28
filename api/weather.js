@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     let latitude = lat, longitude = lng;
     if (!latitude || !longitude) {
       const geoParams = new URLSearchParams({ q: location, limit: 1, appid: apiKey });
-      const geoRes = await fetch(`http://api.openweathermap.org/geo/1.0/direct?${geoParams}`);
+      const geoRes = await fetch(`https://api.openweathermap.org/geo/1.0/direct?${geoParams}`);
       const geoData = await geoRes.json();
       if (!geoData?.[0]) return res.status(404).json({ error: "Location not found" });
       latitude = geoData[0].lat;

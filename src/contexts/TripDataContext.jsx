@@ -151,15 +151,25 @@ export function TripDataProvider({ children }) {
   };
 
   // ─── Supabase: Lookup Trip by Share Code ───
+  // NOTE: This uses the `join_trip_by_share_code` RPC function (SECURITY DEFINER)
+  // which must exist in Supabase before this code works. Run supabase-rls-lockdown.sql
+  // in the Supabase SQL Editor to create it.
   const lookupTripByShareCode = async (code) => {
     try {
-      const { data, error } = await supabase
-        .from('trips')
-        .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
-        .eq('share_code', code.toUpperCase())
-        .single();
+      const { data, error } = await supabase.rpc('join_trip_by_share_code', { code: code.toUpperCase() });
       if (error) throw error;
-      return data;
+      // The RPC returns trip rows (without joins), so fetch the full trip with relations
+      if (data && data.length > 0) {
+        const trip = data[0];
+        const { data: fullTrip, error: fetchError } = await supabase
+          .from('trips')
+          .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
+          .eq('id', trip.id)
+          .single();
+        if (fetchError) throw fetchError;
+        return fullTrip;
+      }
+      return null;
     } catch (err) {
       console.error('Error looking up trip:', err);
       return null;
@@ -282,7 +292,11 @@ export function TripDataProvider({ children }) {
       setSaving(false);
       navigate("createdTrip");
     } else {
-      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], polls: [], activity: [], shareCode: Math.random().toString(36).substring(2, 8).toUpperCase() };
+      // Generate a cryptographically secure share code instead of Math.random()
+      const _scArr = new Uint8Array(4);
+      crypto.getRandomValues(_scArr);
+      const _shareCode = Array.from(_scArr, b => b.toString(36).padStart(2, '0')).join('').substring(0, 8).toUpperCase();
+      const newTrip = { id: Date.now(), ...tripData, status: "new", timeline: [], polls: [], activity: [], shareCode: _shareCode };
       setCreatedTrips(prev => [newTrip, ...prev]);
       if (user && user.id !== 'demo') {
         saveTripToDB(newTrip).then(savedTrip => {

@@ -110,6 +110,12 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    // Clear all app-specific localStorage keys
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("twm_")) localStorage.removeItem(key);
+    });
+    // Clear Supabase API cache from service worker
+    try { await caches.delete("supabase-api"); } catch {} // eslint-disable-line
     setUser(null);
   };
 

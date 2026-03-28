@@ -12,6 +12,83 @@ import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const ChatContext = createContext(null);
 
+// ─── PII Sanitisation Helper ───
+// Strips personally identifiable information from trip data before sending to the Claude API.
+// Keeps: places, dates, travel mode, budget range, template style, activities/preferences, day, weather.
+// Strips: real names, specific stay names/addresses (keeps type), special instructions text.
+function sanitiseTripContext(ctx) {
+  if (!ctx) return ctx;
+  const sanitised = { ...ctx };
+
+  // Sanitise travellers — replace names with generic labels, keep counts and ages
+  if (sanitised.travellers) {
+    const t = sanitised.travellers;
+    const cleaned = {};
+    // Adults
+    if (Array.isArray(t.adults) && t.adults.length > 0) {
+      cleaned.adults = t.adults.map((a, i) => {
+        const label = { name: `Traveller ${i + 1}` };
+        // Keep age if present
+        if (a.age !== undefined) label.age = a.age;
+        return label;
+      });
+    } else if (typeof t.adults === "number") {
+      cleaned.adults = t.adults;
+    }
+    // Older kids
+    if (Array.isArray(t.olderKids) && t.olderKids.length > 0) {
+      cleaned.olderKids = t.olderKids.map((k, i) => ({
+        name: `Child ${i + 1}`,
+        age: k.age,
+      }));
+    }
+    // Younger kids
+    if (Array.isArray(t.youngerKids) && t.youngerKids.length > 0) {
+      const offset = (t.olderKids || []).length;
+      cleaned.youngerKids = t.youngerKids.map((k, i) => ({
+        name: `Child ${offset + i + 1}`,
+        age: k.age,
+      }));
+    }
+    // Infants
+    if (Array.isArray(t.infants) && t.infants.length > 0) {
+      cleaned.infants = t.infants.map((k, i) => ({
+        name: `Infant ${i + 1}`,
+        age: k.age,
+      }));
+    }
+    sanitised.travellers = cleaned;
+  }
+
+  // Sanitise stays — keep type/dates/location, strip specific names and addresses
+  if (Array.isArray(sanitised.stays)) {
+    sanitised.stays = sanitised.stays.map(s => {
+      const clean = {};
+      // Infer accommodation type from the name or fallback to "Accommodation"
+      const typePat = /hotel|resort|cottage|hostel|airbnb|villa|apartment|motel|b&b|guesthouse|cabin|lodge|camp/i;
+      const typeMatch = (s.name || "").match(typePat) || (s.type || "").match(typePat);
+      clean.type = typeMatch ? typeMatch[0].charAt(0).toUpperCase() + typeMatch[0].slice(1).toLowerCase() : (s.type || "Accommodation");
+      if (s.location) clean.location = s.location;
+      if (s.checkIn) clean.checkIn = s.checkIn;
+      if (s.checkOut) clean.checkOut = s.checkOut;
+      return clean;
+    });
+  }
+
+  // Strip special instructions from prefs (may contain personal/medical info)
+  if (sanitised.prefs) {
+    const cleanPrefs = { ...sanitised.prefs };
+    delete cleanPrefs.instructions;
+    // Keep food preferences, activities, etc.
+    sanitised.prefs = cleanPrefs;
+  }
+
+  // Strip trip name (may contain family name / personal reference)
+  delete sanitised.tripName;
+
+  return sanitised;
+}
+
 export function ChatProvider({ children }) {
   const { user } = useAuth();
   const { screen, showToast, navigate } = useNavigation();
@@ -431,8 +508,7 @@ export function ChatProvider({ children }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: msg,
-          tripContext: {
-            tripName: trip?.name,
+          tripContext: sanitiseTripContext({
             dates: trip?.start && trip?.end ? `${trip.start} – ${trip.end}` : null,
             places: trip?.places,
             travelMode: trip?.travel?.join(", "),
@@ -443,11 +519,11 @@ export function ChatProvider({ children }) {
             currentLocation: firstLoc,
             currentDay: selectedDay,
             templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),
-          },
+          }),
           intelligence: intelligenceRef.current, // Real-time signals from connectors
-          chatHistory: tripChatMessages.slice(-30),
-          chatSummary: tripChatMessages.length > 30 ? (() => {
-            const earlier = tripChatMessages.slice(0, -30);
+          chatHistory: tripChatMessages.slice(-10),
+          chatSummary: tripChatMessages.length > 10 ? (() => {
+            const earlier = tripChatMessages.slice(0, -10);
             const topics = [...new Set(earlier.filter(m => m.role === 'user').map(m => m.text).filter(Boolean).map(t => t.slice(0, 60)))].slice(-5);
             return `Earlier in this conversation (${earlier.length} messages), topics discussed: ${topics.join('; ') || 'general trip planning'}`;
           })() : null,
