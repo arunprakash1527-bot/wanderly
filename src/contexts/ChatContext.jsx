@@ -652,7 +652,57 @@ export function ChatProvider({ children }) {
       const dayMatch = lower.match(/day\s*(\d+)/);
       const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
       const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
-      const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
+      let itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
+
+      // ── Compound request: "add X and suggest/recommend other activities in Y" ──
+      const compoundMatch = itemTitle && itemTitle.match(/^(.+?)\s+(?:and|&|also|,)\s*(?:suggest|recommend|show|list|what about|other)\s+(?:other\s+)?(?:activit|thing|place|attraction|option)/i);
+      if (compoundMatch) {
+        const namedActivity = compoundMatch[1].replace(/^activities\s+/i, '').replace(/\b(such\s*(as)?|like|e\.?g\.?)\s*/i, '').trim();
+        // Extract location hint from the rest of the message
+        const locHint = itemTitle.match(/\b(?:in|at|near|around)\s+([a-z\s]+)$/i);
+        const suggestLoc = locHint ? locHint[1].trim() : locForDay(targetDay);
+        const dayLoc = locForDay(targetDay);
+
+        // Add the named activity first
+        if (namedActivity.length > 2) {
+          const smartSlot = findSmartSlot(tripId, targetDay, "add " + namedActivity.toLowerCase());
+          const newItem = { time: smartSlot.time, title: namedActivity, desc: `${dayLoc} · Added via chat`, group: "Everyone", color: T.blue };
+          const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+          setCreatedTrips(prev => prev.map(t => {
+            if (t.id !== tripId) return t;
+            const tl = t.timeline || {};
+            let dayTl = [...(tl[targetDay] || []), newItem];
+            dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
+            const newTimeline = { ...tl, [targetDay]: dayTl };
+            saveTimelineToDB(t.dbId || t.id, newTimeline);
+            return { ...t, timeline: newTimeline };
+          }));
+          logActivity(tripId, "📍", `Added "${namedActivity}" to Day ${targetDay}`, "itinerary");
+        }
+
+        // Now suggest other activities for the location
+        const locActs = getLocationActivities(suggestLoc) || getLocationActivities(dayLoc);
+        const hasKids = (trip?.travellers?.olderKids?.length || 0) + (trip?.travellers?.youngerKids?.length || 0) + (trip?.travellers?.infants?.length || 0) > 0;
+        const allOptions = locActs
+          ? [...(locActs.morning || []), ...(locActs.afternoon || []), ...(hasKids ? locActs.kids || [] : [])].filter(a => a.toLowerCase() !== namedActivity.toLowerCase())
+          : [`Explore ${suggestLoc}`, `Walking tour of ${suggestLoc}`, `Local market`, `Sightseeing walk`, `Museum visit`];
+        const uniqueOptions = [...new Set(allOptions)].slice(0, 6);
+        setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay, loc: dayLoc } });
+        const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
+        const addedNote = namedActivity.length > 2 ? `✅ Added **${namedActivity}** to Day ${targetDay}.\n\n` : "";
+        const reply = `${addedNote}Here are more activities in **${suggestLoc}** for Day ${targetDay}:\n\n${optionsList}\n\nReply with a number to add it, or type something specific!`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        saveChatMessage(trip?.dbId, 'ai', reply);
+        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+        return;
+      }
+
+      // Strip "such as" / "like" phrasing from simple add requests too
+      if (itemTitle) {
+        itemTitle = itemTitle.replace(/^activities\s+(?:such\s+as|like)\s+/i, '').replace(/^(?:such\s+as|like)\s+/i, '').trim();
+      }
+
       // For generic/vague items — present location-specific options for the user to pick
       const isGeneric = itemTitle && /^(famous|popular|top|best|must.?see|local|nearby|good)\s+(attraction|activit|restaurant|place|thing|spot|sight|landmark|experience)/i.test(itemTitle);
       if (isGeneric) {
