@@ -306,8 +306,8 @@ export function TimelineProvider({ children }) {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
       const tl = t.timeline || {};
+      // When editing, items are in raw (unsorted) order — idx maps directly
       const dayItems = (tl[selectedDay] || []).map((item, i) => i === idx ? { ...item, [field]: value } : item);
-      // Don't sort during editing — just update in place. Sort happens on Done.
       const newTimeline = { ...tl, [selectedDay]: dayItems };
       persistTimeline(tripId, newTimeline);
       return { ...t, timeline: newTimeline };
@@ -335,7 +335,6 @@ export function TimelineProvider({ children }) {
     if (idx < 0 || idx >= dayItems.length) return;
     const item = dayItems[idx];
     const title = item?.title || "this item";
-    // Use try/catch for confirm — some mobile browsers suppress it
     let confirmed = true;
     try { confirmed = window.confirm(`Remove "${title}" from Day ${dayKey}?`); } catch { confirmed = true; }
     if (!confirmed) return;
@@ -387,10 +386,11 @@ export function TimelineProvider({ children }) {
   };
 
   // ─── Timeline Helpers ───
-  const getDayItems = (timeline, day, skipSort) => {
+  const getDayItems = (timeline, day, isEditing) => {
     if (!timeline) return [];
     const items = Array.isArray(timeline) ? (day === 1 ? timeline : []) : (timeline[day] || []);
-    return skipSort ? items : sortByTime(items);
+    // Always sort for display UNLESS actively editing (to prevent index shift)
+    return isEditing ? items : sortByTime(items);
   };
 
   const getNumDays = (trip) => {

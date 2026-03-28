@@ -6,7 +6,7 @@ export function TripUIProvider({ children }) {
   const [selectedDay, setSelectedDay] = useState(1);
   const [tripDetailTab, setTripDetailTab] = useState("itinerary");
   const [expandedItem, setExpandedItem] = useState(null);
-  const [editingTimelineIdx, setEditingTimelineIdx] = useState(null);
+  const [editingTimelineIdx, setEditingTimelineIdx] = useState(null); // Can be index or item key string
   const [expandedSections, setExpandedSections] = useState({});
   const [bookingStates, setBookingStates] = useState({});
   const [showMap, setShowMap] = useState(false);
