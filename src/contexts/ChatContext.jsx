@@ -258,10 +258,11 @@ export function ChatProvider({ children }) {
     // ── Handle "pick attraction" flow — user selecting from suggested options ──
     if (tripChatFlow?.step === "pick_attraction") {
       // If user is issuing a NEW explicit command (e.g. "day 2 – Add X"), clear the flow and let it fall through
-      const isNewCommand = /\b(add|include|plug)\b/i.test(lower) && (/day\s*\d+/i.test(lower) || /first stop|morning|afternoon|evening/i.test(lower));
+      const isNewCommand = (/\b(add|include|plug)\b/i.test(lower) && (/day\s*\d+/i.test(lower) || /first stop|morning|afternoon|evening/i.test(lower)))
+        || /\b(suggest|recommend|show me|find|what|list|remove|clear|ev charger)\b/i.test(lower);
       if (isNewCommand) {
         setTripChatFlow(null);
-        // Fall through to the add handler below
+        // Fall through to the appropriate handler below
       } else {
       const { options, targetDay, loc: flowLoc } = tripChatFlow.data;
       // Check if user typed a number (1-based), exact name, or keyword match
