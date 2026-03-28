@@ -228,6 +228,15 @@ export function ChatProvider({ children }) {
       if (places.length > 0) return places[(dayNum - 1) % places.length];
       return firstLoc;
     };
+    // ── Load EV vehicle profile (if user selected one during trip creation) ──
+    let evProfile = null;
+    try { evProfile = JSON.parse(localStorage.getItem("twm_ev_profile")); } catch {}
+    const isEvTrip = (trip?.travel || []).some(m => /ev/i.test(m));
+    const evConnectors = evProfile?.connectors || [];
+    const evDefaultConnector = evConnectors[0] || null; // e.g. "CCS"
+    const evRangeMiles = evProfile?.rangeMiles || null;
+    const evModelLabel = evProfile ? `${evProfile.make} ${evProfile.model}` : null;
+
     const budget = trip?.budget || "";
     const summary = trip?.summary || buildTripSummary(trip || {});
     const instructions = trip?.prefs?.instructions || "";
@@ -287,7 +296,8 @@ export function ChatProvider({ children }) {
       setTripChatFlow(null);
       // Merge the original query context with the follow-up reply
       const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/i);
-      const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "").toLowerCase() : null;
+      // Fall back to EV profile's connector type if user didn't specify one
+      const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "").toLowerCase() : evDefaultConnector;
       const carCountMatch = lower.match(/(\d+)\s*(?:car|vehicle|ev)/i);
       const carCount = carCountMatch ? parseInt(carCountMatch[1]) : 1;
 
@@ -327,7 +337,8 @@ export function ChatProvider({ children }) {
             const connectorNote = !connectorType ? "\n\n🔌 **Need a specific connector?** Ask me for CCS, CHAdeMO, or Type 2 chargers." : "";
             const zapNote = "\n\n📡 Tap **Zap-Map Live** for real-time availability and queue times.";
             const googleNote = isGoogleFallback ? "\n\n_ℹ️ Basic results shown — connector details unavailable. Check Zap-Map for full info._" : "";
-            return `⚡ **EV Chargers${connectorType ? ` (${connectorType.toUpperCase()})` : ""} near ${locLabel}:**\n\n${list}${connectorNote}${zapNote}${googleNote}`;
+            const vehicleNote = evModelLabel ? `\n\n🔋 Showing results for your **${evModelLabel}** (${connectorType || evDefaultConnector || "all types"}${evRangeMiles ? ` · ${evRangeMiles}mi range` : ""})` : "";
+            return `⚡ **EV Chargers${connectorType ? ` (${connectorType.toUpperCase()})` : ""} near ${locLabel}:**\n\n${list}${vehicleNote}${connectorNote}${zapNote}${googleNote}`;
           }
         } catch (e) { /* fallback below */ }
         return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
@@ -358,14 +369,15 @@ export function ChatProvider({ children }) {
 
     // ── EV charger queries — Open Charge Map for detailed results ──
     if (/ev|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
-      // Extract connector type preference from message
+      // Extract connector type preference from message, fall back to EV profile
       const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/);
-      const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "") : null;
+      const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "") : evDefaultConnector;
 
       // Check if trip has 4+ travellers — ask about multi-car charging
+      // But skip the prompt if EV profile already gives us the connector type
       const adultCount = trip?.travellers?.adults?.length || 1;
       const totalTravellers = adultCount + (trip?.travellers?.olderKids?.length || 0) + (trip?.travellers?.youngerKids?.length || 0) + (trip?.travellers?.infants?.length || 0);
-      const needsMultiCarPrompt = totalTravellers > 4 && !/\d+\s*car|\d+\s*vehicle|single car|one car/i.test(lower);
+      const needsMultiCarPrompt = totalTravellers > 4 && !evDefaultConnector && !/\d+\s*car|\d+\s*vehicle|single car|one car/i.test(lower);
 
       if (needsMultiCarPrompt) {
         setTripChatFlow({ step: "ev_charger_details", data: { query: lower } });
@@ -414,7 +426,8 @@ export function ChatProvider({ children }) {
             const connectorNote = !connectorType ? "\n\n🔌 **Need a specific connector?** Ask me for CCS, CHAdeMO, or Type 2 chargers." : "";
             const zapNote = "\n\n📡 Tap **Zap-Map Live** for real-time availability and queue times.";
             const googleNote = isGoogleFallback ? "\n\n_ℹ️ Basic results shown — connector details unavailable. Check Zap-Map for full info._" : "";
-            return `⚡ **EV Chargers near ${locLabel}:**\n\n${list}${connectorNote}${zapNote}${googleNote}`;
+            const vehicleNote = evModelLabel && connectorType === evDefaultConnector ? `\n\n🔋 Filtered for your **${evModelLabel}** (${evDefaultConnector}${evRangeMiles ? ` · ${evRangeMiles}mi range` : ""})` : "";
+            return `⚡ **EV Chargers${connectorType ? ` (${connectorType.toUpperCase()})` : ""} near ${locLabel}:**\n\n${list}${vehicleNote}${connectorNote}${zapNote}${googleNote}`;
           }
         } catch (e) { /* fallback below */ }
         return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
@@ -520,18 +533,20 @@ export function ChatProvider({ children }) {
       const fromLoc = targetDay === 1 ? origin : (locForDay(targetDay - 1) || origin);
       const toLoc = dayLoc;
 
-      setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Searching for EV charging stations between **${fromLoc}** and **${toLoc}**...` }]);
+      const evNote = evModelLabel ? ` for your ${evModelLabel}` : "";
+      setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Searching for EV charging stations${evNote} between **${fromLoc}** and **${toLoc}**...` }]);
 
       (async () => {
         try {
           const fromCoords = findCoords(fromLoc);
           const toCoords = findCoords(toLoc);
+          const connectorQuery = evDefaultConnector ? ` ${evDefaultConnector}` : "";
           let body = { radius: 50000, maxResults: 5 };
           if (fromCoords && toCoords) {
             body.location = { lat: (fromCoords[0] + toCoords[0]) / 2, lng: (fromCoords[1] + toCoords[1]) / 2 };
-            body.query = "EV rapid charging station motorway services";
+            body.query = `EV${connectorQuery} rapid charging station motorway services`;
           } else {
-            body.query = `EV charging station between ${fromLoc} and ${toLoc}`;
+            body.query = `EV${connectorQuery} charging station between ${fromLoc} and ${toLoc}`;
             body.locationName = fromLoc;
           }
 
@@ -579,7 +594,8 @@ export function ChatProvider({ children }) {
             const rating = station.rating ? ` · ${station.rating}★` : "";
             const addr = station.address ? `\n📍 ${station.address}` : "";
             const nav = mapLink ? `\n🗺️ [Navigate in Maps](${mapLink})` : "";
-            const reply = `⚡ Found a charging station!\n\n**${station.name}**${rating}${addr}${nav}\n\n✅ Added to **Day ${targetDay}** at ${smartSlot.time}. Switching to your itinerary now!`;
+            const evInfo = evModelLabel ? `\n🔋 Matched for your **${evModelLabel}**${evDefaultConnector ? ` (${evDefaultConnector})` : ""} · ${evRangeMiles ? `${evRangeMiles}mi range` : ""}` : "";
+            const reply = `⚡ Found a charging station!\n\n**${station.name}**${rating}${addr}${nav}${evInfo}\n\n✅ Added to **Day ${targetDay}** at ${smartSlot.time}. Switching to your itinerary now!`;
             setTripChatTyping(false);
             setTripChatMessages(prev => {
               const updated = [...prev];
