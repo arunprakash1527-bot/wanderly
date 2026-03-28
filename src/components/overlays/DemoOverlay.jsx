@@ -20,17 +20,16 @@ export function DemoOverlay() {
 
   const t = demoTick;
   const s = demoSlide;
-  const total = 10;
+  const total = 12;
   const isLast = s === total - 1;
-  // Helper: typewriter text (reveals chars based on tick)
+
+  // Helper: typewriter text
   const typeText = (text, startTick, speed = 2) => {
     const elapsed = Math.max(0, t - startTick);
     const chars = Math.min(text.length, Math.floor(elapsed / speed));
     return text.substring(0, chars) + (chars < text.length ? "\u2502" : "");
   };
-  // Helper: show element after tick
   const show = (afterTick) => t >= afterTick;
-  // Helpers: return animation only during animation window, then stable static style to prevent flicker
   const popIn = (delay) => {
     if (t < delay) return { opacity: 0, transform: "scale(0)" };
     if (t < delay + 4) return { animation: "demoPop .6s cubic-bezier(.34,1.56,.64,1) forwards" };
@@ -46,19 +45,27 @@ export function DemoOverlay() {
     if (t < delay + 4) return { animation: "demoBounce .65s ease-out forwards" };
     return { opacity: 1, transform: "translateY(0)" };
   };
-  // Chat bubble — mount at delay, transition at delay+1 (flicker-free)
   const ChatBubble = ({ text, isUser, delay }) => {
     if (t < delay) return null;
     const visible = t > delay;
     return (
       <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 14, fontSize: 12, lineHeight: 1.5, alignSelf: isUser ? "flex-end" : "flex-start",
-        background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t,
+        background: isUser ? T.a : T.s2, color: isUser ? "#fff" : T.t1,
         opacity: visible ? 1 : 0, transform: visible ? "scale(1)" : "scale(.96)",
         transition: "opacity .5s ease, transform .5s ease" }}>
         {text}
       </div>
     );
   };
+
+  // ─── Phase labels for narrative flow ───
+  const phaseLabel = (emoji, phase, step) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 14, ...slideUp(0) }}>
+      <span style={{ fontSize: 10, color: "rgba(255,255,255,.35)", textTransform: "uppercase", letterSpacing: 1.5 }}>{phase}</span>
+      <span style={{ fontSize: 10, color: "rgba(255,255,255,.25)" }}>·</span>
+      <span style={{ fontSize: 10, color: "rgba(255,255,255,.5)" }}>{step}</span>
+    </div>
+  );
 
   // ─── SLIDE RENDERERS ───
   const renderSlide = () => {
@@ -94,14 +101,14 @@ export function DemoOverlay() {
         </div>
       );
 
-      // ─── Slide 1: Trip creation with typing ───
+      // ─── Slide 1: Trip creation ───
       case 1: return (
         <div style={{ width: "100%", maxWidth: 320 }}>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Step 1 · Name your trip</p>
+          {phaseLabel("📋", "Planning", "Create trip")}
           <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
             <div style={{ background: T.s2, borderRadius: 8, padding: 12, marginBottom: 10 }}>
               <span style={{ fontSize: 10, color: T.t3 }}>Trip name</span>
-              <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t }}>{t < 3 ? "\u2502" : typeText("Easter Lake District", 3, 1)}</p>
+              <p style={{ fontSize: 14, fontWeight: 500, marginTop: 2, fontFamily: T.font, color: t < 3 ? T.t3 : T.t1 }}>{t < 3 ? "\u2502" : typeText("Easter Lake District", 3, 1)}</p>
             </div>
             {show(25) && (
               <div style={{ display: "flex", gap: 8, marginBottom: 10, ...slideUp(25) }}>
@@ -126,10 +133,10 @@ export function DemoOverlay() {
         </div>
       );
 
-      // ─── Slide 2: Stays slide in ───
+      // ─── Slide 2: Stays ───
       case 2: return (
         <div style={{ width: "100%", maxWidth: 320 }}>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Step 2 · Where are you staying?</p>
+          {phaseLabel("🏨", "Planning", "Find stays")}
           <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
             {show(4) && (
               <div style={{ background: T.s2, borderRadius: 8, padding: 10, marginBottom: 6, display: "flex", alignItems: "center", gap: 8, ...slideUp(4) }}>
@@ -157,11 +164,77 @@ export function DemoOverlay() {
         </div>
       );
 
-      // ─── Slide 3: Day 1 chat conversation ───
+      // ─── Slide 3: Packing list ───
       case 3: return (
         <div style={{ width: "100%", maxWidth: 320 }}>
+          {phaseLabel("🎒", "Before you go", "Pack smart")}
+          <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
+            {/* Progress bar */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, ...slideUp(2) }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.t1 }}>Packing List</span>
+              <span style={{ fontSize: 11, color: T.t3 }}>{show(30) ? `${Math.min(6, Math.floor((t - 30) / 3))}/8 packed` : "0/8 packed"}</span>
+            </div>
+            {show(4) && (
+              <div style={{ height: 4, borderRadius: 2, background: T.s2, marginBottom: 14, overflow: "hidden", ...slideUp(4) }}>
+                <div style={{ height: "100%", borderRadius: 2, background: T.a, width: show(30) ? `${Math.min(75, (t - 30) * 2.5)}%` : "0%", transition: "width .4s ease" }} />
+              </div>
+            )}
+            {/* AI suggestion badge */}
+            {show(6) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 8, background: T.al, marginBottom: 12, ...slideUp(6) }}>
+                <span style={{ fontSize: 12 }}>✨</span>
+                <span style={{ fontSize: 10, color: T.ad }}>AI-suggested based on your trip, weather & kids</span>
+              </div>
+            )}
+            {/* Categories with items */}
+            {[
+              { cat: "👕 Clothing", items: [
+                { name: "Rain jackets", for: "Everyone", reason: "Lake District weather", delay: 10 },
+                { name: "Walking boots", for: "Adults", reason: "Loughrigg Fell hike", delay: 13 },
+                { name: "Wellies", for: "Max & Ella", reason: "Easter egg trail", delay: 16 },
+              ]},
+              { cat: "🔌 Electronics", items: [
+                { name: "EV charging cable", for: "Driver", reason: "EV road trip", delay: 19 },
+                { name: "Portable charger", for: "Everyone", reason: "Trip essential", delay: 22 },
+              ]},
+              { cat: "📋 Documents", items: [
+                { name: "Hotel confirmation", for: "Lead", reason: "2 bookings", delay: 25 },
+                { name: "Travel insurance", for: "Everyone", reason: "Family trip", delay: 27 },
+                { name: "Kids' activity passes", for: "Max & Ella", reason: "Brockhole Park", delay: 29 },
+              ]},
+            ].map((group, gi) => (
+              show(group.items[0].delay) && (
+                <div key={gi} style={{ marginBottom: 10, ...slideUp(group.items[0].delay) }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: T.t3, textTransform: "uppercase", marginBottom: 4 }}>{group.cat}</p>
+                  {group.items.map((item, ii) => {
+                    const checked = show(30) && (item.delay < 24);
+                    return show(item.delay) && (
+                      <div key={ii} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", opacity: checked ? 0.5 : 1, transition: "opacity .3s", ...slideUp(item.delay) }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${checked ? T.a : T.border}`,
+                          background: checked ? T.a : "transparent", display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "all .3s", flexShrink: 0 }}>
+                          {checked && <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 12, color: T.t1, textDecoration: checked ? "line-through" : "none" }}>{item.name}</span>
+                          <span style={{ fontSize: 9, color: T.ad, marginLeft: 6 }}>{item.for}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+      );
+
+      // ─── Slide 4: Day 1 chat ───
+      case 4: return (
+        <div style={{ width: "100%", maxWidth: 320 }}>
+          {phaseLabel("🚗", "On the trip", "Day 1 · Travel")}
           <div style={{ background: T.ad, borderRadius: "14px 14px 0 0", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>Chat with AI</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>AI Concierge</span>
             <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 1 · 3 Apr</span>
           </div>
           <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8, minHeight: 240 }}>
@@ -188,11 +261,12 @@ export function DemoOverlay() {
         </div>
       );
 
-      // ─── Slide 4: Activity day with animated schedule ───
-      case 4: return (
+      // ─── Slide 5: Day 2 activities ───
+      case 5: return (
         <div style={{ width: "100%", maxWidth: 320 }}>
+          {phaseLabel("🥾", "On the trip", "Day 2 · Activities")}
           <div style={{ background: T.ad, borderRadius: "14px 14px 0 0", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>Chat with AI</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>AI Concierge</span>
             <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 2 · 4 Apr</span>
           </div>
           <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -223,38 +297,77 @@ export function DemoOverlay() {
         </div>
       );
 
-      // ─── Slide 5: Last day departure ───
-      case 5: return (
-        <div style={{ width: "100%", maxWidth: 320 }}>
-          <div style={{ background: T.ad, borderRadius: "14px 14px 0 0", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>Chat with AI</span>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 5 · 7 Apr</span>
-          </div>
-          <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-            <ChatBubble delay={2} text={<span>{"\uD83C\uDFE0"} <b>Time to head home!</b> Keswick {"\u2192"} Manchester<br/><br/>When do you want to set off?</span>} />
-            {show(14) && (
-              <div style={{ display: "flex", gap: 6, ...slideUp(14) }}>
-                {["10:00 AM", "After lunch"].map((opt, i) => (
-                  <span key={opt} style={{ ...css.chip, fontSize: 10, padding: "5px 12px", cursor: "pointer", ...popIn(16 + i * 3),
-                    ...(demoInteracted.depart === opt ? css.chipActive : {}) }}
-                    onClick={e => { e.stopPropagation(); setDemoInteracted(p => ({...p, depart: opt})); setDemoPaused(true); setTimeout(() => setDemoPaused(false), 1500); }}>
-                    {opt}
-                  </span>
-                ))}
-              </div>
-            )}
-            <ChatBubble delay={demoInteracted.depart ? 0 : 26} isUser text={demoInteracted.depart || "After lunch"} />
-            {(demoInteracted.depart || show(32)) && (
-              <ChatBubble delay={demoInteracted.depart ? 2 : 32} text={
-                <span>{"\uD83D\uDDFA\uFE0F"} <b>Route planned!</b><br/>Keswick {"\u2192"} A66 {"\u2192"} M6<br/>{"\u2615"} Stop: Rheged Centre<br/>{"\uD83D\uDCCD"} Home by ~{demoInteracted.depart === "10:00 AM" ? "1:30 PM" : "5:00 PM"}</span>
-              } />
-            )}
-          </div>
-        </div>
-      );
-
-      // ─── Slide 6: Interactive poll ───
+      // ─── Slide 6: Expenses ───
       case 6: {
+        const expenseItems = [
+          { icon: "⛽", cat: "Fuel", desc: "Lancaster Services EV charge", amount: "£12.40", by: "You", delay: 8 },
+          { icon: "🍽️", cat: "Food", desc: "Lunch at Fellinis", amount: "£68.50", by: "James", delay: 14 },
+          { icon: "🎟️", cat: "Activities", desc: "Brockhole Park entry", amount: "£32.00", by: "Sarah", delay: 20 },
+          { icon: "☕", cat: "Food", desc: "Coffee & cake, Ambleside", amount: "£18.20", by: "You", delay: 26 },
+        ];
+        const catBreakdown = [
+          { cat: "Food", color: T.coral, pct: 54, amount: "£86.70" },
+          { cat: "Activities", color: T.blue, pct: 25, amount: "£32.00" },
+          { cat: "Fuel", color: T.amber, pct: 10, amount: "£12.40" },
+          { cat: "Other", color: T.purple, pct: 11, amount: "£14.00" },
+        ];
+        return (
+          <div style={{ width: "100%", maxWidth: 320 }}>
+            {phaseLabel("💷", "On the trip", "Split expenses")}
+            <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
+              {/* Total hero */}
+              <div style={{ textAlign: "center", marginBottom: 14, ...slideUp(2) }}>
+                <p style={{ fontSize: 28, fontWeight: 700, color: T.t1, fontFamily: T.font }}>
+                  £{show(6) ? "131.10" : "0.00"}
+                </p>
+                <p style={{ fontSize: 11, color: T.t3 }}>Total spent · £32.78 per person</p>
+              </div>
+
+              {/* Category bar */}
+              {show(6) && (
+                <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 12, ...slideUp(6) }}>
+                  {catBreakdown.map((c, i) => (
+                    <div key={i} style={{ width: `${c.pct}%`, background: c.color, transition: "width .5s ease" }} />
+                  ))}
+                </div>
+              )}
+
+              {/* Expense items */}
+              {expenseItems.map((exp, i) => (
+                show(exp.delay) && (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0",
+                    borderBottom: i < expenseItems.length - 1 ? `1px solid ${T.border}` : "none", ...slideUp(exp.delay) }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: T.s2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+                      {exp.icon}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 500, color: T.t1 }}>{exp.desc}</p>
+                      <p style={{ fontSize: 10, color: T.t3 }}>{exp.by} paid · split 4 ways</p>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: T.t1, flexShrink: 0 }}>{exp.amount}</span>
+                  </div>
+                )
+              ))}
+
+              {/* Settlement preview */}
+              {show(32) && (
+                <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: T.amberL, border: `1px solid ${T.amber}22`, ...slideUp(32) }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: T.amber, marginBottom: 6 }}>💸 Settle up</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.t2 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 10, background: T.a, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 600 }}>Y</div>
+                    <span>→</span>
+                    <div style={{ width: 20, height: 20, borderRadius: 10, background: T.coral, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 600 }}>J</div>
+                    <span style={{ fontWeight: 500 }}>£14.35</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // ─── Slide 7: Polls ───
+      case 7: {
         const pollVote = demoInteracted.poll;
         const opts = [
           { text: "The Drunken Duck", desc: "steaks \u00B7 kids free", base: 2 },
@@ -269,9 +382,9 @@ export function DemoOverlay() {
         };
         return (
           <div style={{ width: "100%", maxWidth: 320 }}>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Group decision time</p>
+            {phaseLabel("🗳️", "On the trip", "Group vote")}
             <div style={{ background: T.s, borderRadius: 14, padding: 16, textAlign: "left" }}>
-              <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4, ...slideUp(3) }}>{"\uD83D\uDDF3\uFE0F"} Where should we eat dinner?</p>
+              <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 4, ...slideUp(3) }}>{"\uD83C\uDF7D\uFE0F"} Where should we eat dinner?</p>
               <p style={{ fontSize: 10, color: T.t3, marginBottom: 12, ...slideUp(5) }}>4 travellers · {pollVote !== undefined ? "You voted!" : "Tap to vote"}</p>
               {opts.map((o, i) => {
                 const pct = Math.round(getVotes(i) / totalVotes * 100);
@@ -297,8 +410,39 @@ export function DemoOverlay() {
         );
       }
 
-      // ─── Slide 7: Photos flying in ───
-      case 7: {
+      // ─── Slide 8: Last day departure ───
+      case 8: return (
+        <div style={{ width: "100%", maxWidth: 320 }}>
+          {phaseLabel("🏠", "On the trip", "Day 5 · Head home")}
+          <div style={{ background: T.ad, borderRadius: "14px 14px 0 0", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>AI Concierge</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,.6)", background: "rgba(255,255,255,.15)", padding: "2px 8px", borderRadius: 8 }}>Day 5 · 7 Apr</span>
+          </div>
+          <div style={{ background: T.s, borderRadius: "0 0 14px 14px", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            <ChatBubble delay={2} text={<span>{"\uD83C\uDFE0"} <b>Time to head home!</b> Keswick {"\u2192"} Manchester<br/><br/>When do you want to set off?</span>} />
+            {show(14) && (
+              <div style={{ display: "flex", gap: 6, ...slideUp(14) }}>
+                {["10:00 AM", "After lunch"].map((opt, i) => (
+                  <span key={opt} style={{ ...css.chip, fontSize: 10, padding: "5px 12px", cursor: "pointer", ...popIn(16 + i * 3),
+                    ...(demoInteracted.depart === opt ? css.chipActive : {}) }}
+                    onClick={e => { e.stopPropagation(); setDemoInteracted(p => ({...p, depart: opt})); setDemoPaused(true); setTimeout(() => setDemoPaused(false), 1500); }}>
+                    {opt}
+                  </span>
+                ))}
+              </div>
+            )}
+            <ChatBubble delay={demoInteracted.depart ? 0 : 26} isUser text={demoInteracted.depart || "After lunch"} />
+            {(demoInteracted.depart || show(32)) && (
+              <ChatBubble delay={demoInteracted.depart ? 2 : 32} text={
+                <span>{"\uD83D\uDDFA\uFE0F"} <b>Route planned!</b><br/>Keswick {"\u2192"} A66 {"\u2192"} M6<br/>{"\u2615"} Stop: Rheged Centre<br/>{"\uD83D\uDCCD"} Home by ~{demoInteracted.depart === "10:00 AM" ? "1:30 PM" : "5:00 PM"}</span>
+              } />
+            )}
+          </div>
+        </div>
+      );
+
+      // ─── Slide 9: Photos ───
+      case 9: {
         const demoPhotos = [
           { label: "Fell view", color: "#5A8C6E" }, { label: "Lake", color: "#5A7EA0" },
           { label: "Lunch", color: "#A08060" }, { label: "Ella playing", color: "#7EA060" },
@@ -307,7 +451,7 @@ export function DemoOverlay() {
         ];
         return (
           <div style={{ width: "100%", maxWidth: 320 }}>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 12, textAlign: "center", ...slideUp(0) }}>Day 2 memories · Ambleside</p>
+            {phaseLabel("📸", "After the trip", "Memories")}
             <div style={{ background: T.s, borderRadius: 14, padding: 14, textAlign: "left" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5 }}>
                 {demoPhotos.map((p, i) => (
@@ -328,12 +472,13 @@ export function DemoOverlay() {
         );
       }
 
-      // ─── Slide 8: AI highlights reel ───
-      case 8: {
+      // ─── Slide 10: AI reel ───
+      case 10: {
         const reelPhotos = ["#5A8C6E", "#5A7EA0", "#A08060", "#4A8BA0", "#C87040"];
         const activeReel = Math.min(reelPhotos.length - 1, Math.floor(t / 7));
         return (
           <div style={{ width: "100%", maxWidth: 320 }}>
+            {phaseLabel("🎬", "After the trip", "Highlight reel")}
             <div style={{ background: "#1a1a1a", borderRadius: 14, padding: 16, textAlign: "center", color: "#fff", overflow: "hidden" }}>
               <div style={{ display: "flex", gap: 3, marginBottom: 14 }}>
                 {reelPhotos.map((_, i) => (
@@ -353,8 +498,8 @@ export function DemoOverlay() {
               <p style={{ fontFamily: T.fontD, fontSize: 16, marginBottom: 4, ...slideUp(2) }}>Easter Lake District 2026</p>
               <p style={{ fontSize: 10, color: "rgba(255,255,255,.5)", marginBottom: 10 }}>AI-curated highlights · 8 photos</p>
               <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                {["\uD83C\uDFB5 Music", "\uD83C\uDF99\uFE0F Narration", "\uD83D\uDCC5 Dates"].map((s, i) => (
-                  <span key={s} style={{ fontSize: 9, padding: "3px 8px", borderRadius: 8, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.6)", ...popIn(4 + i * 3) }}>{s}</span>
+                {["\uD83C\uDFB5 Music", "\uD83C\uDF99\uFE0F Narration", "\uD83D\uDCC5 Dates"].map((label, i) => (
+                  <span key={label} style={{ fontSize: 9, padding: "3px 8px", borderRadius: 8, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.6)", ...popIn(4 + i * 3) }}>{label}</span>
                 ))}
               </div>
             </div>
@@ -362,8 +507,8 @@ export function DemoOverlay() {
         );
       }
 
-      // ─── Slide 9: CTA ───
-      case 9: return (
+      // ─── Slide 11: CTA ───
+      case 11: return (
         <div style={{ textAlign: "center", maxWidth: 340 }}>
           <div style={{ fontSize: 56, marginBottom: 16, ...popIn(2) }}>{"\uD83C\uDF0D"}</div>
           <h2 style={{ fontFamily: T.fontD, fontSize: 26, color: "#fff", marginBottom: 8, ...slideUp(5) }}>Your adventure awaits</h2>
@@ -394,10 +539,12 @@ export function DemoOverlay() {
     "This is their story...",
     "First, name the trip and pick destinations",
     "Then find the perfect places to stay",
+    "AI suggests what to pack based on your trip",
     "Day 1 \u2014 the AI plans the whole drive",
     "Activity days \u2014 split plans for everyone",
-    "Last day \u2014 route home with pit stops",
+    "Track every expense, split costs fairly",
     "Big decisions? Let the group vote",
+    "Last day \u2014 route home with pit stops",
     "Every moment, captured and catalogued",
     "The AI turns your photos into a highlight reel",
     "",
@@ -424,7 +571,7 @@ export function DemoOverlay() {
           );
         })}
       </div>
-      {/* Top bar: Skip + pause */}
+      {/* Top bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px 0", flexShrink: 0 }}>
         <span style={{ fontSize: 11, color: "rgba(255,255,255,.4)" }}>{s + 1} / {total}{s === 0 ? " · ~2 min" : ""}</span>
         <div style={{ display: "flex", gap: 8 }}>

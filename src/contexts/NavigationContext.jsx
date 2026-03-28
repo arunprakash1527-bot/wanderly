@@ -43,7 +43,7 @@ export function NavigationProvider({ children }) {
   useEffect(() => {
     if (!showDemo) return;
     const dur = DEMO_SLIDE_DURATIONS[demoSlide] || 50;
-    if (demoTick >= dur && demoSlide < 9) {
+    if (demoTick >= dur && demoSlide < 11) {
       setDemoSlide(s => s + 1);
       setDemoTick(0);
     }
