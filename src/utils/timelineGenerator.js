@@ -272,25 +272,31 @@ export function generateMultiDayTimeline(trip) {
 
       items.push({ time: fmtTime(arrivalHour, arrivalMin), title: `Arrive ${loc}`, desc: `Check in at ${stayName} · Drop bags, freshen up`, group: "Everyone", color: T.a });
 
+      // Day 1 arrival: prefer gentle/local activities near the stay, save major attractions for full days
       if (!isRelaxed && remainingHours >= 2) {
         const exploreHr = Math.min(arrivalHour + 1, 18);
-        const idx = nextActIdx(loc, "m");
-        const act = pickAct(locPools.morning, idx, steepTest) || `Explore ${loc}`;
-        items.push({ time: fmtTime(exploreHr), title: act, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
+        const arrivalActs = [
+          `Settle in & explore around ${stayName}`,
+          `Short walk near ${stayName}`,
+          `Stroll around ${loc} village`,
+          `Explore the neighbourhood`,
+        ];
+        const act = arrivalActs[0];
+        items.push({ time: fmtTime(exploreHr), title: act, desc: tags(`${loc} · Get your bearings`), group: "Everyone", color: T.blue });
         if (hasKids) {
-          const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+          const kidAct = `Kids settle in & explore grounds`;
           items.push({ time: fmtTime(exploreHr, 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
         if (isPacked && remainingHours >= 4) {
           const lunchHr = Math.min(exploreHr + 2, 15);
-          items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodForDay(d - 1)}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
+          items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodForDay(d - 1)}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} nearby · ${budgetTier.price}`, group: "Everyone", color: T.coral });
           if (remainingHours >= 6) {
-            const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Stroll around ${loc}`;
+            const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Evening stroll in ${loc}`;
             items.push({ time: fmtTime(Math.min(lunchHr + 2, 17)), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
           }
         }
       } else if (isRelaxed && remainingHours >= 3) {
-        items.push({ time: fmtTime(Math.min(arrivalHour + 1, 18)), title: `Gentle stroll around ${loc}`, desc: tags(`Take it easy after the journey`), group: "Everyone", color: T.blue });
+        items.push({ time: fmtTime(Math.min(arrivalHour + 1, 18)), title: `Gentle stroll around ${stayName}`, desc: tags(`Take it easy after the journey`), group: "Everyone", color: T.blue });
       }
 
       const dinnerHr = Math.max(arrivalHour + 2, 18);

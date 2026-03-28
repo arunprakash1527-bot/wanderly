@@ -46,7 +46,7 @@ function haversineKm(c1, c2) {
 }
 
 // Look up coordinates for a location name (fuzzy match)
-function findCoords(name) {
+export function findCoords(name) {
   const n = name.toLowerCase().replace(/[^a-z\s]/g, "").trim();
   if (LOCATION_COORDS[n]) return LOCATION_COORDS[n];
   for (const [k, v] of Object.entries(LOCATION_COORDS)) {

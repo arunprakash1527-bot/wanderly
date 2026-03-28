@@ -116,6 +116,12 @@ export const TRAVEL_TIMES = {
   "london|liverpool": 4.5, "london|bristol": 2, "london|york": 3.5, "london|bath": 2.5,
   "london|oxford": 1.5, "london|cambridge": 1.5, "london|brighton": 1.5, "london|cornwall": 5,
   "london|lake district": 5, "london|inverness": 9, "london|isle of skye": 10.5,
+  // South London suburbs → destinations (slightly longer than central London)
+  "coulsdon|lake district": 5, "coulsdon|windermere": 5, "coulsdon|manchester": 4.5,
+  "coulsdon|birmingham": 2.5, "coulsdon|edinburgh": 7.5, "coulsdon|york": 4,
+  "coulsdon|bath": 2.5, "coulsdon|cornwall": 5.5, "coulsdon|bristol": 2.5,
+  "croydon|lake district": 5, "croydon|windermere": 5, "croydon|manchester": 4.5,
+  "sutton|lake district": 5, "sutton|windermere": 5, "sutton|manchester": 4.5,
   "manchester|edinburgh": 3.5, "manchester|glasgow": 3.5, "manchester|liverpool": 1,
   "manchester|birmingham": 1.5, "manchester|lake district": 1.5, "manchester|york": 1.5,
   "manchester|inverness": 6.5, "manchester|isle of skye": 8,
@@ -185,7 +191,8 @@ export const TRAVEL_TIMES = {
 // ─── City Coordinates (lat, lng) for distance-based travel time estimation ───
 export const LOCATION_COORDS = {
   // UK
-  london: [51.51, -0.13], manchester: [53.48, -2.24], birmingham: [52.49, -1.89],
+  london: [51.51, -0.13], coulsdon: [51.32, -0.14], croydon: [51.38, -0.10], sutton: [51.36, -0.19],
+  manchester: [53.48, -2.24], birmingham: [52.49, -1.89],
   edinburgh: [55.95, -3.19], glasgow: [55.86, -4.25], liverpool: [53.41, -2.98],
   bristol: [51.45, -2.58], leeds: [53.80, -1.55], sheffield: [53.38, -1.47],
   newcastle: [54.98, -1.61], cambridge: [52.21, 0.12], oxford: [51.75, -1.25],

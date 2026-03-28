@@ -3,7 +3,7 @@ import { T } from "../styles/tokens";
 import { API } from "../constants/api";
 import { authFetch } from "../utils/authFetch";
 import { generateMultiDayTimeline } from "../utils/timelineGenerator";
-import { estimateTravelHours, estimateDistanceMiles } from "../utils/locationHelpers";
+import { estimateTravelHours, estimateDistanceMiles, findCoords } from "../utils/locationHelpers";
 import { useTripData } from "./TripDataContext";
 import { useTripUI } from "./TripUIContext";
 import { useAuth } from "./AuthContext";
@@ -42,15 +42,30 @@ export function TimelineProvider({ children }) {
     if (evItems.length > 0) {
       try {
         const enriched = await Promise.all(evItems.map(async (ev) => {
-          const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
+          // Search at the midpoint between origin and destination for en-route stations
+          const fromCoords = findCoords(ev.from.toLowerCase().replace(/[^a-z\s]/g, "").trim());
+          const toCoords = findCoords(ev.to.toLowerCase().replace(/[^a-z\s]/g, "").trim());
+          const body = { query: `EV rapid charging station`, type: "electric_vehicle_charging_station" };
+          if (fromCoords && toCoords) {
+            // Use midpoint coordinates to bias search to en-route stations
+            body.location = { lat: (fromCoords[0] + toCoords[0]) / 2, lng: (fromCoords[1] + toCoords[1]) / 2 };
+            body.radius = 50000; // 50km radius around midpoint to find en-route stations
+            body.query = `EV rapid charging station motorway services`;
+          } else {
+            body.query = `EV charging station services between ${ev.from} and ${ev.to}`;
+          }
           const res = await authFetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),
+            body: JSON.stringify(body),
           });
           const data = await res.json();
           if (res.ok && data.places?.length > 0) {
-            const station = data.places[0];
+            // Pick the first station that isn't at the origin or destination
+            const station = data.places.find(p => {
+              const addr = (p.address || "").toLowerCase();
+              return !addr.includes(ev.from.toLowerCase()) && !addr.includes(ev.to.toLowerCase());
+            }) || data.places[0];
             return { ...ev, station };
           }
           return ev;
