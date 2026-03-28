@@ -849,7 +849,13 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                   const ratingM = rest.match(/(\d\.\d)★/);
                   const priceM = rest.match(/(£{1,4})/);
                   const isRestaurant = /restaurant|food|eat|seafood|cuisine|cafe|bistro|bakery|dining|grill|kitchen/i.test(rest + " " + name);
-                  current = { name, desc: rest, rating: ratingM ? ratingM[1] : null, price: priceM ? priceM[1] : null, isRestaurant };
+                  // Extract cuisine tags (e.g. "· Italian · Cafe" after rating/price)
+                  const cuisineM = rest.match(/·\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/g);
+                  const cuisineTags = cuisineM ? cuisineM
+                    .map(c => c.replace(/^·\s*/, "").trim())
+                    .filter(c => !/^(Open|Closed|Restaurant)$/i.test(c) && !/★|£/.test(c))
+                    .slice(0, 2) : [];
+                  current = { name, desc: rest, rating: ratingM ? ratingM[1] : null, price: priceM ? priceM[1] : null, isRestaurant, cuisineTags };
                 } else if (current && line.match(/^\s{2,}/) && !line.match(/^\s*(\*|#|Pro|💡|Say)/)) {
                   current.address = line.trim();
                 }
@@ -873,7 +879,9 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
                         {item.rating && <span style={{ fontSize: 11, color: T.amber, fontWeight: 600 }}>{item.rating}★</span>}
                         {item.price && <span style={{ fontSize: 11, color: T.green, fontWeight: 500 }}>{item.price}</span>}
-                        {item.isRestaurant && <span style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "1px 6px", borderRadius: 4 }}>🍽️ Restaurant</span>}
+                        {item.cuisineTags?.length > 0
+                          ? item.cuisineTags.map((c, ci) => <span key={ci} style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "1px 6px", borderRadius: 4 }}>🍽️ {c}</span>)
+                          : item.isRestaurant && <span style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "1px 6px", borderRadius: 4 }}>🍽️ Restaurant</span>}
                       </div>
                       {item.desc && <p style={{ fontSize: 11, color: T.t3, lineHeight: 1.4 }}>{item.desc.replace(/[\d.]+★/g, "").replace(/£+/g, "").replace(/^\s*[,·\-–]\s*/, "").trim()}</p>}
                     </div>

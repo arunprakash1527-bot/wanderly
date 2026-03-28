@@ -1051,8 +1051,14 @@ export function ChatProvider({ children }) {
               const stars = p.rating ? `${p.rating}★` : "";
               const price = p.priceLevel || "";
               const status = p.openNow === true ? "Open now" : p.openNow === false ? "Closed" : "";
+              // Extract cuisine/type from types array
+              const cuisineTypes = (p.types || [])
+                .filter(t => !["restaurant","food","point_of_interest","establishment","meal_takeaway","meal_delivery","store","bar"].includes(t))
+                .map(t => t.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()))
+                .slice(0, 2);
+              const cuisineLabel = cuisineTypes.length > 0 ? cuisineTypes.join(" · ") : "";
               const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
-              return `${i + 1}. **${p.name}** ${stars} ${price}\n   ${p.address}${status ? ` · ${status}` : ""}\n   [View on Maps](${mapLink})`;
+              return `${i + 1}. **${p.name}** ${stars} ${price}${cuisineLabel ? ` · ${cuisineLabel}` : ""}\n   ${p.address}${status ? ` · ${status}` : ""}\n   [View on Maps](${mapLink})`;
             }).join("\n\n");
 
             const locNote = usedGps ? "your current location" : firstLoc;
