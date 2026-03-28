@@ -16,11 +16,22 @@
 
 
 -- ────────────────────────────────────────────────────────────────────────────
--- Helper: reusable sub-query that returns trip IDs the calling user belongs to
--- (used in every child-table policy below)
+-- Helper: SECURITY DEFINER function that returns trip IDs the calling user
+-- belongs to. This MUST be a function (not an inlined sub-query) because
+-- inlining causes circular RLS evaluation:
+--   trips policy → sub-query on trip_travellers → trip_travellers policy
+--   → sub-query on trips → trips policy → ∞
+-- SECURITY DEFINER bypasses RLS on trip_travellers, breaking the cycle.
 -- ────────────────────────────────────────────────────────────────────────────
--- We inline the sub-query in each policy rather than wrapping it in a function
--- so Postgres can inline and optimise it per-table.
+CREATE OR REPLACE FUNCTION public.my_trip_ids()
+RETURNS SETOF UUID
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid()
+$$;
 
 
 -- ============================================================================
@@ -65,21 +76,19 @@ CREATE POLICY "Trips viewable by participants"
   FOR SELECT
   USING (
     lead_user_id = auth.uid()
-    OR id IN (
-      SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid()
-    )
+    OR id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- trip_travellers: user must be a participant of the parent trip
+-- Uses my_trip_ids() to avoid circular RLS with trips table
 CREATE POLICY "Travellers viewable by trip participants"
   ON public.trip_travellers
   FOR SELECT
   USING (
     trip_id IN (
-      SELECT id FROM public.trips
-      WHERE lead_user_id = auth.uid()
-         OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+      SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
     )
+    OR trip_id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- trip_stays: user must be a participant of the parent trip
@@ -88,10 +97,9 @@ CREATE POLICY "Stays viewable by trip participants"
   FOR SELECT
   USING (
     trip_id IN (
-      SELECT id FROM public.trips
-      WHERE lead_user_id = auth.uid()
-         OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+      SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
     )
+    OR trip_id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- trip_preferences: user must be a participant of the parent trip
@@ -100,10 +108,9 @@ CREATE POLICY "Prefs viewable by trip participants"
   FOR SELECT
   USING (
     trip_id IN (
-      SELECT id FROM public.trips
-      WHERE lead_user_id = auth.uid()
-         OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+      SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
     )
+    OR trip_id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- timeline_items: user must be a participant of the parent trip
@@ -112,10 +119,9 @@ CREATE POLICY "Timeline viewable by trip participants"
   FOR SELECT
   USING (
     trip_id IN (
-      SELECT id FROM public.trips
-      WHERE lead_user_id = auth.uid()
-         OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+      SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
     )
+    OR trip_id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- messages: user must be a participant of the parent trip
@@ -124,10 +130,9 @@ CREATE POLICY "Messages viewable by trip participants"
   FOR SELECT
   USING (
     trip_id IN (
-      SELECT id FROM public.trips
-      WHERE lead_user_id = auth.uid()
-         OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+      SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
     )
+    OR trip_id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- photos: user must be a participant of the parent trip
@@ -136,10 +141,9 @@ CREATE POLICY "Photos viewable by trip participants"
   FOR SELECT
   USING (
     trip_id IN (
-      SELECT id FROM public.trips
-      WHERE lead_user_id = auth.uid()
-         OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+      SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
     )
+    OR trip_id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- polls: user must be a participant of the parent trip
@@ -148,10 +152,9 @@ CREATE POLICY "Polls viewable by trip participants"
   FOR SELECT
   USING (
     trip_id IN (
-      SELECT id FROM public.trips
-      WHERE lead_user_id = auth.uid()
-         OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+      SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
     )
+    OR trip_id IN (SELECT * FROM public.my_trip_ids())
   );
 
 -- poll_votes: user must be a participant of the poll's parent trip
@@ -163,10 +166,9 @@ CREATE POLICY "Votes viewable by trip participants"
     poll_id IN (
       SELECT p.id FROM public.polls p
       WHERE p.trip_id IN (
-        SELECT id FROM public.trips
-        WHERE lead_user_id = auth.uid()
-           OR id IN (SELECT trip_id FROM public.trip_travellers WHERE user_id = auth.uid())
+        SELECT id FROM public.trips WHERE lead_user_id = auth.uid()
       )
+      OR p.trip_id IN (SELECT * FROM public.my_trip_ids())
     )
   );
 
