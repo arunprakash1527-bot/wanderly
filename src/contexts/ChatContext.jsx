@@ -579,6 +579,21 @@ export function ChatProvider({ children }) {
         reply = `Tap ✏️ on any item, then 🗑️ to remove it. Which activity would you like to remove?`;
       } else if (lower.includes("budget") || lower.includes("cost") || lower.includes("spend") || lower.includes("price")) {
         reply = `${contextLine}Your **${budget || "unspecified"}** budget shapes all recommendations:\n• 🍽️ ${budgetLabel} restaurants (${foodPref})\n• 🎯 ${budgetLabel} activities\n• 🏨 Stays: ${trip?.stayNames?.join(", ") || "not set"}\n\nTrack actual costs by marking items as "Booked" and entering the price.`;
+      } else if (lower.includes("suggest") || lower.includes("activit") || lower.includes("things to do") || lower.includes("what can") || lower.includes("what should") || lower.includes("recommend") || lower.includes("ideas")) {
+        const dayLoc = locForDay(selectedDay);
+        const locActs = getLocationActivities(dayLoc);
+        if (locActs) {
+          const morning = locActs.morning || [];
+          const afternoon = locActs.afternoon || [];
+          const kidsActs = (hasKids && locActs.kids) ? locActs.kids : [];
+          const allOptions = [...morning.slice(0, 3), ...afternoon.slice(0, 3), ...kidsActs.slice(0, 2)];
+          const uniqueOptions = [...new Set(allOptions)].slice(0, 6);
+          setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay: selectedDay, loc: dayLoc } });
+          const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
+          reply = `Here are activities I'd recommend in **${dayLoc}** for Day ${selectedDay}:\n\n${optionsList}\n\nReply with a number to add it to your itinerary, or type something specific!`;
+        } else {
+          reply = `${contextLine}For activities in **${dayLoc}**, try saying:\n• "Add [activity name] to Day ${selectedDay}"\n• "Add popular attractions"\n\nOr ask about restaurants, timing, or budget!`;
+        }
       } else if (lower.includes("summary") || lower.includes("plan") || lower.includes("overview")) {
         reply = `${contextLine}All itinerary items above are tailored to this context. Ask me about restaurants, activities, timing, or budget — I'll factor in everything.`;
       } else if (lower.includes("regenerate") || lower.includes("refresh") || lower.includes("redo")) {
