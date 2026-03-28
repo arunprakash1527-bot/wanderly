@@ -715,6 +715,71 @@ export function ChatProvider({ children }) {
       return;
     }
 
+    // ── Handle "remove/clear/replace itinerary for day X" requests ──
+    const isClearRequest = /\b(remove|clear|delete|wipe|reset|replace|redo|rebuild)\b/i.test(lower) && /\b(all|itinerary|activities|everything|schedule)\b/i.test(lower) && /day\s*(\d+)/i.test(lower);
+    if (isClearRequest) {
+      const clearDayMatch = lower.match(/day\s*(\d+)/i);
+      const clearDay = clearDayMatch ? parseInt(clearDayMatch[1]) : selectedDay;
+
+      // Extract specific activities the user wants in the new itinerary
+      const includeMatch = msg.match(/(?:including|with|featuring|having)\s+(.+?)$/i);
+      let requestedItems = [];
+      if (includeMatch) {
+        // Parse "visit to roe island and boat trip to piel island" style
+        requestedItems = includeMatch[1]
+          .split(/\s+(?:and|,|&)\s+/)
+          .map(s => s.replace(/^\s*(a\s+|the\s+)?/i, '').trim())
+          .filter(s => s.length > 2 && !/^(also|then|maybe|please)$/i.test(s));
+      }
+
+      // Clear the day's timeline
+      setCreatedTrips(prev => prev.map(t => {
+        if (t.id !== tripId) return t;
+        const tl = { ...(t.timeline || {}) };
+        tl[clearDay] = [];
+        saveTimelineToDB(t.dbId || t.id, tl);
+        return { ...t, timeline: tl };
+      }));
+      logActivity(tripId, "🗑️", `Cleared all activities from Day ${clearDay}`, "itinerary");
+
+      if (requestedItems.length > 0) {
+        // Add the requested items with smart time slots
+        const dayLoc = locForDay(clearDay);
+        const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+        const baseSlots = ["9:00 AM", "10:30 AM", "12:00 PM", "1:30 PM", "3:00 PM", "4:30 PM"];
+        const newItems = requestedItems.map((item, idx) => ({
+          time: baseSlots[idx] || `${3 + idx}:00 PM`,
+          title: item.charAt(0).toUpperCase() + item.slice(1),
+          desc: `${dayLoc} · Added via chat`,
+          group: "Everyone",
+          color: T.blue,
+        }));
+
+        setCreatedTrips(prev => prev.map(t => {
+          if (t.id !== tripId) return t;
+          const tl = { ...(t.timeline || {}) };
+          tl[clearDay] = newItems;
+          saveTimelineToDB(t.dbId || t.id, tl);
+          return { ...t, timeline: tl };
+        }));
+
+        const itemsList = newItems.map(n => `• **${n.title}** at ${n.time}`).join("\n");
+        setSelectedDay(clearDay);
+        const reply = `🗑️ Cleared Day ${clearDay} itinerary.\n\n✅ Added your requested activities:\n${itemsList}\n\nTap the Itinerary tab to see them — tap ✏️ to adjust times.`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        saveChatMessage(trip?.dbId, 'ai', reply);
+        return;
+      } else {
+        setSelectedDay(clearDay);
+        const reply = `🗑️ Cleared all activities from **Day ${clearDay}**. You can now add new ones — try "add [activity] to day ${clearDay}" or "suggest activities for day ${clearDay}".`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        saveChatMessage(trip?.dbId, 'ai', reply);
+        return;
+      }
+    }
+
     // ── Handle "suggest/recommend activities" queries — show location activities ──
     const isSuggestQuery = /\b(suggest|recommend|what(?:'s| is| are| can)|show me|list|things to do|activities|attractions|places to visit|can be done|ideas|what.+do\b)/i.test(lower)
       && /\b(activit|attraction|thing|place|do\b|done|visit|see|sight|experience|idea)/i.test(lower);
