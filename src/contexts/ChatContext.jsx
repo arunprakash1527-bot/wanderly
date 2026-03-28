@@ -257,6 +257,12 @@ export function ChatProvider({ children }) {
 
     // ── Handle "pick attraction" flow — user selecting from suggested options ──
     if (tripChatFlow?.step === "pick_attraction") {
+      // If user is issuing a NEW explicit command (e.g. "day 2 – Add X"), clear the flow and let it fall through
+      const isNewCommand = /\b(add|include|plug)\b/i.test(lower) && (/day\s*\d+/i.test(lower) || /first stop|morning|afternoon|evening/i.test(lower));
+      if (isNewCommand) {
+        setTripChatFlow(null);
+        // Fall through to the add handler below
+      } else {
       const { options, targetDay, loc: flowLoc } = tripChatFlow.data;
       // Check if user typed a number (1-based), exact name, or keyword match
       const numMatch = lower.match(/^(\d+)$/);
@@ -294,8 +300,8 @@ export function ChatProvider({ children }) {
           return { ...t, timeline: newTimeline };
         }));
         logActivity(tripId, "📍", `Added "${picked}" to Day ${targetDay}`, "itinerary");
-        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
-        const reply = `✅ Added **${picked}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Switching to your itinerary now!`;
+        setSelectedDay(targetDay);
+        const reply = `✅ Added **${picked}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Check your itinerary to see it!`;
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
@@ -317,8 +323,8 @@ export function ChatProvider({ children }) {
           return { ...t, timeline: newTimeline };
         }));
         logActivity(tripId, "📍", `Added "${customTitle}" to Day ${targetDay}`, "itinerary");
-        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
-        const reply = `✅ Added **${customTitle}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Switching to your itinerary now!`;
+        setSelectedDay(targetDay);
+        const reply = `✅ Added **${customTitle}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Check your itinerary to see it!`;
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
@@ -326,6 +332,7 @@ export function ChatProvider({ children }) {
       } else {
         setTripChatFlow(null); // Clear flow if user typed something else
       }
+      } // end else (not a new command)
     }
 
     // ── Handle EV charger flow follow-up — user replying with connector type / car count ──
@@ -626,13 +633,13 @@ export function ChatProvider({ children }) {
               return { ...t, timeline: newTimeline };
             }));
             logActivity(tripId, "⚡", `Added EV charging stop "${station.name}" to Day ${targetDay}`, "itinerary");
-            setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+            setSelectedDay(targetDay);
 
             const rating = station.rating ? ` · ${station.rating}★` : "";
             const addr = station.address ? `\n📍 ${station.address}` : "";
             const nav = mapLink ? `\n🗺️ [Navigate in Maps](${mapLink})` : "";
             const evInfo = evModelLabel ? `\n🔋 Matched for your **${evModelLabel}**${evDefaultConnector ? ` (${evDefaultConnector})` : ""} · ${evRangeMiles ? `${evRangeMiles}mi range` : ""}` : "";
-            const reply = `⚡ Found a charging station!\n\n**${station.name}**${rating}${addr}${nav}${evInfo}\n\n✅ Added to **Day ${targetDay}** at ${smartSlot.time}. Switching to your itinerary now!`;
+            const reply = `⚡ Found a charging station!\n\n**${station.name}**${rating}${addr}${nav}${evInfo}\n\n✅ Added to **Day ${targetDay}** at ${smartSlot.time}. Check your itinerary to see it!`;
             setTripChatTyping(false);
             setTripChatMessages(prev => {
               const updated = [...prev];
@@ -766,7 +773,7 @@ export function ChatProvider({ children }) {
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
-        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+        setSelectedDay(targetDay);
         return;
       }
 
@@ -823,10 +830,10 @@ export function ChatProvider({ children }) {
         } else {
           logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
         }
-        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+        setSelectedDay(targetDay);
         const addReply = replacedTitle
-          ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust.`
-          : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
+          ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust.`
+          : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust the time.`;
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: addReply }]);
         saveChatMessage(trip?.dbId, 'ai', addReply);
@@ -973,10 +980,10 @@ export function ChatProvider({ children }) {
             logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
           }
           // Auto-switch to itinerary on the added day
-          setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+          setSelectedDay(targetDay);
           reply = replacedTitle
-            ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust.`
-            : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Switching to your itinerary now — tap ✏️ to adjust the time.`;
+            ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust.`
+            : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust the time.`;
         } else {
           addTimelineItem(tripId);
           reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
