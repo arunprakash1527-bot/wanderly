@@ -282,6 +282,80 @@ export function ChatProvider({ children }) {
       }
     }
 
+    // ── Handle EV charger flow follow-up — user replying with connector type / car count ──
+    if (tripChatFlow?.step === "ev_charger_details") {
+      setTripChatFlow(null);
+      // Merge the original query context with the follow-up reply
+      const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/i);
+      const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "").toLowerCase() : null;
+      const carCountMatch = lower.match(/(\d+)\s*(?:car|vehicle|ev)/i);
+      const carCount = carCountMatch ? parseInt(carCountMatch[1]) : 1;
+
+      setTripChatMessages(prev => [...prev, { role: "ai", text: "⚡ Finding EV chargers with real-time details..." }]);
+
+      const handleEvResults = async (lat, lng, locLabel) => {
+        try {
+          const body = { maxResults: 5 };
+          if (lat && lng) { body.lat = lat; body.lng = lng; }
+          else { body.locationName = firstLoc; }
+          if (connectorType) body.connectorType = connectorType;
+
+          const res = await authFetch(API.EV_CHARGERS, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+
+          if (res.ok && data.chargers?.length > 0) {
+            const isGoogleFallback = data.source === "google";
+            const list = data.chargers.map((c, i) => {
+              const dist = c.distance ? ` · 📏 ${c.distance}` : "";
+              const status = c.isOperational ? " · 🟢 Operational" : c.isOperational === false ? " · 🔴 Out of service" : "";
+              const speed = c.maxPowerKW ? ` · ⚡ ${c.speedLabel} (${c.maxPowerKW}kW)` : "";
+              const connectors = c.connectors?.length > 0 ? `\n   🔌 ${c.connectors.join(", ")} · ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}` : "";
+              const points = carCount > 1 && c.totalPoints ? (c.totalPoints >= carCount ? ` ✅ Can charge ${carCount} cars` : ` ⚠️ Only ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}`) : "";
+              const cost = c.usageCost ? `\n   💰 ${c.usageCost}` : c.usageType ? `\n   💰 ${c.usageType}` : "";
+              const facilities = c.facilities?.length > 0 ? `\n   🏪 ${c.facilities.join(" · ")}` : "";
+              const operator = c.operator ? `\n   🏢 ${c.operator}` : "";
+              const rating = isGoogleFallback && c.rating ? ` · ${c.rating}★` : "";
+              const open = isGoogleFallback ? (c.openNow === true ? " · Open now" : c.openNow === false ? " · Closed" : "") : "";
+              const zapLink = c.zapMapLink ? ` · [Zap-Map Live](${c.zapMapLink})` : "";
+              return `${i + 1}. **${c.name}**${dist}${status}${rating}${open}${speed}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink})${zapLink}`;
+            }).join("\n\n");
+
+            const connectorNote = !connectorType ? "\n\n🔌 **Need a specific connector?** Ask me for CCS, CHAdeMO, or Type 2 chargers." : "";
+            const zapNote = "\n\n📡 Tap **Zap-Map Live** for real-time availability and queue times.";
+            const googleNote = isGoogleFallback ? "\n\n_ℹ️ Basic results shown — connector details unavailable. Check Zap-Map for full info._" : "";
+            return `⚡ **EV Chargers${connectorType ? ` (${connectorType.toUpperCase()})` : ""} near ${locLabel}:**\n\n${list}${connectorNote}${zapNote}${googleNote}`;
+          }
+        } catch (e) { /* fallback below */ }
+        return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
+      };
+
+      const updateEvReply = (reply) => {
+        setTripChatTyping(false);
+        setTripChatMessages(prev => {
+          const updated = [...prev];
+          const idx = updated.findLastIndex(m => m.text === "⚡ Finding EV chargers with real-time details...");
+          if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+          else updated.push({ role: "ai", text: reply });
+          return updated;
+        });
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => updateEvReply(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")),
+          async () => updateEvReply(await handleEvResults(null, null, firstLoc)),
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
+      } else {
+        updateEvReply(await handleEvResults(null, null, firstLoc));
+      }
+      return;
+    }
+
     // ── EV charger queries — Open Charge Map for detailed results ──
     if (/ev|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
       // Extract connector type preference from message
@@ -294,6 +368,7 @@ export function ChatProvider({ children }) {
       const needsMultiCarPrompt = totalTravellers > 4 && !/\d+\s*car|\d+\s*vehicle|single car|one car/i.test(lower);
 
       if (needsMultiCarPrompt) {
+        setTripChatFlow({ step: "ev_charger_details", data: { query: lower } });
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: `🚗 Your trip has ${totalTravellers} travellers. How many EVs need charging? Also, what connector type do you need?\n\n• **CCS** (most common for rapid charging)\n• **CHAdeMO**\n• **Type 2** (standard AC)\n\nJust reply like: "2 cars, CCS" or "1 car, Type 2"` }]);
         return;
