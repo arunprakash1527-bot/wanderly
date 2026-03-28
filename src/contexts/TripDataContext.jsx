@@ -140,6 +140,55 @@ export function TripDataProvider({ children }) {
     }
   };
 
+  // ─── Supabase: Update Edited Trip ───
+  const updateTripInDB = async (tripData, tripId) => {
+    if (!user || user.id === 'demo' || !tripId) return;
+    try {
+      // Update the main trip row
+      const { error: tripError } = await supabase.from('trips').update({
+        name: tripData.name,
+        brief: tripData.brief || null,
+        start_date: tripData.rawStart || null,
+        end_date: tripData.rawEnd || null,
+        places: tripData.places || [],
+        travel_mode: tripData.travel || [],
+        budget: tripData.budget || null,
+        start_location: tripData.startLocation || null,
+        summary: tripData.summary || null,
+        timeline: tripData.timeline || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', tripId);
+      if (tripError) throw tripError;
+
+      // Replace stays: delete old, insert new
+      await supabase.from('trip_stays').delete().eq('trip_id', tripId);
+      const stayRows = mapStaysForInsert(tripData.stays, tripId);
+      if (stayRows.length > 0) {
+        const { error: sErr } = await supabase.from('trip_stays').insert(stayRows);
+        if (sErr) console.error('Error saving stays:', sErr);
+      }
+
+      // Replace travellers: delete old, insert new
+      await supabase.from('trip_travellers').delete().eq('trip_id', tripId);
+      const travellerRows = mapTravellersForInsert(tripData, tripId, user.id);
+      if (travellerRows.length > 0) {
+        const { error: tErr } = await supabase.from('trip_travellers').insert(travellerRows);
+        if (tErr) console.error('Error saving travellers:', tErr);
+      }
+
+      // Replace preferences: delete old, insert new
+      await supabase.from('trip_preferences').delete().eq('trip_id', tripId);
+      const prefsRow = mapPrefsForInsert(tripData.prefs, tripId);
+      if (prefsRow) {
+        const { error: pErr } = await supabase.from('trip_preferences').insert(prefsRow);
+        if (pErr) console.error('Error saving preferences:', pErr);
+      }
+    } catch (err) {
+      console.error('Error updating trip:', err);
+      showToast("Failed to save changes — check connection", "error");
+    }
+  };
+
   // ─── Supabase: Update Trip Status ───
   const updateTripStatusInDB = async (tripId, status) => {
     if (!user || user.id === 'demo' || !tripId) return;
@@ -281,14 +330,23 @@ export function TripDataProvider({ children }) {
     };
     tripData.summary = buildTripSummary(tripData);
     if (editingTripId) {
+      let updatedTrip;
       setCreatedTrips(prev => prev.map(t => {
         if (t.id !== editingTripId) return t;
         const updated = { ...t, ...tripData };
         if (t.status === "live") updated.timeline = generateMultiDayTimeline(updated);
+        updatedTrip = updated;
         return updated;
       }));
-      const updatedTrip = { ...createdTrips.find(t => t.id === editingTripId), ...tripData };
+      if (!updatedTrip) updatedTrip = { ...createdTrips.find(t => t.id === editingTripId), ...tripData };
       setSelectedCreatedTrip(updatedTrip);
+      // Persist edits to Supabase
+      const dbId = updatedTrip.dbId || editingTripId;
+      if (user && user.id !== 'demo' && dbId) {
+        updateTripInDB(updatedTrip, dbId).then(() => {
+          showToast("Changes saved", "success");
+        });
+      }
       setSaving(false);
       navigate("createdTrip");
     } else {
