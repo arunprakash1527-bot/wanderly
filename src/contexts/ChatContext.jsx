@@ -399,14 +399,13 @@ export function ChatProvider({ children }) {
         });
       };
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => updateEvReply(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")),
-          async () => updateEvReply(await handleEvResults(null, null, firstLoc)),
-          { enableHighAccuracy: false, timeout: 8000 }
-        );
+      // Use the current day's location for the flow follow-up
+      const flowDayLoc = locForDay(selectedDay);
+      const flowDayCoords = findCoords(flowDayLoc);
+      if (flowDayCoords) {
+        updateEvReply(await handleEvResults(flowDayCoords[0], flowDayCoords[1], flowDayLoc));
       } else {
-        updateEvReply(await handleEvResults(null, null, firstLoc));
+        updateEvReply(await handleEvResults(null, null, flowDayLoc || firstLoc));
       }
       return;
     }
@@ -416,6 +415,14 @@ export function ChatProvider({ children }) {
       // Extract connector type preference from message, fall back to EV profile
       const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/);
       const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "") : evDefaultConnector;
+
+      // Extract location from the message (e.g. "near windermere", "in keswick", "for day 2")
+      const evLocMatch = lower.match(/\b(?:near|in|at|around)\s+([a-z\s]+?)(?:\s+(?:for|on)\s+day\s*\d+)?$/i);
+      const evDayMatch = lower.match(/day\s*(\d+)/);
+      const evRequestedLoc = evLocMatch ? evLocMatch[1].trim().replace(/\b(ev|charger|charging|station|point)\b/gi, '').trim() : null;
+      // If user specified a location or day, use that instead of GPS
+      const evTargetLoc = evRequestedLoc && evRequestedLoc.length > 1 ? evRequestedLoc : (evDayMatch ? locForDay(parseInt(evDayMatch[1])) : null);
+      const evTargetCoords = evTargetLoc ? findCoords(evTargetLoc) : null;
 
       // Check if trip has 4+ travellers — ask about multi-car charging
       // But skip the prompt if EV profile already gives us the connector type
@@ -488,14 +495,32 @@ export function ChatProvider({ children }) {
         });
       };
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => updateEvReply(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")),
-          async () => updateEvReply(await handleEvResults(null, null, firstLoc)),
-          { enableHighAccuracy: false, timeout: 8000 }
-        );
+      if (evTargetCoords) {
+        // User specified a location — use its coordinates directly, no GPS
+        updateEvReply(await handleEvResults(evTargetCoords[0], evTargetCoords[1], evTargetLoc));
+      } else if (evTargetLoc) {
+        // Location name but no coordinates — pass as location name
+        updateEvReply(await handleEvResults(null, null, evTargetLoc));
+      } else if (/near me|nearby|near here|around me/i.test(lower)) {
+        // User explicitly asked for nearby — use GPS
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => updateEvReply(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")),
+            async () => updateEvReply(await handleEvResults(null, null, firstLoc)),
+            { enableHighAccuracy: false, timeout: 8000 }
+          );
+        } else {
+          updateEvReply(await handleEvResults(null, null, firstLoc));
+        }
       } else {
-        updateEvReply(await handleEvResults(null, null, firstLoc));
+        // No location specified — use the current day's location
+        const dayLoc = locForDay(selectedDay);
+        const dayCoords = findCoords(dayLoc);
+        if (dayCoords) {
+          updateEvReply(await handleEvResults(dayCoords[0], dayCoords[1], dayLoc));
+        } else {
+          updateEvReply(await handleEvResults(null, null, dayLoc || firstLoc));
+        }
       }
       return;
     }
