@@ -7,7 +7,7 @@ import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
 import { fetchTripIntelligence, buildSmartGreeting, buildSmartTips } from "../utils/tripIntelligence";
-import { getLocationActivities, estimateTravelHours } from "../utils/locationHelpers";
+import { getLocationActivities, estimateTravelHours, findCoords } from "../utils/locationHelpers";
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const ChatContext = createContext(null);
@@ -432,6 +432,126 @@ export function ChatProvider({ children }) {
       } else {
         handleNearbyResults(null, null, firstLoc).then(updateNearbyChat);
       }
+      return;
+    }
+
+    // ── Handle "add EV charger to day X" — live Places API lookup at route midpoint ──
+    if (/\b(add|include|plug|put|insert)\b/i.test(lower) && /ev|charger|charging|charge\s*point/i.test(lower)) {
+      const dayMatch = lower.match(/day\s*(\d+)/);
+      const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
+      const dayLoc = locForDay(targetDay);
+      const origin = trip?.startLocation || trip?.places?.[0] || "origin";
+      // For day 1, origin is start location; for other days, use previous day location or stay
+      const fromLoc = targetDay === 1 ? origin : (locForDay(targetDay - 1) || origin);
+      const toLoc = dayLoc;
+
+      setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Searching for EV charging stations between **${fromLoc}** and **${toLoc}**...` }]);
+
+      (async () => {
+        try {
+          const fromCoords = findCoords(fromLoc);
+          const toCoords = findCoords(toLoc);
+          let body = { radius: 50000, maxResults: 5 };
+          if (fromCoords && toCoords) {
+            body.location = { lat: (fromCoords[0] + toCoords[0]) / 2, lng: (fromCoords[1] + toCoords[1]) / 2 };
+            body.query = "EV rapid charging station motorway services";
+          } else {
+            body.query = `EV charging station between ${fromLoc} and ${toLoc}`;
+            body.locationName = fromLoc;
+          }
+
+          const res = await authFetch(API.PLACES, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+
+          let station = null;
+          if (res.ok && data.places?.length > 0) {
+            // Filter out stations at origin or destination
+            const fromN = fromLoc.toLowerCase();
+            const toN = toLoc.toLowerCase();
+            const filtered = data.places.filter(p => {
+              const addr = (p.address || "").toLowerCase();
+              const name = (p.name || "").toLowerCase();
+              return !addr.includes(fromN) && !addr.includes(toN) && !name.includes(fromN) && !name.includes(toN);
+            });
+            station = filtered[0] || data.places[0];
+          }
+
+          if (station) {
+            const stationTitle = `⚡ ${station.name}`;
+            const stationDesc = station.address ? `${station.address} · EV Charging Stop` : "EV Charging Stop";
+            const smartSlot = findSmartSlot(tripId, targetDay, "ev charging break");
+            const newItem = { time: smartSlot.time, title: stationTitle, desc: stationDesc, group: "Everyone", color: "#22c55e" };
+            const mapLink = station.placeId ? `https://www.google.com/maps/place/?q=place_id:${station.placeId}` : null;
+            if (mapLink) newItem.mapLink = mapLink;
+
+            const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+            setCreatedTrips(prev => prev.map(t => {
+              if (t.id !== tripId) return t;
+              const tl = t.timeline || {};
+              let dayTl = [...(tl[targetDay] || []), newItem];
+              dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
+              const newTimeline = { ...tl, [targetDay]: dayTl };
+              saveTimelineToDB(t.dbId || t.id, newTimeline);
+              return { ...t, timeline: newTimeline };
+            }));
+            logActivity(tripId, "⚡", `Added EV charging stop "${station.name}" to Day ${targetDay}`, "itinerary");
+            setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+
+            const rating = station.rating ? ` · ${station.rating}★` : "";
+            const addr = station.address ? `\n📍 ${station.address}` : "";
+            const nav = mapLink ? `\n🗺️ [Navigate in Maps](${mapLink})` : "";
+            const reply = `⚡ Found a charging station!\n\n**${station.name}**${rating}${addr}${nav}\n\n✅ Added to **Day ${targetDay}** at ${smartSlot.time}. Switching to your itinerary now!`;
+            setTripChatTyping(false);
+            setTripChatMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.findLastIndex(m => m.text.includes("Searching for EV charging stations"));
+              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+              else updated.push({ role: "ai", text: reply });
+              return updated;
+            });
+            saveChatMessage(trip?.dbId, 'ai', reply);
+          } else {
+            // Fallback — no results, add a generic placeholder
+            const smartSlot = findSmartSlot(tripId, targetDay, "ev charging break");
+            const fallbackItem = { time: smartSlot.time, title: "⚡ EV Charging Stop", desc: `Mid-route between ${fromLoc} & ${toLoc} · Added via chat`, group: "Everyone", color: "#22c55e" };
+            const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+            setCreatedTrips(prev => prev.map(t => {
+              if (t.id !== tripId) return t;
+              const tl = t.timeline || {};
+              let dayTl = [...(tl[targetDay] || []), fallbackItem];
+              dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
+              const newTimeline = { ...tl, [targetDay]: dayTl };
+              saveTimelineToDB(t.dbId || t.id, newTimeline);
+              return { ...t, timeline: newTimeline };
+            }));
+            const reply = `⚡ Couldn't find a specific charger between ${fromLoc} and ${toLoc}, but I've added a charging stop placeholder to **Day ${targetDay}** at ${smartSlot.time}. Check [Zap-Map](https://www.zap-map.com/live/) for real-time availability along your route.`;
+            setTripChatTyping(false);
+            setTripChatMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.findLastIndex(m => m.text.includes("Searching for EV charging stations"));
+              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+              else updated.push({ role: "ai", text: reply });
+              return updated;
+            });
+            saveChatMessage(trip?.dbId, 'ai', reply);
+          }
+        } catch (err) {
+          console.error("EV charger add error:", err);
+          setTripChatTyping(false);
+          const errReply = `⚡ Had trouble searching for chargers. Try [Zap-Map](https://www.zap-map.com/live/) to find one along your route, then say "add [station name] to day ${targetDay}".`;
+          setTripChatMessages(prev => {
+            const updated = [...prev];
+            const idx = updated.findLastIndex(m => m.text.includes("Searching for EV charging stations"));
+            if (idx >= 0) updated[idx] = { role: "ai", text: errReply };
+            else updated.push({ role: "ai", text: errReply });
+            return updated;
+          });
+        }
+      })();
       return;
     }
 
