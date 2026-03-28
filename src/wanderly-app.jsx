@@ -390,6 +390,24 @@ function AppShell() {
     };
   }, []);
 
+  // ─── Prevent pull-to-refresh on mobile ───
+  useEffect(() => {
+    let startY = 0;
+    const onTouchStart = (e) => { startY = e.touches[0].pageY; };
+    const onTouchMove = (e) => {
+      const el = e.target.closest('[style*="overflow"]') || document.scrollingElement;
+      if (el && el.scrollTop <= 0 && e.touches[0].pageY > startY) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+    };
+  }, []);
+
   // PWA install prompt
   const deferredPromptRef = useRef(null);
   const [showInstall, setShowInstall] = useState(false);
