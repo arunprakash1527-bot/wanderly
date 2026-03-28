@@ -352,6 +352,25 @@ function DesktopSidePanel({ screen }) {
             </div>
           ))}
         </div>
+
+        {/* Data privacy */}
+        <div style={{ marginTop: 16, padding: 16, borderRadius: 14, background: T.s, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.green}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🔒</div>
+            <p style={{ fontSize: 12, fontWeight: 600, color: T.t1 }}>Your data is protected</p>
+          </div>
+          {[
+            { icon: "🛡️", text: "Trip data is only visible to you and invited travellers" },
+            { icon: "📸", text: "Photos are stored privately with time-limited access" },
+            { icon: "🤖", text: "Personal names are redacted before AI processing" },
+            { icon: "🚪", text: "All cached data is cleared when you sign out" },
+          ].map((item, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
+              <p style={{ fontSize: 11, color: T.t2, lineHeight: 1.4 }}>{item.text}</p>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
