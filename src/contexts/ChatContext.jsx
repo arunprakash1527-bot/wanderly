@@ -828,8 +828,28 @@ export function ChatProvider({ children }) {
         return;
       }
       if (itemTitle && itemTitle.length > 2) {
+        // Extract explicit time from the request (e.g. "at 11:00 am", "at 2pm", "for 3:30 PM")
+        const explicitTimeMatch = itemTitle.match(/\b(?:at|for|@)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i);
+        let explicitTime = null;
+        if (explicitTimeMatch) {
+          let raw = explicitTimeMatch[1].trim().toUpperCase();
+          // Normalise: "11am" → "11:00 AM", "2pm" → "2:00 PM", "3:30 PM" stays
+          if (!raw.includes(":")) raw = raw.replace(/(\d+)\s*(AM|PM)/, "$1:00 $2");
+          else raw = raw.replace(/(\d+:\d+)\s*(AM|PM)/, "$1 $2");
+          explicitTime = raw;
+          // Strip the time clause from the title
+          itemTitle = itemTitle.replace(/\s*\b(?:at|for|@)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i, '').trim();
+        }
+        // Also check for "first stop", "morning", "afternoon", "evening" hints
+        const isFirstStop = /first\s*stop|first\s*thing|start\s*with/i.test(lower);
+        if (isFirstStop && !explicitTime) explicitTime = "9:00 AM";
+        // Strip "first stop as" / "as first stop" / "from [location]" from title
+        itemTitle = itemTitle.replace(/\b(as\s+)?first\s+stop(\s+as)?\b/i, '').replace(/\bfrom\s+\S+(\s+\S+)?\s*$/i, '').trim();
+        // Clean up any leading/trailing "as"
+        itemTitle = itemTitle.replace(/^as\s+/i, '').replace(/\s+as$/i, '').trim();
+
         const dayLoc = locForDay(targetDay);
-        const smartSlot = findSmartSlot(tripId, targetDay, lower);
+        const smartSlot = explicitTime ? { time: explicitTime, label: "Requested time" } : findSmartSlot(tripId, targetDay, lower);
         const newItem = { time: smartSlot.time, title: itemTitle, desc: `${dayLoc} · Added via chat`, group: "Everyone", color: T.blue };
         const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
         let replacedTitle = null;
