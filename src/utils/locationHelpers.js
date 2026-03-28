@@ -155,9 +155,33 @@ export function estimateDistanceMiles(from, to) {
   return Math.round(hrs * 45);
 }
 
+// Sub-locations that should resolve to a parent region's activities
+const LOCATION_ALIASES = {
+  windermere: "lake district", bowness: "lake district", "bowness on windermere": "lake district",
+  ambleside: "lake district", grasmere: "lake district", keswick: "lake district",
+  penrith: "lake district", coniston: "lake district", ullswater: "lake district",
+  "bowness-on-windermere": "lake district", hawkshead: "lake district",
+  penzance: "cornwall", "st ives": "cornwall", newquay: "cornwall", padstow: "cornwall", falmouth: "cornwall",
+  portree: "isle of skye", dunvegan: "isle of skye",
+  drumnadrochit: "loch ness", "fort augustus": "loch ness",
+  montmartre: "paris", "le marais": "paris",
+  trastevere: "rome", vatican: "rome",
+  "gothic quarter": "barcelona", "el born": "barcelona",
+};
+
 export function getLocationActivities(place) {
-  const key = place.toLowerCase();
+  const key = place.toLowerCase().trim();
   if (LOCATION_ACTIVITIES[key]) return LOCATION_ACTIVITIES[key];
+  // Check aliases
+  if (LOCATION_ALIASES[key] && LOCATION_ACTIVITIES[LOCATION_ALIASES[key]]) {
+    return LOCATION_ACTIVITIES[LOCATION_ALIASES[key]];
+  }
+  // Partial match
+  for (const [alias, parent] of Object.entries(LOCATION_ALIASES)) {
+    if (key.includes(alias) || alias.includes(key)) {
+      if (LOCATION_ACTIVITIES[parent]) return LOCATION_ACTIVITIES[parent];
+    }
+  }
   for (const [k, v] of Object.entries(LOCATION_ACTIVITIES)) {
     if (key.includes(k) || k.includes(key)) return v;
   }

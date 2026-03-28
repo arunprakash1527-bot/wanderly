@@ -258,9 +258,23 @@ export function ChatProvider({ children }) {
     // ── Handle "pick attraction" flow — user selecting from suggested options ──
     if (tripChatFlow?.step === "pick_attraction") {
       const { options, targetDay, loc: flowLoc } = tripChatFlow.data;
-      // Check if user typed a number (1-based) or the attraction name
+      // Check if user typed a number (1-based), exact name, or keyword match
       const numMatch = lower.match(/^(\d+)$/);
-      const picked = numMatch ? options[parseInt(numMatch[1]) - 1] : options.find(o => lower.includes(o.toLowerCase()));
+      const cleanInput = lower.replace(/^(how about|what about|maybe|i'd like|i want|let's do|yes|yeah)\s*/i, '').replace(/\?$/,'').trim();
+      const picked = numMatch
+        ? options[parseInt(numMatch[1]) - 1]
+        : options.find(o => lower.includes(o.toLowerCase()) || o.toLowerCase().includes(cleanInput))
+          || (() => {
+            // Keyword matching: find option that shares significant words with user input
+            const inputWords = cleanInput.split(/\s+/).filter(w => w.length > 2 && !['the','and','for','with','some','any'].includes(w));
+            if (inputWords.length === 0) return null;
+            const scored = options.map(o => {
+              const oWords = o.toLowerCase().split(/\s+/);
+              const matches = inputWords.filter(w => oWords.some(ow => ow.includes(w) || w.includes(ow)));
+              return { option: o, score: matches.length };
+            }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
+            return scored.length > 0 ? scored[0].option : null;
+          })();
       if (picked) {
         setTripChatFlow(null);
         const smartSlot = findSmartSlot(tripId, targetDay, "add " + picked.toLowerCase());
@@ -282,6 +296,29 @@ export function ChatProvider({ children }) {
         logActivity(tripId, "📍", `Added "${picked}" to Day ${targetDay}`, "itinerary");
         setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
         const reply = `✅ Added **${picked}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Switching to your itinerary now!`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        saveChatMessage(trip?.dbId, 'ai', reply);
+        return;
+      } else if (cleanInput.length > 2) {
+        // User typed something specific not in the list — add it as a custom activity
+        setTripChatFlow(null);
+        const smartSlot = findSmartSlot(tripId, targetDay, "add " + cleanInput);
+        const customTitle = cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1);
+        const newItem = { time: smartSlot.time, title: customTitle, desc: `${flowLoc} · Added via chat`, group: "Everyone", color: T.blue };
+        const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
+        setCreatedTrips(prev => prev.map(t => {
+          if (t.id !== tripId) return t;
+          const tl = t.timeline || {};
+          let dayTl = [...(tl[targetDay] || []), newItem];
+          dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
+          const newTimeline = { ...tl, [targetDay]: dayTl };
+          saveTimelineToDB(t.dbId || t.id, newTimeline);
+          return { ...t, timeline: newTimeline };
+        }));
+        logActivity(tripId, "📍", `Added "${customTitle}" to Day ${targetDay}`, "itinerary");
+        setTimeout(() => { setSelectedDay(targetDay); setTripDetailTab("itinerary"); }, 600);
+        const reply = `✅ Added **${customTitle}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Switching to your itinerary now!`;
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
