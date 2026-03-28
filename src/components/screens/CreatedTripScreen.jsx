@@ -163,7 +163,7 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
   if (numDays <= 1 && trip.rawStart && trip.rawEnd) {
     numDays = Math.max(1, Math.round((new Date(trip.rawEnd + "T12:00:00") - new Date(trip.rawStart + "T12:00:00")) / 86400000) + 1);
   }
-  const dayItems = getDayItems(trip.timeline, selectedDay);
+  const dayItems = getDayItems(trip.timeline, selectedDay, editingTimelineIdx !== null);
   const tripHasTimeline = hasTimeline(trip);
   const tripStart = trip.rawStart ? new Date(trip.rawStart) : null;
 

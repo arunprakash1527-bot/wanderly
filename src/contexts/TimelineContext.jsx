@@ -306,9 +306,8 @@ export function TimelineProvider({ children }) {
     setCreatedTrips(prev => prev.map(t => {
       if (t.id !== tripId) return t;
       const tl = t.timeline || {};
-      // Don't sort during editing — just update the field in place.
-      // Sorting happens when the user finishes editing (via finaliseTimelineEdit).
       const dayItems = (tl[selectedDay] || []).map((item, i) => i === idx ? { ...item, [field]: value } : item);
+      // Don't sort during editing — just update in place. Sort happens on Done.
       const newTimeline = { ...tl, [selectedDay]: dayItems };
       persistTimeline(tripId, newTimeline);
       return { ...t, timeline: newTimeline };
@@ -388,10 +387,10 @@ export function TimelineProvider({ children }) {
   };
 
   // ─── Timeline Helpers ───
-  const getDayItems = (timeline, day) => {
+  const getDayItems = (timeline, day, skipSort) => {
     if (!timeline) return [];
-    if (Array.isArray(timeline)) return day === 1 ? timeline : [];
-    return timeline[day] || [];
+    const items = Array.isArray(timeline) ? (day === 1 ? timeline : []) : (timeline[day] || []);
+    return skipSort ? items : sortByTime(items);
   };
 
   const getNumDays = (trip) => {
