@@ -38,32 +38,26 @@ $$;
 -- 1. DROP EXISTING OVERLY-PERMISSIVE SELECT POLICIES
 -- ============================================================================
 
--- trips
+-- Drop original permissive policies (from initial schema)
 DROP POLICY IF EXISTS "Trips viewable by participants" ON public.trips;
-
--- trip_travellers
 DROP POLICY IF EXISTS "Travellers viewable by all" ON public.trip_travellers;
-
--- trip_stays
 DROP POLICY IF EXISTS "Stays viewable" ON public.trip_stays;
-
--- trip_preferences
 DROP POLICY IF EXISTS "Prefs viewable" ON public.trip_preferences;
-
--- timeline_items
 DROP POLICY IF EXISTS "Timeline viewable" ON public.timeline_items;
-
--- messages
 DROP POLICY IF EXISTS "Messages viewable" ON public.messages;
-
--- photos
 DROP POLICY IF EXISTS "Photos viewable" ON public.photos;
-
--- polls
 DROP POLICY IF EXISTS "Polls viewable" ON public.polls;
-
--- poll_votes
 DROP POLICY IF EXISTS "Votes viewable" ON public.poll_votes;
+
+-- Drop restrictive policies from previous run (makes script idempotent)
+DROP POLICY IF EXISTS "Travellers viewable by trip participants" ON public.trip_travellers;
+DROP POLICY IF EXISTS "Stays viewable by trip participants" ON public.trip_stays;
+DROP POLICY IF EXISTS "Prefs viewable by trip participants" ON public.trip_preferences;
+DROP POLICY IF EXISTS "Timeline viewable by trip participants" ON public.timeline_items;
+DROP POLICY IF EXISTS "Messages viewable by trip participants" ON public.messages;
+DROP POLICY IF EXISTS "Photos viewable by trip participants" ON public.photos;
+DROP POLICY IF EXISTS "Polls viewable by trip participants" ON public.polls;
+DROP POLICY IF EXISTS "Votes viewable by trip participants" ON public.poll_votes;
 
 
 -- ============================================================================
