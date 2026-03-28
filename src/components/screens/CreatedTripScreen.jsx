@@ -729,9 +729,33 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                         <div style={{ flex: 1, paddingBottom: 4 }}>
                           {editingTimelineIdx === i ? (
                             <div style={{ ...css.card, padding: 10, marginBottom: 4 }}>
-                              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                                <input value={item.time} onChange={e => updateTimelineItem(trip.id, i, "time", e.target.value)}
-                                  style={{ width: 90, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Time" />
+                              <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                                {/* Time stepper: ▼ time ▲ with 30-min increments */}
+                                <div style={{ display: "flex", alignItems: "center", gap: 0, border: `.5px solid ${T.border}`, borderRadius: 8, overflow: "hidden", background: T.s, flexShrink: 0 }}>
+                                  <button onClick={() => {
+                                    const m = item.time?.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                                    if (!m) return;
+                                    let h = parseInt(m[1]), min = parseInt(m[2]), ap = m[3].toUpperCase();
+                                    let total = (ap === "PM" && h !== 12 ? h + 12 : ap === "AM" && h === 12 ? 0 : h) * 60 + min;
+                                    total = Math.max(0, total - 30);
+                                    let nh = Math.floor(total / 60), nm = total % 60;
+                                    const nap = nh >= 12 ? "PM" : "AM";
+                                    if (nh > 12) nh -= 12; if (nh === 0) nh = 12;
+                                    updateTimelineItem(trip.id, i, "time", `${nh}:${String(nm).padStart(2,"0")} ${nap}`);
+                                  }} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 8px", fontSize: 13, color: T.t2, fontFamily: T.font, lineHeight: 1 }} aria-label="Earlier">◀</button>
+                                  <span style={{ padding: "4px 6px", fontSize: 12, fontWeight: 600, color: T.a, minWidth: 70, textAlign: "center", fontFamily: T.font }}>{item.time}</span>
+                                  <button onClick={() => {
+                                    const m = item.time?.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                                    if (!m) return;
+                                    let h = parseInt(m[1]), min = parseInt(m[2]), ap = m[3].toUpperCase();
+                                    let total = (ap === "PM" && h !== 12 ? h + 12 : ap === "AM" && h === 12 ? 0 : h) * 60 + min;
+                                    total = Math.min(23 * 60 + 30, total + 30);
+                                    let nh = Math.floor(total / 60), nm = total % 60;
+                                    const nap = nh >= 12 ? "PM" : "AM";
+                                    if (nh > 12) nh -= 12; if (nh === 0) nh = 12;
+                                    updateTimelineItem(trip.id, i, "time", `${nh}:${String(nm).padStart(2,"0")} ${nap}`);
+                                  }} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 8px", fontSize: 13, color: T.t2, fontFamily: T.font, lineHeight: 1 }} aria-label="Later">▶</button>
+                                </div>
                                 <input value={item.title} onChange={e => updateTimelineItem(trip.id, i, "title", e.target.value)}
                                   style={{ flex: 1, padding: "5px 8px", border: `.5px solid ${T.border}`, borderRadius: 6, fontFamily: T.font, fontSize: 11, background: T.s, outline: "none" }} placeholder="Title" />
                               </div>
