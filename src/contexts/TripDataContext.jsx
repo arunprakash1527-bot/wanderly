@@ -193,7 +193,7 @@ export function TripDataProvider({ children }) {
         start_date: tripData.rawStart || null,
         end_date: tripData.rawEnd || null,
         places: tripData.places || [],
-        travel_mode: tripData.travel || [],
+        travel_modes: Array.from(tripData.travel || []),
         budget: tripData.budget || null,
         start_location: tripData.startLocation || null,
         summary: tripData.summary || null,
