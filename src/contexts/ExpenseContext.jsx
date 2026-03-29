@@ -77,12 +77,21 @@ export function ExpenseProvider({ children }) {
       setExpenses(prev => prev.map(e => e.id === editingExpense.id ? updatedExpense : e));
       try {
         await supabase.from('expense_splits').delete().eq('expense_id', editingExpense.id);
-        await supabase.from('expenses').update({
+        const updatePayload = {
           description: expenseDesc.trim(), amount, category: expenseCategory,
           paid_by: expensePaidBy, split_method: expenseSplitMethod, expense_date: expenseDate, updated_at: new Date().toISOString(),
-        }).eq('id', editingExpense.id);
-        await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: editingExpense.id, ...s })));
-      } catch (e) { /* local state already updated */ }
+        };
+        let { error: updateErr } = await supabase.from('expenses').update(updatePayload).eq('id', editingExpense.id);
+        // If expense_date column doesn't exist yet, retry without it
+        if (updateErr && updateErr.message?.includes('expense_date')) {
+          delete updatePayload.expense_date;
+          const retry = await supabase.from('expenses').update(updatePayload).eq('id', editingExpense.id);
+          updateErr = retry.error;
+        }
+        if (updateErr) console.error('Expense update failed:', updateErr.message);
+        const { error: splitErr } = await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: editingExpense.id, ...s })));
+        if (splitErr) console.error('Expense splits insert failed:', splitErr.message);
+      } catch (e) { console.error('Expense update error:', e); }
       showToast("Expense updated");
     } else {
       const localExpense = {
@@ -92,16 +101,28 @@ export function ExpenseProvider({ children }) {
       };
       setExpenses(prev => [localExpense, ...prev]);
       try {
-        const { data: exp } = await supabase.from('expenses').insert({
+        const insertPayload = {
           trip_id: tripDbId, description: expenseDesc.trim(), amount, category: expenseCategory,
           paid_by: expensePaidBy, split_method: expenseSplitMethod, expense_date: expenseDate,
           created_by: user?.user_metadata?.full_name || user?.email || 'You',
-        }).select().single();
-        if (exp) {
-          await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: exp.id, ...s })));
+        };
+        let { data: exp, error: insertErr } = await supabase.from('expenses').insert(insertPayload).select().single();
+        // If expense_date column doesn't exist yet, retry without it
+        if (insertErr && insertErr.message?.includes('expense_date')) {
+          delete insertPayload.expense_date;
+          const retry = await supabase.from('expenses').insert(insertPayload).select().single();
+          exp = retry.data;
+          insertErr = retry.error;
+        }
+        if (insertErr) {
+          console.error('Expense insert failed:', insertErr.message);
+          showToast("Expense saved locally — sync failed", "error");
+        } else if (exp) {
+          const { error: splitErr } = await supabase.from('expense_splits').insert(splits.map(s => ({ expense_id: exp.id, ...s })));
+          if (splitErr) console.error('Expense splits insert failed:', splitErr.message);
           setExpenses(prev => prev.map(e => e.id === localExpense.id ? { ...exp, splits: splits.map(s => ({ expense_id: exp.id, ...s })) } : e));
         }
-      } catch (e) { /* local state already has the expense */ }
+      } catch (e) { console.error('Expense save error:', e); showToast("Expense saved locally — sync failed", "error"); }
       showToast("Expense added");
       const expTrip = selectedCreatedTrip || (createdTrips && createdTrips[0]);
       if (expTrip?.id && logActivity) logActivity(expTrip.id, "\uD83D\uDCB0", `Added expense: ${expenseDesc.trim()} (${amount.toFixed(2)})`, "expense");
