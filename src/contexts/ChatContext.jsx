@@ -259,7 +259,8 @@ export function ChatProvider({ children }) {
     if (tripChatFlow?.step === "pick_attraction") {
       // If user is issuing a NEW explicit command (e.g. "day 2 – Add X"), clear the flow and let it fall through
       const isNewCommand = (/\b(add|include|plug)\b/i.test(lower) && (/day\s*\d+/i.test(lower) || /first stop|morning|afternoon|evening/i.test(lower)))
-        || /\b(suggest|recommend|show me|find|what|list|remove|clear|ev charger)\b/i.test(lower);
+        || /\b(suggest|recommend|show me|find|what|list|remove|clear|ev charger)\b/i.test(lower)
+        || /\b(how|weather|forecast|temperature|rain|cost|budget|price|when|where|who|why|can you|could you|tell me|is there|are there|do we|should we|what time)\b/i.test(lower);
       if (isNewCommand) {
         setTripChatFlow(null);
         // Fall through to the appropriate handler below
@@ -307,8 +308,8 @@ export function ChatProvider({ children }) {
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
-      } else if (cleanInput.length > 2) {
-        // User typed something specific not in the list — add it as a custom activity
+      } else if (cleanInput.length > 2 && !/\b(how|what|when|where|why|who|is there|are there|can|could|should|would|weather|forecast|temperature|cost|budget|price|tell me)\b/i.test(cleanInput) && !/\?$/.test(msg.trim())) {
+        // User typed something specific not in the list — add it as a custom activity (but NOT questions)
         setTripChatFlow(null);
         const smartSlot = findSmartSlot(tripId, targetDay, "add " + cleanInput);
         const customTitle = cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1);
@@ -409,6 +410,85 @@ export function ChatProvider({ children }) {
       } else {
         updateEvReply(await handleEvResults(null, null, flowDayLoc || firstLoc));
       }
+      return;
+    }
+
+    // ── Weather queries — live forecast from OpenWeatherMap ──
+    if (/\b(weather|forecast|rain|temperature|cold|hot|warm|snow|wind|sunny|cloudy)\b/i.test(lower) && /\b(how|what|will|is|any|check|look)\b/i.test(lower)) {
+      const weatherDayMatch = lower.match(/day\s*(\d+)/);
+      const weatherDay = weatherDayMatch ? parseInt(weatherDayMatch[1]) : selectedDay;
+      const weatherLoc = locForDay(weatherDay) || firstLoc;
+      const weatherCoords = findCoords(weatherLoc);
+
+      setTripChatMessages(prev => [...prev, { role: "ai", text: `🌤️ Checking weather for **${weatherLoc}**...` }]);
+
+      (async () => {
+        try {
+          const body = weatherCoords ? { lat: weatherCoords[0], lng: weatherCoords[1], units: "metric" } : { location: weatherLoc, units: "metric" };
+          const res = await authFetch(API.WEATHER, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+
+          let reply;
+          if (res.ok && data.current) {
+            const condIcon = { Clear: "☀️", Clouds: "☁️", Rain: "🌧️", Drizzle: "🌦️", Snow: "❄️", Thunderstorm: "⛈️", Mist: "🌫️", Fog: "🌫️" }[data.current.condition] || "🌤️";
+            reply = `${condIcon} **Weather in ${weatherLoc}:**\n\n**Now:** ${data.current.temp}°C (feels like ${data.current.feelsLike}°C) · ${data.current.description}\n💨 Wind: ${data.current.wind?.speed} m/s · 💧 Humidity: ${data.current.humidity}%`;
+
+            // Add forecast for trip days
+            if (data.daily?.length > 0) {
+              const tripStart = trip?.rawStart ? new Date(trip.rawStart + "T12:00:00") : null;
+              const forecastLines = data.daily.slice(0, 5).map(d => {
+                const dayDate = new Date(d.date + "T12:00:00");
+                const dayLabel = tripStart ? (() => {
+                  const diff = Math.round((dayDate - tripStart) / 86400000) + 1;
+                  return diff >= 1 && diff <= 10 ? `Day ${diff}` : dayDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+                })() : dayDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+                const fIcon = { Clear: "☀️", Clouds: "☁️", Rain: "🌧️", Drizzle: "🌦️", Snow: "❄️", Thunderstorm: "⛈️" }[d.condition] || "🌤️";
+                const rain = d.rainMm > 0 ? ` · 🌧️ ${d.rainMm}mm` : "";
+                return `${fIcon} **${dayLabel}:** ${d.high}°/${d.low}°C · ${d.condition}${rain}`;
+              });
+              reply += `\n\n**Forecast:**\n${forecastLines.join("\n")}`;
+            }
+
+            // Add alerts
+            if (data.alerts?.length > 0) {
+              reply += `\n\n⚠️ **Alerts:**\n${data.alerts.map(a => `• ${a.message}`).join("\n")}`;
+            }
+
+            // Packing tips
+            const anyRain = data.daily?.some(d => d.rainMm > 1);
+            const anyCold = data.daily?.some(d => d.low <= 5);
+            const tips = [];
+            if (anyRain) tips.push("🌂 Pack waterproofs");
+            if (anyCold) tips.push("🧥 Bring warm layers");
+            if (data.current.temp > 25) tips.push("🧴 Don't forget sun cream");
+            if (tips.length > 0) reply += `\n\n🎒 ${tips.join(" · ")}`;
+          } else {
+            reply = `🌤️ Couldn't fetch weather for ${weatherLoc}. Check [BBC Weather](https://www.bbc.co.uk/weather) or your weather app for the latest forecast.`;
+          }
+
+          setTripChatTyping(false);
+          setTripChatMessages(prev => {
+            const updated = [...prev];
+            const idx = updated.findLastIndex(m => m.text.includes("Checking weather for"));
+            if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+            else updated.push({ role: "ai", text: reply });
+            return updated;
+          });
+        } catch (e) {
+          setTripChatTyping(false);
+          setTripChatMessages(prev => {
+            const updated = [...prev];
+            const idx = updated.findLastIndex(m => m.text.includes("Checking weather for"));
+            if (idx >= 0) updated[idx] = { role: "ai", text: `🌤️ Couldn't fetch weather right now. Check [BBC Weather](https://www.bbc.co.uk/weather) for ${weatherLoc}.` };
+            else updated.push({ role: "ai", text: `🌤️ Couldn't fetch weather right now. Check [BBC Weather](https://www.bbc.co.uk/weather) for ${weatherLoc}.` });
+            return updated;
+          });
+        }
+      })();
       return;
     }
 
