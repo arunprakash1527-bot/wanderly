@@ -153,6 +153,13 @@ export function ChatProvider({ children }) {
     });
   }, [selectedDay, selectedCreatedTrip, createdTrips]);
 
+  // Reset tripChatFlow when day changes — prevents stale pick_attraction/ev flows
+  useEffect(() => {
+    if (tripChatFlow) {
+      setTripChatFlow(null);
+    }
+  }, [selectedDay]);
+
   // Auto-scroll chat to bottom when messages change
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight); }, [chatMessages]);
 
@@ -309,8 +316,15 @@ export function ChatProvider({ children }) {
         setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
-      } else if (cleanInput.length > 2 && !/\b(how|what|when|where|why|who|is there|are there|can|could|should|would|weather|forecast|temperature|cost|budget|price|tell me)\b/i.test(cleanInput) && !/\?$/.test(msg.trim())) {
-        // User typed something specific not in the list — add it as a custom activity (but NOT questions)
+      } else if (cleanInput.length > 2
+        && !/\b(how|what|when|where|why|who|is there|are there|can|could|should|would|weather|forecast|temperature|cost|budget|price|tell me)\b/i.test(cleanInput)
+        && !/\?$/.test(msg.trim())
+        // Reject conversational/filler phrases that shouldn't become itinerary items
+        && !/^(ok|okay|hmm|hm|umm|um|ah|oh|great|cool|nice|good|sure|yeah|yep|nope|nah|right|fine|alright|awesome|perfect|thanks|thank you|cheers|brilliant|lovely|wow|lol|haha|interesting|maybe|perhaps|dunno|idk|not sure|no thanks|no thank you|never mind|nevermind|forget it|skip|pass|none|nothing|whatever|anyway|anyways|so|well|actually|honestly|basically|literally|totally|absolutely|exactly|indeed|certainly|definitely|obviously|clearly|fair enough|no worries|all good|sounds good|got it|understood|noted|i see|makes sense|that works|let me think|i'll think|not now|later|next time)$/i.test(cleanInput.replace(/[.!,]+$/, '').trim())
+        // Must have at least one word that looks like a real activity/place name (3+ chars, not all stopwords)
+        && cleanInput.split(/\s+/).filter(w => w.length >= 3 && !['the','and','for','with','some','any','but','not','this','that','its','was','has','had','are','were','been','will','can','may','let','also','too','very','just','really','quite','much','more','most','all','bit'].includes(w)).length > 0
+      ) {
+        // User typed something specific not in the list — add it as a custom activity (but NOT questions/conversational noise)
         setTripChatFlow(null);
         const smartSlot = findSmartSlot(tripId, targetDay, "add " + cleanInput);
         const customTitle = cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1);
@@ -401,6 +415,7 @@ export function ChatProvider({ children }) {
           else updated.push({ role: "ai", text: reply });
           return updated;
         });
+        saveChatMessage(trip?.dbId, 'ai', reply);
       };
 
       // Use the current day's location for the flow follow-up
@@ -415,7 +430,10 @@ export function ChatProvider({ children }) {
     }
 
     // ── Weather queries — live forecast from OpenWeatherMap ──
-    if (/\b(weather|forecast|rain|temperature|cold|hot|warm|snow|wind|sunny|cloudy)\b/i.test(lower) && /\b(how|what|will|is|any|check|look)\b/i.test(lower)) {
+    // Match: "weather forecast", "rain today", "temperature", "is it sunny", "how cold", etc.
+    const isWeatherQuery = /\b(weather|forecast|temperature)\b/i.test(lower)
+      || (/\b(rain|cold|hot|warm|snow|wind|sunny|cloudy|storm|thunder|ice|frost|hail)\b/i.test(lower) && /\b(how|what|will|is|any|check|look|today|tomorrow|day\s*\d+|this week|expect)\b/i.test(lower));
+    if (isWeatherQuery) {
       const weatherDayMatch = lower.match(/day\s*(\d+)/);
       const weatherDay = weatherDayMatch ? parseInt(weatherDayMatch[1]) : selectedDay;
       const weatherLoc = locForDay(weatherDay) || firstLoc;
@@ -479,13 +497,15 @@ export function ChatProvider({ children }) {
             else updated.push({ role: "ai", text: reply });
             return updated;
           });
+          saveChatMessage(trip?.dbId, 'ai', reply);
         } catch (e) {
+          const errReply = `🌤️ Couldn't fetch weather right now. Check [BBC Weather](https://www.bbc.co.uk/weather) for ${weatherLoc}.`;
           setTripChatTyping(false);
           setTripChatMessages(prev => {
             const updated = [...prev];
             const idx = updated.findLastIndex(m => m.text.includes("Checking weather for"));
-            if (idx >= 0) updated[idx] = { role: "ai", text: `🌤️ Couldn't fetch weather right now. Check [BBC Weather](https://www.bbc.co.uk/weather) for ${weatherLoc}.` };
-            else updated.push({ role: "ai", text: `🌤️ Couldn't fetch weather right now. Check [BBC Weather](https://www.bbc.co.uk/weather) for ${weatherLoc}.` });
+            if (idx >= 0) updated[idx] = { role: "ai", text: errReply };
+            else updated.push({ role: "ai", text: errReply });
             return updated;
           });
         }
@@ -627,6 +647,7 @@ export function ChatProvider({ children }) {
               else updated.push({ role: "ai", text: reply });
               return updated;
             });
+            saveChatMessage(trip?.dbId, 'ai', reply);
           } catch (e) {
             setTripChatTyping(false);
             setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Error searching for route chargers. Try [Zap-Map](https://www.zap-map.com/live/) for real-time availability.` }]);
@@ -688,6 +709,7 @@ export function ChatProvider({ children }) {
           else updated.push({ role: "ai", text: reply });
           return updated;
         });
+        saveChatMessage(trip?.dbId, 'ai', reply);
       };
 
       if (evTargetCoords) {
@@ -773,6 +795,7 @@ export function ChatProvider({ children }) {
           else updated.push({ role: "ai", text: reply });
           return updated;
         });
+        saveChatMessage(trip?.dbId, 'ai', reply);
       };
 
       if (navigator.geolocation) {
@@ -1254,9 +1277,13 @@ export function ChatProvider({ children }) {
         saveChatMessage(trip?.dbId, 'ai', data.reply);
         return;
       }
+      // API returned ok but empty reply — don't leave typing indicator stuck
+      if (res.ok && !data.reply) {
+        console.warn('Chat API returned ok but empty reply');
+      }
     } catch (e) { console.warn('Chat API unavailable:', e.message); /* fall back to local */ }
 
-    // Local fallback
+    // Local fallback — ensure typing indicator is always cleared
     setTimeout(async () => {
       let reply = "";
       const lower = msg.toLowerCase();

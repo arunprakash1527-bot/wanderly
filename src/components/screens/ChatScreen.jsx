@@ -425,9 +425,10 @@ export function ChatScreen() {
         setChatMessages(prev => [...prev, { role: "ai", text: data.reply }]);
         return;
       }
+      // API ok but empty — fall through to local (typing indicator cleared below)
     } catch (e) { /* API unavailable — fall back to local */ }
 
-    // Local fallback
+    // Local fallback (always clears typing indicator)
     const response = findResponse(msg.trim());
     const delay = Math.min(2500, Math.max(800, response.length * 6));
     setTimeout(() => {
