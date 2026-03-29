@@ -443,6 +443,94 @@ export function ChatProvider({ children }) {
       const carCountMatch = lower.match(/(\d+)\s*(?:car|vehicle|ev)/);
       const carCount = carCountMatch ? parseInt(carCountMatch[1]) : 1;
 
+      // ── Route-aware: detect "halfway", "between X and Y", "en route", "on the way" ──
+      const isRouteQuery = /halfway|half\s*way|between|en\s*route|on\s*the\s*way|along\s*the\s*(way|route)|mid[\s-]*route|mid[\s-]*way|start.*(?:stay|accom|hotel|destination)|(?:stay|accom|hotel|destination).*start/i.test(lower);
+      if (isRouteQuery) {
+        // Determine from/to — extract from message or use trip context
+        const betweenMatch = lower.match(/between\s+(.+?)\s+and\s+(.+?)(?:\s*$|\s*for|\s*on)/i);
+        let fromLoc, toLoc;
+        if (betweenMatch) {
+          fromLoc = betweenMatch[1].replace(/\b(ev|charger|charging|station|point)\b/gi, '').trim();
+          toLoc = betweenMatch[2].replace(/\b(ev|charger|charging|station|point)\b/gi, '').trim();
+        } else {
+          // Default: starting location → first destination/stay
+          fromLoc = trip?.startLocation || trip?.places?.[0] || firstLoc;
+          toLoc = trip?.stays?.[0]?.location || trip?.stays?.[0]?.name || trip?.places?.[0] || firstLoc;
+          // If from and to are the same, try start → first place
+          if (fromLoc.toLowerCase() === toLoc.toLowerCase() && trip?.places?.length > 0) {
+            toLoc = trip.places[0];
+          }
+        }
+        const fromCoords = findCoords(fromLoc);
+        const toCoords = findCoords(toLoc);
+
+        setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Finding EV chargers along the route from **${fromLoc}** to **${toLoc}**...` }]);
+
+        (async () => {
+          try {
+            const body = { maxResults: 5, mode: "route" };
+            if (fromCoords && toCoords) {
+              body.fromLat = fromCoords[0]; body.fromLng = fromCoords[1];
+              body.toLat = toCoords[0]; body.toLng = toCoords[1];
+            } else {
+              // Fallback: use midpoint if we can get at least one set of coords
+              const anyCoords = fromCoords || toCoords || findCoords(firstLoc);
+              if (anyCoords) { body.lat = anyCoords[0]; body.lng = anyCoords[1]; }
+              else { body.locationName = fromLoc; }
+            }
+            if (connectorType) body.connectorType = connectorType;
+            if (evRangeMiles) body.rangeMiles = evRangeMiles;
+
+            const res = await authFetch(API.EV_CHARGERS, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const data = await res.json();
+
+            let reply;
+            if (res.ok && data.chargers?.length > 0) {
+              const isGoogleFallback = data.source === "google";
+              const list = data.chargers.map((c, i) => {
+                const dist = c.distance ? ` · 📏 ${c.distance}` : "";
+                const status = c.isOperational ? " · 🟢 Operational" : c.isOperational === false ? " · 🔴 Out of service" : "";
+                const speed = c.maxPowerKW ? ` · ⚡ ${c.speedLabel} (${c.maxPowerKW}kW)` : "";
+                const addr = c.address ? `\n   📍 ${c.address}` : "";
+                const connectors = c.connectors?.length > 0 ? `\n   🔌 ${c.connectors.join(", ")} · ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}` : "";
+                const points = carCount > 1 && c.totalPoints ? (c.totalPoints >= carCount ? ` ✅ Can charge ${carCount} cars` : ` ⚠️ Only ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}`) : "";
+                const cost = c.usageCost ? `\n   💰 ${c.usageCost}` : c.usageType ? `\n   💰 ${c.usageType}` : "";
+                const facilities = c.facilities?.length > 0 ? `\n   🏪 ${c.facilities.join(" · ")}` : "";
+                const operator = c.operator ? `\n   🏢 ${c.operator}` : "";
+                const rating = isGoogleFallback && c.rating ? ` · ${c.rating}★` : "";
+                const open = isGoogleFallback ? (c.openNow === true ? " · Open now" : c.openNow === false ? " · Closed" : "") : "";
+                const zapLink = c.zapMapLink ? ` · [Zap-Map Live](${c.zapMapLink})` : "";
+                return `${i + 1}. **${c.name}**${dist}${status}${rating}${open}${speed}${addr}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink})${zapLink}`;
+              }).join("\n\n");
+
+              const vehicleNote = evModelLabel ? `\n\n🔋 Filtered for your **${evModelLabel}** (${connectorType || evDefaultConnector || "CCS"}${evRangeMiles ? ` · ${evRangeMiles}mi range` : ""})` : "";
+              const zapNote = "\n\n📡 Tap **Zap-Map Live** for real-time availability and queue times.";
+              const googleNote = isGoogleFallback ? "\n\n_ℹ️ Basic results shown — connector details unavailable. Check Zap-Map for full info._" : "";
+              reply = `⚡ **EV Chargers along ${fromLoc} → ${toLoc}:**\n\n${list}${vehicleNote}${zapNote}${googleNote}`;
+            } else {
+              reply = `⚡ Couldn't find chargers along the route from ${fromLoc} to ${toLoc}. Try [Zap-Map](https://www.zap-map.com/live/) for real-time availability along your route.`;
+            }
+
+            setTripChatTyping(false);
+            setTripChatMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.findLastIndex(m => m.text.includes("Finding EV chargers along the route"));
+              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+              else updated.push({ role: "ai", text: reply });
+              return updated;
+            });
+          } catch (e) {
+            setTripChatTyping(false);
+            setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Error searching for route chargers. Try [Zap-Map](https://www.zap-map.com/live/) for real-time availability.` }]);
+          }
+        })();
+        return;
+      }
+
       setTripChatMessages(prev => [...prev, { role: "ai", text: "⚡ Finding EV chargers with real-time details..." }]);
 
       const handleEvResults = async (lat, lng, locLabel) => {
