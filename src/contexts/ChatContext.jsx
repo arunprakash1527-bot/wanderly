@@ -524,15 +524,29 @@ export function ChatProvider({ children }) {
       const carCount = carCountMatch ? parseInt(carCountMatch[1]) : 1;
 
       // ── Route-aware: detect "halfway", "between X and Y", "en route", "on the way" ──
-      const isRouteQuery = /halfway|half\s*way|between|en\s*route|on\s*the\s*way|along\s*the\s*(way|route)|mid[\s-]*route|mid[\s-]*way|start.*(?:stay|accom|hotel|destination)|(?:stay|accom|hotel|destination).*start/i.test(lower);
+      const isRouteQuery = /halfway|half\s*way|between|en\s*route|on\s*the\s*way|along\s*the\s*(way|route)|mid[\s-]*route|mid[\s-]*way|from\s+.+?\s+to\s+|start.*(?:stay|accom|hotel|destination|location)|(?:stay|accom|hotel|destination).*start/i.test(lower);
       if (isRouteQuery) {
         // Determine from/to — extract from message or use trip context
         const betweenMatch = lower.match(/between\s+(.+?)\s+and\s+(.+?)(?:\s*$|\s*for|\s*on)/i);
+        const fromToMatch = !betweenMatch ? lower.match(/from\s+(.+?)\s+to\s+(.+?)(?:\s*$|\s*for|\s*on)/i) : null;
         let fromLoc, toLoc;
         if (betweenMatch) {
-          fromLoc = betweenMatch[1].replace(/\b(ev|charger|charging|station|point)\b/gi, '').trim();
+          fromLoc = betweenMatch[1].replace(/\b(ev|charger|charging|station|point|half\s*way)\b/gi, '').trim();
           toLoc = betweenMatch[2].replace(/\b(ev|charger|charging|station|point)\b/gi, '').trim();
-        } else {
+        } else if (fromToMatch) {
+          fromLoc = fromToMatch[1].replace(/\b(ev|charger|charging|station|point|half\s*way)\b/gi, '').trim();
+          toLoc = fromToMatch[2].replace(/\b(ev|charger|charging|station|point)\b/gi, '').trim();
+        }
+        // Resolve special keywords to actual trip locations
+        const resolveLocKeyword = (loc) => {
+          const l = loc.toLowerCase();
+          if (/^(start|starting|home|origin|our|my)\s*(location|point|place|town|city)?$/i.test(l)) return trip?.startLocation || firstLoc;
+          if (/^(destination|stay|accom|hotel|end|arrival|the\s+(?:lake|destination|stay|hotel))$/i.test(l)) return trip?.stays?.[0]?.location || trip?.places?.[0] || firstLoc;
+          return loc;
+        };
+        if (fromLoc) fromLoc = resolveLocKeyword(fromLoc);
+        if (toLoc) toLoc = resolveLocKeyword(toLoc);
+        if (!fromLoc && !toLoc) {
           // Default: starting location → first destination/stay
           fromLoc = trip?.startLocation || trip?.places?.[0] || firstLoc;
           toLoc = trip?.stays?.[0]?.location || trip?.stays?.[0]?.name || trip?.places?.[0] || firstLoc;
