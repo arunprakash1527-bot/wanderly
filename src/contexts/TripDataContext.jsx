@@ -523,12 +523,18 @@ export function TripDataProvider({ children }) {
     const channel = supabase.channel('trip-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, (payload) => {
         if (payload.eventType === 'UPDATE' && payload.new) {
+          // Skip if we're in the middle of a DB write (delete-reinsert stays race)
+          if (dbWriteLockRef.current) return;
           const updated = payload.new;
+          // Preserve stays, travellers, prefs, timeline — realtime payload only has trips table columns
           setCreatedTrips(prev => prev.map(t => {
             if (t.dbId === updated.id) {
               return { ...t, name: updated.name || t.name, status: updated.status || t.status,
                 start: updated.start_date || t.start, end: updated.end_date || t.end,
-                places: updated.places || t.places, travel: updated.travel_modes || t.travel };
+                places: updated.places || t.places, travel: updated.travel_modes || t.travel,
+                timeline: updated.timeline || t.timeline, polls: updated.polls || t.polls };
+              // NOTE: stays, travellers, prefs are in separate tables — NOT in this payload.
+              // They are preserved via the ...t spread above.
             }
             return t;
           }));
@@ -536,7 +542,8 @@ export function TripDataProvider({ children }) {
             if (prev?.dbId === updated.id) {
               return { ...prev, name: updated.name || prev.name, status: updated.status || prev.status,
                 start: updated.start_date || prev.start, end: updated.end_date || prev.end,
-                places: updated.places || prev.places, travel: updated.travel_modes || prev.travel };
+                places: updated.places || prev.places, travel: updated.travel_modes || prev.travel,
+                timeline: updated.timeline || prev.timeline, polls: updated.polls || prev.polls };
             }
             return prev;
           });
@@ -608,7 +615,9 @@ export function TripDataProvider({ children }) {
       onTripUpdate: (payload) => {
         const updated = payload.new;
         if (!updated) return;
-        // Merge incoming trip changes into local state
+        // Skip if we're in the middle of a DB write (delete-reinsert stays race)
+        if (dbWriteLockRef.current) return;
+        // Merge incoming trip changes — preserve stays/travellers/prefs (separate tables, not in payload)
         setCreatedTrips(prev => prev.map(t => {
           if (t.dbId !== updated.id) return t;
           return {
@@ -621,6 +630,7 @@ export function TripDataProvider({ children }) {
             end: updated.end_date || t.end,
             places: updated.places || t.places,
             travel: updated.travel_modes || t.travel,
+            // stays, travellers, prefs preserved via ...t spread (they're in separate tables)
           };
         }));
         setSelectedCreatedTrip(prev => {
@@ -635,6 +645,7 @@ export function TripDataProvider({ children }) {
             end: updated.end_date || prev.end,
             places: updated.places || prev.places,
             travel: updated.travel_modes || prev.travel,
+            // stays, travellers, prefs preserved via ...prev spread
           };
         });
         showToast("Trip updated by a collaborator", "info");
