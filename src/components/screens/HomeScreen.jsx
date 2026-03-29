@@ -1,7 +1,7 @@
 import React from 'react';
 import { T } from '../../styles/tokens';
 import { css } from '../../styles/shared';
-import { TRIP } from '../../constants/tripData';
+import { TRIP, DEMO_TRIPS, DEMO_KEYS, setActiveDemoKey } from '../../constants/tripData';
 import { Avatar } from '../common/Avatar';
 import { Tag } from '../common/Tag';
 import { TabBar } from '../common/TabBar';
@@ -157,6 +157,18 @@ export function HomeScreen() {
           </div>
         ))}
 
+        {/* Demo trip switcher */}
+        <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 8 }}>
+          {DEMO_KEYS.map(key => {
+            const isActive = (localStorage.getItem("twm_demo_key") || "paris") === key;
+            return (
+              <button key={key} onClick={() => { setActiveDemoKey(key); window.location.reload(); }}
+                style={{ ...css.btn, ...css.btnSm, fontSize: 11, padding: "4px 12px", background: isActive ? T.a : "transparent", color: isActive ? "#fff" : T.t2, borderColor: isActive ? T.a : T.border, fontWeight: isActive ? 600 : 400 }}>
+                {DEMO_TRIPS[key].label}
+              </button>
+            );
+          })}
+        </div>
         <div className="w-card" style={{ ...css.card, cursor: "pointer", position: "relative", overflow: "hidden" }} onClick={() => setShowDemo(true)}>
           <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: `radial-gradient(circle at 100% 0%, ${T.al} 0%, transparent 70%)`, pointerEvents: "none" }} />
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
@@ -169,23 +181,26 @@ export function HomeScreen() {
               <Tag bg={T.al} color={T.ad}>Live</Tag>
             </div>
           </div>
+          {TRIP.brief && <p style={{ fontSize: 11, color: T.t2, marginBottom: 8, lineHeight: 1.4, fontStyle: "italic" }}>{TRIP.brief.length > 90 ? TRIP.brief.slice(0, 90) + "..." : TRIP.brief}</p>}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <p style={{ fontSize: 11, color: T.t3, fontStyle: "italic" }}>Sample trip — tap to explore</p>
             <button onClick={e => { e.stopPropagation(); setShowDemo(true); setDemoSlide(0); }} style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 10px", gap: 4 }}>{localStorage.getItem('twm_demo_seen') ? "▶ Replay demo" : "▶ Watch demo"}</button>
           </div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-            <Tag bg={T.blueL} color={T.blue}>EV road trip</Tag>
-            <Tag bg={T.coralL} color={T.coral}>Mixed diet</Tag>
-            <Tag bg={T.pinkL} color={T.pink}>2 kids</Tag>
-            <Tag bg={T.purpleL} color={T.purple}>2 stays</Tag>
+            <Tag bg={T.blueL} color={T.blue}>{TRIP.travelMode || "EV road trip"}</Tag>
+            {TRIP.budget && <Tag bg={T.greenL} color={T.green}>{TRIP.budget}</Tag>}
+            <Tag bg={T.pinkL} color={T.pink}>{(TRIP.travellers?.older?.length || 0) + (TRIP.travellers?.younger?.length || 0)} kids</Tag>
+            <Tag bg={T.purpleL} color={T.purple}>{TRIP.stays?.length || 0} stays</Tag>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex" }}>
-              {[["You", T.a], ["JM", T.coral], ["SP", T.blue], ["+1", T.amber]].map(([l, c], i) => (
-                <Avatar key={i} bg={c} label={l} size={28} style={{ marginLeft: i ? -6 : 0, border: `2px solid ${T.s}` }} />
-              ))}
+              {(TRIP.travellers?.adults || []).slice(0, 4).map((a, i) => {
+                const label = a.name === "You" ? "You" : a.name?.split(" ").map(w => w[0]).join("") || "?";
+                const colors = [T.a, T.coral, T.blue, T.amber];
+                return <Avatar key={i} bg={colors[i % colors.length]} label={label} size={28} style={{ marginLeft: i ? -6 : 0, border: `2px solid ${T.s}` }} />;
+              })}
             </div>
-            <span style={{ fontSize: 12, color: T.t3 }}>4 adults · 2 children</span>
+            <span style={{ fontSize: 12, color: T.t3 }}>{TRIP.travellers?.adults?.length || 0} adults · {(TRIP.travellers?.older?.length || 0) + (TRIP.travellers?.younger?.length || 0)} children</span>
           </div>
         </div>
         <div style={{ ...css.card, ...(createdTrips.length === 0 ? { background: T.al, borderColor: T.a } : { border: `1.5px dashed ${T.border}`, background: "none", boxShadow: "none" }), textAlign: "center", padding: "36px 20px", cursor: "pointer" }} onClick={() => { resetWizard(); navigate("create"); }}>
