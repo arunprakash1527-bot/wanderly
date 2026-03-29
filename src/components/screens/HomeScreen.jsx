@@ -166,7 +166,6 @@ export function HomeScreen() {
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <Tag bg={T.amberL} color={T.amber}>Demo</Tag>
-              <Tag bg={T.al} color={T.ad}>Live</Tag>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
