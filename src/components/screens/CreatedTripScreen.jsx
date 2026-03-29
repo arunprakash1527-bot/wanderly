@@ -1938,8 +1938,8 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                   {(trip.travellers?.adults || []).map((a, i) => {
                     const adultColors = [T.a, T.coral, T.blue, T.amber, T.purple, T.pink];
                     const getInit = (n) => { if (!n) return "?"; const p = n.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase(); };
-                    const status = a.isLead ? "Organiser" : a.dbId ? "Joined" : "Pending";
-                    const statusColor = a.isLead ? T.ad : a.dbId ? T.blue : T.t3;
+                    const status = a.isLead ? "Organiser" : a.isClaimed ? "Joined" : "Invited";
+                    const statusColor = a.isLead ? T.ad : a.isClaimed ? T.blue : T.t3;
                     const displayName = (a.name === "You" && a.isLead && user) ? (user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || a.name) : (a.name || `Adult ${i + 1}`);
                     return (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < (trip.travellers?.adults?.length || 0) - 1 ? `.5px solid ${T.border}` : "none" }}>
