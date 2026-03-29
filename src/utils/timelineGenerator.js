@@ -1,5 +1,5 @@
 import { T } from "../styles/tokens";
-import { getLocationActivities, estimateTravelHours } from "./locationHelpers";
+import { getLocationActivities, estimateTravelHours, isSubLocation } from "./locationHelpers";
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 // ─── Country detection for smart travel mode ───
@@ -335,29 +335,37 @@ export function generateMultiDayTimeline(trip) {
       const dayInfo = dayMap[d];
 
       if (dayInfo.isDayTrip && dayInfo.baseLoc) {
-        const legHrs = estimateTravelHours(dayInfo.baseLoc, loc, localMode);
+        const isNearby = isSubLocation(loc, dayInfo.baseLoc);
+        const legHrs = isNearby ? 0 : estimateTravelHours(dayInfo.baseLoc, loc, localMode);
         const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
         const departHr = startHour;
 
         items.push({ time: fmtTime(departHr), title: "Breakfast", desc: dayInfo.baseStayName, group: "Everyone", color: T.coral });
-        items.push({ time: fmtTime(departHr + 1), title: `🚗 Day trip to ${loc}`, desc: `${dayInfo.baseLoc} → ${loc} · ${legLabel}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
 
-        if (isEV && legHrs >= 1.5) {
-          const evHr = departHr + 1 + Math.floor(legHrs / 2);
-          items.push({ time: fmtTime(evHr), title: `⚡ Charge & Coffee Stop`, desc: `En route to ${loc} · ~30 min rapid charge`, group: "Everyone", color: T.amber, evSearch: { from: dayInfo.baseLoc, to: loc } });
+        if (isNearby) {
+          // Sub-location within the same region — no travel needed, just explore
+          items.push({ time: fmtTime(departHr + 1), title: `Exploring ${loc}`, desc: `Short drive from ${dayInfo.baseStayName}`, group: "Everyone", color: T.a });
+        } else {
+          items.push({ time: fmtTime(departHr + 1), title: `🚗 Day trip to ${loc}`, desc: `${dayInfo.baseLoc} → ${loc} · ${legLabel}${isEV ? " · Check charge level" : ""}`, group: "Everyone", color: T.a });
+
+          if (isEV && legHrs >= 1.5) {
+            const evHr = departHr + 1 + Math.floor(legHrs / 2);
+            items.push({ time: fmtTime(evHr), title: `⚡ Charge & Coffee Stop`, desc: `En route to ${loc} · ~30 min rapid charge`, group: "Everyone", color: T.amber, evSearch: { from: dayInfo.baseLoc, to: loc } });
+          }
+
+          const rawArrival = departHr + 1 + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0);
+          const arriveHr = Math.min(Math.floor(rawArrival), 13);
+          const arriveMin = Math.round((rawArrival - Math.floor(rawArrival)) * 60);
+          items.push({ time: fmtTime(arriveHr, arriveMin), title: `Arrive ${loc}`, desc: `Day trip — exploring ${loc}`, group: "Everyone", color: T.a });
         }
 
-        const rawArrival = departHr + 1 + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0);
-        const arriveHr = Math.min(Math.floor(rawArrival), 13);
-        const arriveMin = Math.round((rawArrival - Math.floor(rawArrival)) * 60);
-        items.push({ time: fmtTime(arriveHr, arriveMin), title: `Arrive ${loc}`, desc: `Day trip — exploring ${loc}`, group: "Everyone", color: T.a });
-
+        const exploreStartHr = isNearby ? departHr + 1.5 : Math.min(departHr + 1 + legHrs + 0.5, 12);
         const mIdx = nextActIdx(loc, "m");
         const morningAct = pickAct(locPools.morning, mIdx, steepTest) || `Explore ${loc}`;
-        items.push({ time: fmtTime(Math.min(arriveHr + 0.5, 12)), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
+        items.push({ time: fmtTime(Math.min(exploreStartHr, 12)), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
           const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
-          items.push({ time: fmtTime(Math.min(arriveHr + 1, 12), 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
+          items.push({ time: fmtTime(Math.min(exploreStartHr + 0.5, 12), 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
 
         items.push({ time: fmtTime(13), title: `Lunch in ${loc}`, desc: `${foodForDay(d - 1)} · ${budgetTier.label} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
@@ -369,13 +377,18 @@ export function generateMultiDayTimeline(trip) {
           items.push({ time: fmtTime(15), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
         }
 
-        const returnDepartHr = 16;
-        items.push({ time: fmtTime(returnDepartHr), title: `🚗 Return to ${dayInfo.baseLoc}`, desc: `${loc} → ${dayInfo.baseLoc} · ${legLabel}`, group: "Everyone", color: T.a });
-        if (isEV && legHrs >= 1.5) {
-          items.push({ time: fmtTime(returnDepartHr + Math.floor(legHrs / 2)), title: `⚡ Charge & Refresh`, desc: `En route back · ~30 min rapid charge`, group: "Everyone", color: T.amber, evSearch: { from: loc, to: dayInfo.baseLoc } });
+        if (isNearby) {
+          // No travel back needed — just return to accommodation
+          items.push({ time: fmtTime(16, 30), title: `Back at ${dayInfo.baseStayName}`, desc: `Freshen up · Relax`, group: "Everyone", color: T.t3 });
+        } else {
+          const returnDepartHr = 16;
+          items.push({ time: fmtTime(returnDepartHr), title: `🚗 Return to ${dayInfo.baseLoc}`, desc: `${loc} → ${dayInfo.baseLoc} · ${legLabel}`, group: "Everyone", color: T.a });
+          if (isEV && legHrs >= 1.5) {
+            items.push({ time: fmtTime(returnDepartHr + Math.floor(legHrs / 2)), title: `⚡ Charge & Refresh`, desc: `En route back · ~30 min rapid charge`, group: "Everyone", color: T.amber, evSearch: { from: loc, to: dayInfo.baseLoc } });
+          }
+          const returnArriveHr = Math.min(Math.floor(returnDepartHr + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0)), 20);
+          items.push({ time: fmtTime(returnArriveHr), title: `Back at ${dayInfo.baseStayName}`, desc: `Freshen up · Relax`, group: "Everyone", color: T.t3 });
         }
-        const returnArriveHr = Math.min(Math.floor(returnDepartHr + legHrs + (isEV && legHrs >= 1.5 ? 0.5 : 0)), 20);
-        items.push({ time: fmtTime(returnArriveHr), title: `Back at ${dayInfo.baseStayName}`, desc: `Freshen up · Relax`, group: "Everyone", color: T.t3 });
 
       } else if (isTransit) {
         const prevCountry = resolveCountry(prevPlace);

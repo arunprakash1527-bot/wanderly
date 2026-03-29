@@ -171,6 +171,29 @@ const LOCATION_ALIASES = {
   "gothic quarter": "barcelona", "el born": "barcelona",
 };
 
+/**
+ * Check if locationA is within or the same region as locationB
+ * e.g., isSubLocation("Windermere", "Lake District") → true
+ *        isSubLocation("Lake District", "Windermere") → true (same region)
+ */
+export function isSubLocation(a, b) {
+  if (!a || !b) return false;
+  const la = a.toLowerCase().trim();
+  const lb = b.toLowerCase().trim();
+  if (la === lb) return true;
+  // Check if a is an alias of b
+  if (LOCATION_ALIASES[la] === lb) return true;
+  // Check if b is an alias of a
+  if (LOCATION_ALIASES[lb] === la) return true;
+  // Check if both resolve to the same parent region
+  const parentA = LOCATION_ALIASES[la] || la;
+  const parentB = LOCATION_ALIASES[lb] || lb;
+  if (parentA === parentB) return true;
+  // Check partial containment (e.g. "bowness on windermere" contains "windermere")
+  if (la.includes(lb) || lb.includes(la)) return true;
+  return false;
+}
+
 export function getLocationActivities(place) {
   const key = place.toLowerCase().trim();
   if (LOCATION_ACTIVITIES[key]) return LOCATION_ACTIVITIES[key];
