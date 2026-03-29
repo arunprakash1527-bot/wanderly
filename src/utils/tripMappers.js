@@ -81,6 +81,9 @@ export function mapTripForInsert(tripData, userId) {
     travel_modes: Array.from(tripData.travel || []),
     status: 'draft',
     lead_user_id: userId,
+    start_location: tripData.startLocation || null,
+    budget: tripData.budget || null,
+    summary: tripData.summary || null,
   };
 }
 
