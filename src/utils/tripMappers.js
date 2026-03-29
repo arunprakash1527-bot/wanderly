@@ -28,7 +28,8 @@ export function mapTripFromDB(t) {
           email: tr.email || "",
           isLead: tr.role === 'lead',
           dbId: tr.id,
-          isClaimed: tr.is_claimed,
+          isClaimed: tr.is_claimed && !!tr.user_id,
+          claimedUserId: tr.user_id || null,
         })),
       olderKids: (t.trip_travellers || [])
         .filter(tr => tr.role === 'child_older' || tr.role === 'teen')
@@ -92,11 +93,11 @@ export function mapTravellersForInsert(tripData, tripId, userId) {
     tripData.travellers.adults.forEach(a => {
       rows.push({
         trip_id: tripId,
-        user_id: a.isLead ? userId : null,
+        user_id: a.isLead ? userId : (a.claimedUserId || null),
         name: a.name || 'Adult',
         email: a.email || null,
         role: a.isLead ? 'lead' : 'adult',
-        is_claimed: a.isLead,
+        is_claimed: a.isLead ? true : (a.isClaimed && !!a.claimedUserId),
       });
     });
   }
