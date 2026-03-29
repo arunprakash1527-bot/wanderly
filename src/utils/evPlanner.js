@@ -140,7 +140,7 @@ export function planChargingStops(vehicle, distanceMiles, startBattery = 80, con
     // Charge to 80% (optimal) unless last stop — then just enough
     const milesToDest = distanceMiles - currentMiles;
     const neededBattery = Math.min(80, Math.ceil((milesToDest / range.realisticRange) * 100) + 20);
-    const chargeTime = estimateChargeTime(vehicle, safeMinBattery, neededBattery, 50); // Assume 50kW charger
+    const chargeTime = estimateChargeTime(vehicle, safeMinBattery, neededBattery, 100); // Assume 100kW rapid charger average
 
     const suggestedActivities = [
       "Grab a coffee while charging",

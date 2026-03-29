@@ -9,6 +9,41 @@ function getAllowedOrigin(req) {
   return allowed.includes(origin) ? origin : allowed[0];
 }
 
+// Score a charger for route-planning quality (0-100)
+function scoreCharger(charger) {
+  let score = 0;
+  // More charge points = less queue risk (max 30 pts)
+  score += Math.min(30, (charger.totalPoints || 1) * 5);
+  // Faster charger = better (max 40 pts)
+  const kw = charger.maxPowerKW || 0;
+  if (kw >= 150) score += 40;
+  else if (kw >= 50) score += 30;
+  else if (kw > 7) score += 15;
+  else score += 5;
+  // Operational bonus (20 pts)
+  if (charger.isOperational) score += 20;
+  // Facilities bonus (max 10 pts)
+  score += Math.min(10, (charger.facilities?.length || 0) * 3);
+  return score;
+}
+
+// Linear interpolation between two coords at a given fraction (0-1)
+function interpolateCoords(from, to, fraction) {
+  return {
+    lat: from.lat + (to.lat - from.lat) * fraction,
+    lng: from.lng + (to.lng - from.lng) * fraction,
+  };
+}
+
+// Haversine distance in miles between two {lat, lng} objects
+function haversineMiles(a, b) {
+  const R = 3959; // Earth radius in miles
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", getAllowedOrigin(req));
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -37,6 +72,112 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ── ROUTE MODE: find best chargers along a route ──
+    if (req.body.mode === "route") {
+      const { fromLat, fromLng, toLat, toLng, rangeMiles = 200, connectorType, maxStops = 3 } = req.body;
+      if (!fromLat || !fromLng || !toLat || !toLng) {
+        return res.status(400).json({ error: "Route mode requires fromLat, fromLng, toLat, toLng" });
+      }
+
+      const from = { lat: fromLat, lng: fromLng };
+      const to = { lat: toLat, lng: toLng };
+      const totalMiles = haversineMiles(from, to);
+      const safeRange = rangeMiles * 0.65; // 65% of rated range for real-world + safety margin
+
+      // Determine how many stops needed
+      const stopsNeeded = Math.min(maxStops, Math.max(0, Math.ceil(totalMiles / safeRange) - 1));
+
+      if (stopsNeeded === 0) {
+        return res.status(200).json({
+          stopPoints: [],
+          totalMiles: Math.round(totalMiles),
+          stopsNeeded: 0,
+          message: `No charging stops needed — ${Math.round(totalMiles)} miles is within your ${rangeMiles} mile range.`,
+        });
+      }
+
+      const ocmKey = process.env.OCM_API_KEY;
+      const connectorMap = { "type2": "25", "ccs": "33", "chademo": "2", "type1": "1,32" };
+      const connTypeId = connectorType ? connectorMap[connectorType.toLowerCase()] : null;
+
+      // For each stop point, find chargers at that position along the route
+      const stopPoints = await Promise.all(
+        Array.from({ length: stopsNeeded }, (_, i) => {
+          const fraction = (i + 1) / (stopsNeeded + 1); // Evenly space stops
+          const point = interpolateCoords(from, to, fraction);
+          const milesFromStart = Math.round(totalMiles * fraction);
+
+          const params = new URLSearchParams({
+            output: "json", latitude: point.lat, longitude: point.lng,
+            distance: 20, distanceunit: "KM", maxresults: 8,
+            compact: "true", verbose: "false",
+          });
+          if (connTypeId) params.set("connectiontypeid", connTypeId);
+          if (ocmKey) params.set("key", ocmKey);
+
+          return fetch(`https://api.openchargemap.io/v3/poi/?${params.toString()}`, {
+            headers: { "User-Agent": "Wanderly-TripWithMe/1.0", ...(ocmKey ? { "x-api-key": ocmKey } : {}) },
+          })
+          .then(r => r.ok ? r.json() : [])
+          .then(data => {
+            if (!Array.isArray(data) || data.length === 0) return { milesFromStart, lat: point.lat, lng: point.lng, chargers: [] };
+            const chargers = data.map(station => {
+              const connections = (station.Connections || []).map(c => ({
+                type: c.ConnectionType?.Title || "Unknown",
+                powerKW: c.PowerKW || null,
+                quantity: c.Quantity || 1,
+                status: c.StatusType?.Title || null,
+              }));
+              const connectorTypes = [...new Set(connections.map(c => c.type))];
+              const maxPower = Math.max(...connections.map(c => c.powerKW || 0));
+              const totalPoints = connections.reduce((sum, c) => sum + c.quantity, 0);
+              let speedLabel = "Slow (≤7kW)";
+              if (maxPower >= 150) speedLabel = "Ultra-Rapid (150kW+)";
+              else if (maxPower >= 50) speedLabel = "Rapid (50kW+)";
+              else if (maxPower > 7) speedLabel = "Fast (7-50kW)";
+              const isOperational = station.StatusType?.IsOperational !== false;
+              const comments = [station.GeneralComments || "", (station.MetadataValues?.map(m => m.ItemValue) || []).join("; ")].join(" ");
+              const facilities = [];
+              const fkw = { "wifi": /wi-?fi|internet/i, "toilet": /toilet|restroom|wc/i, "cafe": /caf[eé]|coffee|costa|starbucks/i, "restaurant": /restaurant|food|diner/i, "shop": /shop|store|supermarket|tesco|sainsbury/i, "parking": /parking|car park/i, "24h": /24.?h|24.?7|always open/i };
+              for (const [label, regex] of Object.entries(fkw)) {
+                if (regex.test(comments) || regex.test(station.AddressInfo?.AddressLine1 || "")) facilities.push(label);
+              }
+              return {
+                name: station.AddressInfo?.Title || "EV Charger",
+                address: [station.AddressInfo?.AddressLine1, station.AddressInfo?.Town, station.AddressInfo?.Postcode].filter(Boolean).join(", "),
+                lat: station.AddressInfo?.Latitude, lng: station.AddressInfo?.Longitude,
+                connectors: connectorTypes, connections, maxPowerKW: maxPower > 0 ? maxPower : null,
+                speedLabel, totalPoints, isOperational, facilities,
+                operator: station.OperatorInfo?.Title || null,
+                usageCost: station.UsageCost || null,
+                mapsLink: `https://www.google.com/maps/dir/?api=1&destination=${station.AddressInfo?.Latitude},${station.AddressInfo?.Longitude}`,
+                zapMapLink: `https://www.zap-map.com/live/?lat=${station.AddressInfo?.Latitude}&lng=${station.AddressInfo?.Longitude}&z=15`,
+                ocmId: station.ID,
+              };
+            });
+
+            // Score and rank chargers
+            const scored = chargers
+              .filter(c => c.isOperational)
+              .map(c => ({ ...c, score: scoreCharger(c) }))
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 3);
+
+            return { milesFromStart, lat: point.lat, lng: point.lng, chargers: scored };
+          })
+          .catch(() => ({ milesFromStart, lat: point.lat, lng: point.lng, chargers: [] }));
+        })
+      );
+
+      return res.status(200).json({
+        stopPoints,
+        totalMiles: Math.round(totalMiles),
+        stopsNeeded,
+        message: `${stopsNeeded} charging stop${stopsNeeded > 1 ? "s" : ""} recommended along ${Math.round(totalMiles)} mile route.`,
+      });
+    }
+
+    // ── SINGLE-POINT MODE (existing behaviour) ──
     const { lat, lng, locationName, maxResults = 5, connectorType } = req.body;
     if (!lat && !lng && !locationName) return res.status(400).json({ error: "Location required" });
 

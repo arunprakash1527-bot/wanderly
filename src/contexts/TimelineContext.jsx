@@ -31,55 +31,72 @@ export function TimelineProvider({ children }) {
     if (!trip) return;
     const timeline = generateMultiDayTimeline(trip);
 
-    // Enrich EV charging stops with real locations from Places API
+    // Enrich EV charging stops with route-scored charger data
+    let evProfile = null;
+    try { evProfile = JSON.parse(localStorage.getItem("twm_ev_profile")); } catch {}
+    const evConnector = evProfile?.connectors?.[0] || null;
+    const evRange = evProfile?.rangeMiles || 250;
+
     const evItems = [];
+    const legMap = {};
     Object.entries(timeline).forEach(([day, items]) => {
       items.forEach((item, idx) => {
-        if (item.evSearch) evItems.push({ day: parseInt(day), idx, from: item.evSearch.from, to: item.evSearch.to });
+        if (item.evSearch) {
+          const key = `${item.evSearch.from}|${item.evSearch.to}`;
+          if (!legMap[key]) legMap[key] = [];
+          legMap[key].push({ day: parseInt(day), idx });
+          evItems.push({ day: parseInt(day), idx, from: item.evSearch.from, to: item.evSearch.to });
+        }
       });
     });
 
     if (evItems.length > 0) {
       try {
-        const enriched = await Promise.all(evItems.map(async (ev) => {
-          // Search at the midpoint between origin and destination for en-route stations
-          const fromCoords = findCoords(ev.from.toLowerCase().replace(/[^a-z\s]/g, "").trim());
-          const toCoords = findCoords(ev.to.toLowerCase().replace(/[^a-z\s]/g, "").trim());
-          const body = { query: `EV rapid charging station`, type: "electric_vehicle_charging_station" };
-          if (fromCoords && toCoords) {
-            // Use midpoint coordinates to bias search to en-route stations
-            body.location = { lat: (fromCoords[0] + toCoords[0]) / 2, lng: (fromCoords[1] + toCoords[1]) / 2 };
-            body.radius = 50000; // 50km radius around midpoint to find en-route stations
-            body.query = `EV rapid charging station motorway services`;
-          } else {
-            body.query = `EV charging station services between ${ev.from} and ${ev.to}`;
+        const legKeys = Object.keys(legMap);
+        const legResults = await Promise.all(legKeys.map(async (key) => {
+          const [from, to] = key.split("|");
+          const fromCoords = findCoords(from);
+          const toCoords = findCoords(to);
+          if (!fromCoords || !toCoords) {
+            const body = { query: `EV charging station services between ${from} and ${to}`, type: "electric_vehicle_charging_station" };
+            const res = await authFetch(API.PLACES, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            const data = await res.json();
+            return { key, stopPoints: null, places: res.ok ? (data.places || []) : [] };
           }
-          const res = await authFetch(API.PLACES, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+          const res = await authFetch(API.EV_CHARGERS, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "route", fromLat: fromCoords[0], fromLng: fromCoords[1], toLat: toCoords[0], toLng: toCoords[1], rangeMiles: evRange, connectorType: evConnector }),
           });
           const data = await res.json();
-          if (res.ok && data.places?.length > 0) {
-            // Pick the first station that isn't at the origin or destination
-            const station = data.places.find(p => {
-              const addr = (p.address || "").toLowerCase();
-              return !addr.includes(ev.from.toLowerCase()) && !addr.includes(ev.to.toLowerCase());
-            }) || data.places[0];
-            return { ...ev, station };
-          }
-          return ev;
+          return { key, stopPoints: data.stopPoints || [], places: null };
         }));
 
-        enriched.forEach(ev => {
-          if (ev.station) {
-            const s = ev.station;
+        for (const result of legResults) {
+          const items = legMap[result.key];
+          if (result.stopPoints) {
+            items.forEach((item, stopIdx) => {
+              const stopPoint = result.stopPoints[stopIdx] || result.stopPoints[0];
+              if (stopPoint?.chargers?.length > 0) {
+                const best = stopPoint.chargers[0];
+                const speedInfo = best.speedLabel || "";
+                const pointsInfo = best.totalPoints >= 4 ? `${best.totalPoints} points · Low queue risk` : `${best.totalPoints || "?"} points`;
+                const facilitiesStr = best.facilities?.length > 0 ? best.facilities.slice(0, 3).join(", ") : "";
+                const chargeKw = best.maxPowerKW || 50;
+                const chargeMin = chargeKw >= 150 ? "~15" : chargeKw >= 50 ? "~25" : "~45";
+                timeline[item.day][item.idx].title = `⚡ ${best.name}`;
+                timeline[item.day][item.idx].desc = `${best.address} · ${speedInfo} · ${pointsInfo} · ${chargeMin} min charge${facilitiesStr ? ` · ${facilitiesStr}` : ""}`;
+              }
+            });
+          } else if (result.places?.length > 0) {
+            const s = result.places[0];
             const rating = s.rating ? ` · ${s.rating}★` : "";
-            timeline[ev.day][ev.idx].title = `⚡ ${s.name}`;
-            timeline[ev.day][ev.idx].desc = `${s.address} · Rapid charge ~30 min · Grab food & coffee while charging${rating}`;
+            items.forEach(item => {
+              timeline[item.day][item.idx].title = `⚡ ${s.name}`;
+              timeline[item.day][item.idx].desc = `${s.address} · Rapid charge ~30 min · Grab food & coffee while charging${rating}`;
+            });
           }
-        });
-      } catch (e) { /* Places API unavailable — keep generic descriptions */ }
+        }
+      } catch (e) { /* fallback — keep generic descriptions */ }
     }
 
     setCreatedTrips(prev => prev.map(t => {
@@ -151,16 +168,26 @@ export function TimelineProvider({ children }) {
     const places = getSmartRouteOrder(trip);
     const startLoc = trip?.startLocation || "";
     const autoStops = [];
-    const EV_CHARGE_THRESHOLD_MILES = 50; // Only suggest charging for legs > 50 miles
-    const REST_THRESHOLD_MILES = 60;      // Only suggest rest stops for legs > 60 miles
+    const REST_THRESHOLD_MILES = 60;
+
+    // Read EV profile for range-aware stop calculation
+    let evProfile = null;
+    try { evProfile = JSON.parse(localStorage.getItem("twm_ev_profile")); } catch {}
+    const evRange = evProfile?.rangeMiles || 250;
+    const safeRange = Math.round(evRange * 0.65); // 65% of rated for real-world + buffer
 
     if (isDriving && places.length > 0 && startLoc) {
       const firstLegMiles = estimateDistanceMiles(startLoc, places[0]) || 100;
       const firstLegHrs = estimateTravelHours(startLoc, places[0]);
       const timeLabel = firstLegHrs >= 1.5 ? `~${Math.round(firstLegHrs * 10) / 10} hrs into journey` : `~${Math.round(firstLegHrs * 60)} min drive`;
 
-      if (isEV && firstLegMiles >= EV_CHARGE_THRESHOLD_MILES) {
-        autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${startLoc} and ${places[0]} (~${firstLegMiles} mi)`, time: timeLabel, enabled: true, combineMeal: true });
+      if (isEV) {
+        // Calculate how many EV stops needed for this leg based on actual vehicle range
+        const stopsNeeded = Math.max(0, Math.ceil(firstLegMiles / safeRange) - 1);
+        for (let s = 0; s < stopsNeeded; s++) {
+          const atMiles = Math.round(safeRange * (s + 1));
+          autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${startLoc} and ${places[0]} (~${atMiles} mi mark)`, time: timeLabel, enabled: true, combineMeal: s === 0, atMiles, legFrom: startLoc, legTo: places[0] });
+        }
       } else if (!isEV && firstLegMiles >= REST_THRESHOLD_MILES) {
         autoStops.push({ type: "rest", label: "Rest & coffee stop", desc: `Between ${startLoc} and ${places[0]} (~${firstLegMiles} mi)`, time: timeLabel, enabled: true, combineMeal: false });
       }
@@ -169,9 +196,13 @@ export function TimelineProvider({ children }) {
       for (let i = 0; i < places.length - 1; i++) {
         const legMiles = estimateDistanceMiles(places[i], places[i + 1]) || 100;
         const legHrs = estimateTravelHours(places[i], places[i + 1]);
-        if (isEV && legMiles >= EV_CHARGE_THRESHOLD_MILES) {
-          const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
-          autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${places[i]} and ${places[i + 1]} (~${legMiles} mi)`, time: legLabel, enabled: true, combineMeal: true });
+        if (isEV) {
+          const stopsNeeded = Math.max(0, Math.ceil(legMiles / safeRange) - 1);
+          for (let s = 0; s < stopsNeeded; s++) {
+            const atMiles = Math.round(safeRange * (s + 1));
+            const legLabel = legHrs >= 1 ? `~${Math.round(legHrs * 10) / 10} hrs` : `~${Math.round(legHrs * 60)} min`;
+            autoStops.push({ type: "ev_charge", label: `EV charge & refreshments`, desc: `Service station between ${places[i]} and ${places[i + 1]} (~${atMiles} mi mark)`, time: legLabel, enabled: true, combineMeal: false, atMiles, legFrom: places[i], legTo: places[i + 1] });
+          }
         }
       }
     }
@@ -191,34 +222,90 @@ export function TimelineProvider({ children }) {
     const updated = { ...trip, status: "live", activationPrefs: { ...activationPrefs } };
     updated.timeline = generateMultiDayTimeline(updated);
 
-    // Enrich EV charging stops with real locations
+    // Enrich EV charging stops with real charger data (route-aware scoring)
+    let evProfile = null;
+    try { evProfile = JSON.parse(localStorage.getItem("twm_ev_profile")); } catch {}
+    const evConnector = evProfile?.connectors?.[0] || null;
+    const evRange = evProfile?.rangeMiles || 250;
+
+    // Group evSearch items by leg (from→to) to batch route queries
     const evItems = [];
+    const legMap = {}; // "from|to" → [{day, idx}]
     Object.entries(updated.timeline).forEach(([day, items]) => {
       items.forEach((item, idx) => {
-        if (item.evSearch) evItems.push({ day: parseInt(day), idx, from: item.evSearch.from, to: item.evSearch.to });
+        if (item.evSearch) {
+          const key = `${item.evSearch.from}|${item.evSearch.to}`;
+          if (!legMap[key]) legMap[key] = [];
+          legMap[key].push({ day: parseInt(day), idx });
+          evItems.push({ day: parseInt(day), idx, from: item.evSearch.from, to: item.evSearch.to });
+        }
       });
     });
+
     if (evItems.length > 0) {
       try {
-        const enriched = await Promise.all(evItems.map(async (ev) => {
-          const query = `EV charging station with cafe between ${ev.from} and ${ev.to}`;
-          const res = await authFetch(API.PLACES, {
+        // Fetch route chargers per unique leg
+        const legKeys = Object.keys(legMap);
+        const legResults = await Promise.all(legKeys.map(async (key) => {
+          const [from, to] = key.split("|");
+          const fromCoords = findCoords(from);
+          const toCoords = findCoords(to);
+          if (!fromCoords || !toCoords) {
+            // Fallback to Places API if coords not found
+            const query = `EV charging station with cafe between ${from} and ${to}`;
+            const res = await authFetch(API.PLACES, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),
+            });
+            const data = await res.json();
+            return { key, stopPoints: null, places: res.ok ? (data.places || []) : [] };
+          }
+          // Use route mode for scored charger results
+          const res = await authFetch(API.EV_CHARGERS, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query, type: "electric_vehicle_charging_station" }),
+            body: JSON.stringify({
+              mode: "route",
+              fromLat: fromCoords[0], fromLng: fromCoords[1],
+              toLat: toCoords[0], toLng: toCoords[1],
+              rangeMiles: evRange,
+              connectorType: evConnector,
+            }),
           });
           const data = await res.json();
-          if (res.ok && data.places?.length > 0) return { ...ev, station: data.places[0] };
-          return ev;
+          return { key, stopPoints: data.stopPoints || [], places: null };
         }));
-        enriched.forEach(ev => {
-          if (ev.station) {
-            const s = ev.station;
+
+        // Apply results to timeline items
+        for (const result of legResults) {
+          const items = legMap[result.key];
+          if (result.stopPoints) {
+            // Route mode — scored chargers per stop point
+            items.forEach((item, stopIdx) => {
+              const stopPoint = result.stopPoints[stopIdx] || result.stopPoints[0];
+              if (stopPoint?.chargers?.length > 0) {
+                const best = stopPoint.chargers[0]; // Highest scored
+                const speedInfo = best.speedLabel || "";
+                const pointsInfo = best.totalPoints >= 4 ? `${best.totalPoints} points · Low queue risk` : `${best.totalPoints || "?"} points`;
+                const facilitiesStr = best.facilities?.length > 0 ? best.facilities.slice(0, 3).join(", ") : "";
+                const chargeKw = best.maxPowerKW || 50;
+                const chargeMin = chargeKw >= 150 ? "~15" : chargeKw >= 50 ? "~25" : "~45";
+                updated.timeline[item.day][item.idx].title = `⚡ ${best.name}`;
+                updated.timeline[item.day][item.idx].desc = `${best.address} · ${speedInfo} · ${pointsInfo} · ${chargeMin} min charge${facilitiesStr ? ` · ${facilitiesStr}` : ""}`;
+                updated.timeline[item.day][item.idx].evCharger = { name: best.name, score: best.score, totalPoints: best.totalPoints, maxPowerKW: chargeKw, speedLabel: speedInfo, lat: best.lat, lng: best.lng, mapsLink: best.mapsLink, zapMapLink: best.zapMapLink };
+              }
+            });
+          } else if (result.places?.length > 0) {
+            // Fallback Places API
+            const s = result.places[0];
             const rating = s.rating ? ` · ${s.rating}★` : "";
-            updated.timeline[ev.day][ev.idx].title = `⚡ ${s.name}`;
-            updated.timeline[ev.day][ev.idx].desc = `${s.address} · Rapid charge ~30 min · Grab food & coffee while charging${rating}`;
+            items.forEach(item => {
+              updated.timeline[item.day][item.idx].title = `⚡ ${s.name}`;
+              updated.timeline[item.day][item.idx].desc = `${s.address} · Rapid charge ~30 min · Grab food & coffee while charging${rating}`;
+            });
           }
-        });
+        }
       } catch (e) { /* fallback to generic */ }
     }
 
