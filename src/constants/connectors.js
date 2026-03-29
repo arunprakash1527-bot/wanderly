@@ -10,7 +10,7 @@ export const CONNECTORS = {
   currency: { name: "Frankfurter (ECB)", apis: ["Exchange Rates", "Currency Conversion"], icon: "💱", status: "connected", color: T.green },
   auth: { name: "Supabase Auth", apis: ["Email/Pass", "Google SSO", "Session Management"], icon: "👤", status: "connected", color: T.pink },
   places: { name: "Google Places", apis: ["Nearby Search", "Place Details", "Photos", "Reviews"], icon: "📍", status: "connected", color: T.coral },
-  booking: { name: "Viator / GetYourGuide", apis: ["Activity Search", "Availability", "Booking"], icon: "🎟️", status: "coming_soon", color: T.purple },
+  booking: { name: "Viator / GetYourGuide", apis: ["Activity Search", "Deep Links", "Booking"], icon: "🎟️", status: "connected", color: T.purple },
   accommodation: { name: "Booking.com / Airbnb", apis: ["Search", "Availability", "Property Details"], icon: "🏨", status: "coming_soon", color: T.amber },
   traffic: { name: "TomTom / HERE", apis: ["Traffic Flow", "Incidents", "Route Planning"], icon: "🚗", status: "coming_soon", color: T.red },
   flights: { name: "Skyscanner / Amadeus", apis: ["Flight Search", "Price Alerts", "Check-in"], icon: "✈️", status: "coming_soon", color: T.blue },
@@ -20,5 +20,5 @@ export const CONNECTORS = {
   photos: { name: "Cloudinary / S3", apis: ["Upload", "Transform", "AI Tagging"], icon: "📸", status: "coming_soon", color: T.coral },
   notifications: { name: "Firebase / OneSignal", apis: ["Push", "In-App", "Email"], icon: "🔔", status: "coming_soon", color: T.amber },
   rideshare: { name: "Uber / Bolt", apis: ["Price Estimate", "Request Ride"], icon: "🚕", status: "coming_soon", color: T.t1 },
-  restaurants: { name: "OpenTable / TheFork", apis: ["Search", "Reservation", "Menu"], icon: "🍽️", status: "coming_soon", color: T.coral },
+  restaurants: { name: "OpenTable / TheFork", apis: ["Search", "Deep Links", "Reservation"], icon: "🍽️", status: "connected", color: T.coral },
 };

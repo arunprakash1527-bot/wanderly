@@ -8,6 +8,7 @@ import { useNavigation } from "./NavigationContext";
 import { useTrip } from "./TripContext";
 import { fetchTripIntelligence, buildSmartGreeting, buildSmartTips } from "../utils/tripIntelligence";
 import { getLocationActivities, estimateTravelHours, findCoords } from "../utils/locationHelpers";
+import { getRestaurantBookingMarkdown } from "../utils/bookingLinks";
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const ChatContext = createContext(null);
@@ -1032,7 +1033,8 @@ export function ChatProvider({ children }) {
                 .slice(0, 2);
               const cuisineLabel = cuisineTypes.length > 0 ? cuisineTypes.join(" · ") : "";
               const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
-              return `${i + 1}. **${p.name}** ${stars} ${price}${cuisineLabel ? ` · ${cuisineLabel}` : ""}${status ? ` · ${status}` : ""}\n   ${p.address}\n   [View on Maps](${mapLink})`;
+              const bookingMd = getRestaurantBookingMarkdown({ name: p.name, placeId: p.placeId }, { city: searchLoc, places: trip?.places });
+              return `${i + 1}. **${p.name}** ${stars} ${price}${cuisineLabel ? ` · ${cuisineLabel}` : ""}${status ? ` · ${status}` : ""}\n   ${p.address}\n   [View on Maps](${mapLink})${bookingMd ? ` · ${bookingMd}` : ""}`;
             }).join("\n\n");
 
             const extras = [];

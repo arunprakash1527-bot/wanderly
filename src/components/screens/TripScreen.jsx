@@ -8,8 +8,9 @@ import { TabBar } from '../common/TabBar';
 import { TripMap } from '../map/TripMap';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useTrip } from '../../contexts/TripContext';
+import { detectItemType, getRestaurantBookingLinks, getActivityBookingLinks } from '../../utils/bookingLinks';
 
-const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, onSkip, onCostUpdate, onRemove }) => {
+const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, onSkip, onCostUpdate, onRemove, tripCity }) => {
   const forMap = { all: "Everyone", adults: "Adults", kids: "Max & Ella", older: "Max (12)", younger: "Ella (8)" };
   return (
     <div style={{ position: "relative", marginBottom: 12, cursor: "pointer" }} onClick={onToggle}>
@@ -20,17 +21,27 @@ const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, o
       {item.for && item.for !== "all" && <div style={{ marginTop: 3 }}><GroupTag type={item.for}>{forMap[item.for]}</GroupTag></div>}
 
       {/* Booking status tracking */}
-      {item.needsBooking && !bookingState && (
-        <div style={{ padding: 10, background: T.amberL, border: `.5px solid ${T.amber}`, borderRadius: T.rs, marginTop: 6 }}
-          onClick={e => e.stopPropagation()}>
-          <p style={{ fontSize: 12, color: T.amber, marginBottom: 8 }}><strong>Action needed:</strong> {item.price}</p>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.blue }} onClick={() => window.open(`https://www.google.com/search?q=book+${encodeURIComponent(item.title)}`, "_blank")}>Book externally ↗</button>
-            <button style={{ ...css.btn, ...css.btnSm, ...css.btnP, fontSize: 11 }} onClick={onBook}>Mark as booked</button>
-            <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={onSkip}>Skip</button>
+      {item.needsBooking && !bookingState && (() => {
+        const itemType = detectItemType(item);
+        const ctx = { city: tripCity || "Lake District" };
+        const bookingLinks = itemType === "restaurant"
+          ? getRestaurantBookingLinks({ name: item.title }, ctx).slice(0, 2)
+          : getActivityBookingLinks({ title: item.title }, ctx).slice(0, 2);
+        return (
+          <div style={{ padding: 10, background: T.amberL, border: `.5px solid ${T.amber}`, borderRadius: T.rs, marginTop: 6 }}
+            onClick={e => e.stopPropagation()}>
+            <p style={{ fontSize: 12, color: T.amber, marginBottom: 8 }}><strong>Action needed:</strong> {item.price}</p>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {bookingLinks.map((link, li) => (
+                <button key={li} style={{ ...css.btn, ...css.btnSm, fontSize: 11, color: T.blue }}
+                  onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}>{link.icon} {link.label} ↗</button>
+              ))}
+              <button style={{ ...css.btn, ...css.btnSm, ...css.btnP, fontSize: 11 }} onClick={onBook}>Mark as booked</button>
+              <button style={{ ...css.btn, ...css.btnSm, fontSize: 11 }} onClick={onSkip}>Skip</button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {item.needsBooking && bookingState?.status === "booked" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: T.al, borderRadius: T.rs, marginTop: 6 }} onClick={e => e.stopPropagation()}>
           <span style={{ fontSize: 12, color: T.ad, fontWeight: 500 }}>✓ Booked — marked by you</span>
@@ -51,13 +62,25 @@ const TimelineItem = ({ item, index, expanded, onToggle, bookingState, onBook, o
           <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>{item.desc}</p>
           {item.rating && <p style={{ fontSize: 12, color: T.amber, marginTop: 4 }}>{"★".repeat(Math.floor(item.rating))} {item.rating}</p>}
           {item.price && <p style={{ fontSize: 12, color: T.t2, marginTop: 2 }}>Price: {item.price}</p>}
-          <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-            <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(item.title)}+Lake+District`, "_blank")}>Navigate</button>
-            <button style={{ ...css.btn, ...css.btnSm }} onClick={() => alert(`Calling ${item.title}...`)}>Call</button>
-            <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+reviews`, "_blank")}>Reviews</button>
-            <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+menu`, "_blank")}>Menu</button>
-            <button style={{ ...css.btn, ...css.btnSm, color: T.red }} onClick={() => { if (window.confirm(`Remove "${item.title}" from the itinerary?`)) { onRemove?.(); } }}>Remove</button>
-          </div>
+          {(() => {
+            const itemType = detectItemType(item);
+            const ctx = { city: tripCity || "Lake District" };
+            const links = itemType === "restaurant"
+              ? getRestaurantBookingLinks({ name: item.title }, ctx).slice(0, 2)
+              : item.needsBooking ? getActivityBookingLinks({ title: item.title }, ctx).slice(0, 2) : [];
+            return (
+              <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                <button style={{ ...css.btn, ...css.btnSm, ...css.btnP }} onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(item.title + " " + (tripCity || ""))}`, "_blank")}>Navigate</button>
+                {itemType === "restaurant" && <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+menu`, "_blank")}>Menu</button>}
+                <button style={{ ...css.btn, ...css.btnSm }} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(item.title)}+reviews`, "_blank")}>Reviews</button>
+                {links.map((link, li) => (
+                  <button key={li} style={{ ...css.btn, ...css.btnSm, color: T.blue }}
+                    onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}>{link.icon} {link.label.split(" on ").pop() || link.label}</button>
+                ))}
+                <button style={{ ...css.btn, ...css.btnSm, color: T.red }} onClick={() => { if (window.confirm(`Remove "${item.title}" from the itinerary?`)) { onRemove?.(); } }}>Remove</button>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -126,6 +149,7 @@ export function TripScreen() {
           <div style={{ position: "absolute", left: 5, top: 8, bottom: 8, width: 1.5, background: T.border }} />
           {items.map((item, i) => (
             <TimelineItem key={`${selectedDay}-${i}`} item={item} index={i} expanded={expandedItem === i}
+              tripCity={DAYS[selectedDay - 1]?.location || TRIP.places?.[0] || ""}
               onToggle={() => setExpandedItem(expandedItem === i ? null : i)}
               bookingState={bookingStates[`${selectedDay}-${i}`]}
               onBook={() => setBookingStates(prev => ({ ...prev, [`${selectedDay}-${i}`]: { status: "booked", cost: "" } }))}

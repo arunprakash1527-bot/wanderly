@@ -25,6 +25,7 @@ import { EV_MODELS, calculateRealisticRange, planChargingStops } from '../../uti
 import { checkInActivity, markRunningLate, getDayProgress, getTimeToNext } from '../../utils/liveTrip';
 import { checkWeatherAlerts } from '../../utils/weatherAlerts';
 import { exportItineraryAsPDF } from '../../utils/exportItinerary';
+import { detectItemType, getRestaurantBookingLinks, getActivityBookingLinks } from '../../utils/bookingLinks';
 import { TimelineItemSkeleton } from '../common/Skeleton';
 
 const fmtDate = (iso) => {
@@ -795,6 +796,21 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                                 {isLive && item.checkedIn && (
                                   <span style={{ fontSize: 16 }}>✅</span>
                                 )}
+                                {(() => {
+                                  const iType = detectItemType(item);
+                                  const dayLoc = trip.places?.[Math.min(selectedDay - 1, (trip.places?.length || 1) - 1)] || trip.places?.[0] || "";
+                                  if (iType === "restaurant") {
+                                    const link = getRestaurantBookingLinks({ name: item.title }, { city: dayLoc, places: trip.places })[0];
+                                    return link ? <button onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")} aria-label="Reserve"
+                                      style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 8px", minWidth: 36, minHeight: 28, color: T.blue, justifyContent: "center" }}>🍽️</button> : null;
+                                  }
+                                  if (/museum|tour|cruise|boat|castle|palace|workshop|class|zoo|aquarium|gallery|show|theatre|concert|spa|kayak|climb|cycle|surf|dive|ski/i.test(`${item.title} ${item.desc || ""}`)) {
+                                    const link = getActivityBookingLinks({ title: item.title }, { city: dayLoc })[0];
+                                    return link ? <button onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")} aria-label="Book activity"
+                                      style={{ ...css.btn, ...css.btnSm, fontSize: 10, padding: "4px 8px", minWidth: 36, minHeight: 28, color: T.blue, justifyContent: "center" }}>🎟️</button> : null;
+                                  }
+                                  return null;
+                                })()}
                                 <button onClick={() => setEditingTimelineIdx(i)} aria-label={`Edit ${item.title}`}
                                   style={{ ...css.btn, ...css.btnSm, fontSize: 14, padding: "8px", minWidth: 40, minHeight: 40, opacity: 0.5, justifyContent: "center" }}>✏️</button>
                               </div>
