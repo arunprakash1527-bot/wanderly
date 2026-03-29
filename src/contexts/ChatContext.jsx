@@ -1230,7 +1230,7 @@ export function ChatProvider({ children }) {
         saveChatMessage(trip?.dbId, 'ai', data.reply);
         return;
       }
-    } catch (e) { /* API unavailable — fall back to local */ }
+    } catch (e) { console.warn('Chat API unavailable:', e.message); /* fall back to local */ }
 
     // Local fallback
     setTimeout(async () => {

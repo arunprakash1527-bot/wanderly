@@ -57,17 +57,30 @@ export default async function handler(req, res) {
     // Build messages array from chat history
     const messages = [];
     if (chatHistory && chatHistory.length > 0) {
-      // Include last 10 messages for context
+      // Include last 10 messages for context, filtering out empty/invalid entries
       const recent = chatHistory.slice(-10);
       for (const msg of recent) {
-        messages.push({
-          role: msg.role === "ai" ? "assistant" : "user",
-          content: msg.text,
-        });
+        if (!msg.text || typeof msg.text !== 'string' || msg.text.trim().length === 0) continue;
+        const role = msg.role === "ai" ? "assistant" : "user";
+        // Ensure no consecutive same-role messages (Claude API requirement)
+        if (messages.length > 0 && messages[messages.length - 1].role === role) {
+          messages[messages.length - 1].content += "\n" + msg.text;
+        } else {
+          messages.push({ role, content: msg.text });
+        }
       }
     }
     // Add the current message
-    messages.push({ role: "user", content: message });
+    if (messages.length > 0 && messages[messages.length - 1].role === "user") {
+      messages[messages.length - 1].content += "\n" + message;
+    } else {
+      messages.push({ role: "user", content: message });
+    }
+
+    // Add chatSummary context if provided
+    if (req.body.chatSummary) {
+      messages[0] = { role: messages[0].role, content: `[Context: ${req.body.chatSummary}]\n\n${messages[0].content}` };
+    }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
