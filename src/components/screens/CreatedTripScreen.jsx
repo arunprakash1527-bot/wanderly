@@ -857,7 +857,15 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                     .slice(0, 2) : [];
                   current = { name, desc: rest, rating: ratingM ? ratingM[1] : null, price: priceM ? priceM[1] : null, isRestaurant, cuisineTags };
                 } else if (current && line.match(/^\s{2,}/) && !line.match(/^\s*(\*|#|Pro|💡|Say)/)) {
-                  current.address = line.trim();
+                  const trimmed = line.trim();
+                  // Capture 📍 address specifically
+                  if (trimmed.startsWith("📍")) {
+                    current.address = trimmed.replace(/^📍\s*/, "");
+                  } else if (!current.address && !trimmed.startsWith("🔌") && !trimmed.startsWith("💰") && !trimmed.startsWith("🏢") && !trimmed.startsWith("🏪") && !trimmed.startsWith("[")) {
+                    current.address = trimmed;
+                  }
+                  // Capture distance/operational from desc line for EV chargers
+                  if (trimmed.startsWith("🔌")) current.connectorInfo = trimmed;
                 }
               }
               if (current) items.push(current);
@@ -883,6 +891,7 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                           ? item.cuisineTags.map((c, ci) => <span key={ci} style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "1px 6px", borderRadius: 4 }}>🍽️ {c}</span>)
                           : item.isRestaurant && <span style={{ fontSize: 10, color: T.t3, background: T.s2, padding: "1px 6px", borderRadius: 4 }}>🍽️ Restaurant</span>}
                       </div>
+                      {item.address && <p style={{ fontSize: 10, color: T.t2, lineHeight: 1.3, marginBottom: 1 }}>📍 {item.address}</p>}
                       {item.desc && <p style={{ fontSize: 11, color: T.t3, lineHeight: 1.4 }}>{item.desc.replace(/[\d.]+★/g, "").replace(/£+/g, "").replace(/^\s*[,·\-–]\s*/, "").trim()}</p>}
                     </div>
                     {isAdded ? (
