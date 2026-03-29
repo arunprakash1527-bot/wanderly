@@ -21,6 +21,7 @@ export function TripDataProvider({ children }) {
   const [joinedSlot, setJoinedSlot] = useState(null);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const dbWriteLockRef = React.useRef(false); // Prevents loadTripsFromDB during updateTripInDB
   const [showNotifications, setShowNotifications] = useState(false);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [lastSeenActivity, setLastSeenActivity] = useState(() => {
@@ -61,6 +62,8 @@ export function TripDataProvider({ children }) {
   // ─── Supabase: Load Trips ───
   const loadTripsFromDB = useCallback(async () => {
     if (!user) return;
+    // Skip if a DB write is in progress (prevents race with delete+reinsert)
+    if (dbWriteLockRef.current) return;
     setSyncing(true);
     try {
       const { data: trips, error } = await supabase
@@ -72,7 +75,26 @@ export function TripDataProvider({ children }) {
 
       if (trips && trips.length > 0) {
         const mapped = trips.map(t => mapTripFromDB(t));
-        setCreatedTrips(mapped);
+        // Smart merge: preserve local stays/travellers/prefs if DB returns empty
+        // (protects against race condition during delete+reinsert in updateTripInDB)
+        setCreatedTrips(prev => {
+          return mapped.map(dbTrip => {
+            const localTrip = prev.find(lt => lt.dbId === dbTrip.dbId || lt.id === dbTrip.id);
+            if (!localTrip) return dbTrip;
+            return {
+              ...dbTrip,
+              // Preserve local stays if DB returned empty but local has data
+              stays: (dbTrip.stays?.length > 0) ? dbTrip.stays : (localTrip.stays || []),
+              stayNames: (dbTrip.stayNames?.length > 0) ? dbTrip.stayNames : (localTrip.stayNames || []),
+              // Preserve local timeline if DB has none but local does
+              timeline: dbTrip.timeline || localTrip.timeline,
+              // Preserve activation prefs (not stored in DB)
+              activationPrefs: localTrip.activationPrefs,
+              // Preserve activity log (not always in DB)
+              activity: dbTrip.activity?.length > 0 ? dbTrip.activity : (localTrip.activity || []),
+            };
+          });
+        });
       }
     } catch (err) {
       console.error('Error loading trips:', err);
@@ -143,6 +165,8 @@ export function TripDataProvider({ children }) {
   // ─── Supabase: Update Edited Trip ───
   const updateTripInDB = async (tripData, tripId) => {
     if (!user || user.id === 'demo' || !tripId) return;
+    // Lock to prevent loadTripsFromDB from running during delete+reinsert
+    dbWriteLockRef.current = true;
     try {
       // Update the main trip row
       const { error: tripError } = await supabase.from('trips').update({
@@ -160,7 +184,7 @@ export function TripDataProvider({ children }) {
       }).eq('id', tripId);
       if (tripError) throw tripError;
 
-      // Replace stays: delete old, insert new
+      // Replace stays: delete old, insert new (must happen atomically from UI perspective)
       await supabase.from('trip_stays').delete().eq('trip_id', tripId);
       const stayRows = mapStaysForInsert(tripData.stays, tripId);
       if (stayRows.length > 0) {
@@ -186,6 +210,8 @@ export function TripDataProvider({ children }) {
     } catch (err) {
       console.error('Error updating trip:', err);
       showToast("Failed to save changes — check connection", "error");
+    } finally {
+      dbWriteLockRef.current = false;
     }
   };
 
