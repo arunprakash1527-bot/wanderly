@@ -541,7 +541,14 @@ export function ChatProvider({ children }) {
         const resolveLocKeyword = (loc) => {
           const l = loc.toLowerCase();
           if (/^(start|starting|home|origin|our|my)\s*(location|point|place|town|city)?$/i.test(l)) return trip?.startLocation || firstLoc;
-          if (/^(destination|stay|accom|hotel|end|arrival|the\s+(?:lake|destination|stay|hotel))$/i.test(l)) return trip?.stays?.[0]?.location || trip?.places?.[0] || firstLoc;
+          if (/^(destination|stay|accom|hotel|end|arrival|the\s+(?:lake|destination|stay|hotel))$/i.test(l)) {
+            // Prefer a trip place with known coordinates over a stay name
+            const stayLoc = trip?.stays?.[0]?.location;
+            const stayLocCoords = stayLoc ? findCoords(stayLoc) : null;
+            if (stayLocCoords) return stayLoc;
+            // Fall back to first trip place (e.g. "Lake District")
+            return trip?.places?.[0] || firstLoc;
+          }
           return loc;
         };
         if (fromLoc) fromLoc = resolveLocKeyword(fromLoc);
@@ -549,7 +556,8 @@ export function ChatProvider({ children }) {
         if (!fromLoc && !toLoc) {
           // Default: starting location → first destination/stay
           fromLoc = trip?.startLocation || trip?.places?.[0] || firstLoc;
-          toLoc = trip?.stays?.[0]?.location || trip?.stays?.[0]?.name || trip?.places?.[0] || firstLoc;
+          const defStayLoc = trip?.stays?.[0]?.location;
+          toLoc = (defStayLoc && findCoords(defStayLoc)) ? defStayLoc : trip?.places?.[0] || firstLoc;
           // If from and to are the same, try start → first place
           if (fromLoc.toLowerCase() === toLoc.toLowerCase() && trip?.places?.length > 0) {
             toLoc = trip.places[0];
@@ -562,12 +570,13 @@ export function ChatProvider({ children }) {
 
         (async () => {
           try {
-            const body = { maxResults: 5, mode: "route" };
+            const body = { maxResults: 5 };
             if (fromCoords && toCoords) {
+              body.mode = "route";
               body.fromLat = fromCoords[0]; body.fromLng = fromCoords[1];
               body.toLat = toCoords[0]; body.toLng = toCoords[1];
             } else {
-              // Fallback: use midpoint if we can get at least one set of coords
+              // Fallback: search near midpoint or known location (no route mode)
               const anyCoords = fromCoords || toCoords || findCoords(firstLoc);
               if (anyCoords) { body.lat = anyCoords[0]; body.lng = anyCoords[1]; }
               else { body.locationName = fromLoc; }
