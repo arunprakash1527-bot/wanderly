@@ -313,6 +313,7 @@ export function TripDataProvider({ children }) {
       else if (youngest <= 5) parts.push("young children in group — plan short activity blocks and rest breaks");
       else if (youngest <= 10) parts.push("children in group — mix family-friendly with adult activities");
     }
+    if (trip.brief) parts.push(`trip brief: ${trip.brief}`);
     if (trip.prefs?.instructions) parts.push(trip.prefs.instructions);
     return parts.join(". ") + (parts.length ? "." : "");
   };

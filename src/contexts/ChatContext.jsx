@@ -1200,6 +1200,7 @@ export function ChatProvider({ children }) {
             stays: trip?.stays,
             prefs: trip?.prefs,
             budget,
+            brief: trip?.brief || null,
             currentLocation: firstLoc,
             currentDay: selectedDay,
             templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),

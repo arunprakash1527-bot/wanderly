@@ -67,7 +67,7 @@ export function generateMultiDayTimeline(trip) {
   const allKids = [...(trip.travellers?.olderKids || []), ...(trip.travellers?.youngerKids || []), ...(trip.travellers?.infants || [])];
   const hasKids = allKids.length > 0;
   const budgetTier = { "Budget": { label: "budget-friendly", price: "£" }, "Mid-range": { label: "mid-range", price: "££" }, "Luxury": { label: "upscale", price: "£££" }, "No limit": { label: "top-rated", price: "££££" } }[trip.budget] || { label: "local", price: "££" };
-  const ctx = (trip.summary || "") + " " + (trip.prefs.instructions || "");
+  const ctx = (trip.summary || "") + " " + (trip.brief || "") + " " + (trip.prefs.instructions || "");
   const ctxLower = ctx.toLowerCase();
   const wantsDogFriendly = /dog|pet/.test(ctxLower);
   const wantsAccessible = /accessible|wheelchair|mobility|pushchair|buggy|pram/.test(ctxLower);

@@ -111,6 +111,7 @@ Be warm, helpful, and specific with recommendations.`;
   const parts = [`You are Trip With Me, an AI travel concierge helping plan a trip.`];
 
   if (ctx.tripName) parts.push(`Trip: "${ctx.tripName}"`);
+  if (ctx.brief) parts.push(`Trip brief (from the organiser — use this to personalise all recommendations): ${ctx.brief}`);
   if (ctx.dates) parts.push(`Dates: ${ctx.dates}`);
   if (ctx.places?.length) parts.push(`Places: ${ctx.places.join(", ")}`);
   if (ctx.travelMode) parts.push(`Travel mode: ${ctx.travelMode}`);
