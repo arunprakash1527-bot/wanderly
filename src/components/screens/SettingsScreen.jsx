@@ -15,10 +15,12 @@ export function SettingsScreen() {
   const cameFromHome = prevScreen === "home";
   // settingsToggles is local to this screen
   const [settingsToggles, setSettingsToggles] = useState(() => {
-    const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = true);
+    const s = {}; Object.keys(CONNECTORS).forEach(k => s[k] = CONNECTORS[k].status === "connected");
     ["booking","ev","traffic","video","poll","checkout"].forEach(k => s["n_"+k] = true);
     return s;
   });
+  const connectedList = Object.entries(CONNECTORS).filter(([, c]) => c.status === "connected");
+  const comingSoonList = Object.entries(CONNECTORS).filter(([, c]) => c.status === "coming_soon");
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "14px 20px", background: T.s, borderBottom: `.5px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -54,18 +56,27 @@ export function SettingsScreen() {
             <span key={o} style={{ ...css.chip, ...css.chipActive }}>{o}</span>
           ))}
         </div>
-        <div style={css.sectionTitle}>Connectors &amp; integrations</div>
-        <div style={{ background: T.amberL, padding: "8px 12px", borderRadius: T.rs, marginBottom: 8 }}>
-          <p style={{ fontSize: 11, color: T.amber, fontWeight: 500 }}>🔌 Coming soon — connector integrations will power live data from these services. Toggles saved for when ready.</p>
-        </div>
-        <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Trip With Me uses intelligent routing to connect the right services automatically. Toggle individual connectors on/off.</p>
+        <div style={css.sectionTitle}>Connected services ({connectedList.length})</div>
+        <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Live integrations powering your trips right now.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
-          {Object.entries(CONNECTORS).map(([key, c]) => (
+          {connectedList.map(([key, c]) => (
             <div key={key} onClick={() => setSettingsToggles(prev => ({ ...prev, [key]: !prev[key] }))}
               style={{ background: settingsToggles[key] ? T.s : T.s2, border: `.5px solid ${settingsToggles[key] ? T.a : T.border}`, borderRadius: T.rs, padding: "10px 8px", textAlign: "center", fontSize: 11, color: settingsToggles[key] ? T.t1 : T.t3, cursor: "pointer", transition: "all .15s", opacity: settingsToggles[key] ? 1 : 0.5 }}>
               <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
               <div style={{ fontWeight: 500, fontSize: 10, lineHeight: 1.3 }}>{c.name.split(" / ")[0]}</div>
-              <div style={{ fontSize: 9, color: settingsToggles[key] ? T.a : T.t3, marginTop: 2 }}>{settingsToggles[key] ? "Active" : "Off"}</div>
+              <div style={{ fontSize: 9, color: settingsToggles[key] ? T.green : T.t3, marginTop: 2 }}>{settingsToggles[key] ? "Connected" : "Off"}</div>
+            </div>
+          ))}
+        </div>
+        <div style={css.sectionTitle}>Coming soon ({comingSoonList.length})</div>
+        <p style={{ fontSize: 12, color: T.t3, marginBottom: 8 }}>Planned integrations — toggles saved for when ready.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
+          {comingSoonList.map(([key, c]) => (
+            <div key={key}
+              style={{ background: T.s2, border: `.5px solid ${T.border}`, borderRadius: T.rs, padding: "10px 8px", textAlign: "center", fontSize: 11, color: T.t3, opacity: 0.5 }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
+              <div style={{ fontWeight: 500, fontSize: 10, lineHeight: 1.3 }}>{c.name.split(" / ")[0]}</div>
+              <div style={{ fontSize: 9, color: T.t3, marginTop: 2 }}>Coming soon</div>
             </div>
           ))}
         </div>

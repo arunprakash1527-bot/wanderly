@@ -193,7 +193,7 @@ export function HomeScreen() {
           <p style={{ fontSize: 12, color: T.t3, marginTop: 4 }}>Start planning in under a minute</p>
         </div>
 
-        <p style={{ textAlign: "center", fontSize: 10, color: T.t3, marginTop: 20, opacity: 0.6 }}>✨ Powered by intelligent routing · 18 connected services</p>
+        <p style={{ textAlign: "center", fontSize: 10, color: T.t3, marginTop: 20, opacity: 0.6 }}>✨ Powered by intelligent routing · 7 connected services</p>
       </div>
       <TabBar active="home" onNav={navigate} />
     </div>
