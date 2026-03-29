@@ -372,11 +372,12 @@ export function ChatProvider({ children }) {
               const points = carCount > 1 && c.totalPoints ? (c.totalPoints >= carCount ? ` ✅ Can charge ${carCount} cars` : ` ⚠️ Only ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}`) : "";
               const cost = c.usageCost ? `\n   💰 ${c.usageCost}` : c.usageType ? `\n   💰 ${c.usageType}` : "";
               const facilities = c.facilities?.length > 0 ? `\n   🏪 ${c.facilities.join(" · ")}` : "";
+              const addr = c.address ? `\n   📍 ${c.address}` : "";
               const operator = c.operator ? `\n   🏢 ${c.operator}` : "";
               const rating = isGoogleFallback && c.rating ? ` · ${c.rating}★` : "";
               const open = isGoogleFallback ? (c.openNow === true ? " · Open now" : c.openNow === false ? " · Closed" : "") : "";
               const zapLink = c.zapMapLink ? ` · [Zap-Map Live](${c.zapMapLink})` : "";
-              return `${i + 1}. **${c.name}**${dist}${status}${rating}${open}${speed}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink})${zapLink}`;
+              return `${i + 1}. **${c.name}**${dist}${status}${rating}${open}${speed}${addr}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink})${zapLink}`;
             }).join("\n\n");
 
             const connectorNote = !connectorType ? "\n\n🔌 **Need a specific connector?** Ask me for CCS, CHAdeMO, or Type 2 chargers." : "";
@@ -468,11 +469,12 @@ export function ChatProvider({ children }) {
               const points = carCount > 1 && c.totalPoints ? (c.totalPoints >= carCount ? ` ✅ Can charge ${carCount} cars` : ` ⚠️ Only ${c.totalPoints} point${c.totalPoints > 1 ? "s" : ""}`) : "";
               const cost = c.usageCost ? `\n   💰 ${c.usageCost}` : c.usageType ? `\n   💰 ${c.usageType}` : "";
               const facilities = c.facilities?.length > 0 ? `\n   🏪 ${c.facilities.join(" · ")}` : "";
+              const addr = c.address ? `\n   📍 ${c.address}` : "";
               const operator = c.operator ? `\n   🏢 ${c.operator}` : "";
               const rating = isGoogleFallback && c.rating ? ` · ${c.rating}★` : "";
               const open = isGoogleFallback ? (c.openNow === true ? " · Open now" : c.openNow === false ? " · Closed" : "") : "";
               const zapLink = c.zapMapLink ? ` · [Zap-Map Live](${c.zapMapLink})` : "";
-              return `${i + 1}. **${c.name}**${dist}${status}${rating}${open}${speed}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink})${zapLink}`;
+              return `${i + 1}. **${c.name}**${dist}${status}${rating}${open}${speed}${addr}${connectors}${points}${cost}${operator}${facilities}\n   [Navigate](${c.mapsLink})${zapLink}`;
             }).join("\n\n");
 
             const connectorNote = !connectorType ? "\n\n🔌 **Need a specific connector?** Ask me for CCS, CHAdeMO, or Type 2 chargers." : "";
