@@ -12,10 +12,8 @@
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
 
 const BASE_ESSENTIALS = [
-  { item: "Passport / ID", category: "documents", perPerson: true },
   { item: "Phone charger", category: "electronics" },
   { item: "Medications", category: "health", perPerson: true },
-  { item: "Travel insurance docs", category: "documents", perPerson: true },
   { item: "Cash + cards", category: "documents", perPerson: true },
 ];
 
@@ -321,22 +319,29 @@ export function generatePackingSuggestions(trip, intelligence) {
     if (UK_COUNTRIES.includes(c1) && UK_COUNTRIES.includes(c2)) return true;
     return false;
   };
-  if (!intelligence?.language) {
+  // ── Passport / ID — only add passport for international travel ──
+  {
     const startCountry = resolveCountry(trip.startLocation);
     const destPlaces = trip.places || [];
     const destCountries = destPlaces.map(p => resolveCountry(p)).filter(Boolean);
     const isForeign = startCountry && destCountries.length > 0 && destCountries.some(dc => !isSameCountryGroup(dc, startCountry));
-    if (isForeign) {
+    // Also check intelligence.language as a foreign indicator
+    const hasForeignLang = !!intelligence?.language;
+
+    if (isForeign || hasForeignLang) {
       const foreignDest = destPlaces.find(p => {
         const dc = resolveCountry(p);
         return dc && !isSameCountryGroup(dc, startCountry);
-      }) || destPlaces[0];
-      add("Passport", "documents", `International travel to ${foreignDest}`);
+      }) || destPlaces[0] || "destination";
+      add("Passport", "documents", `International travel to ${foreignDest}`, "everyone", adults.length);
       add("Travel insurance docs", "documents", `International travel to ${foreignDest}`);
       add("Foreign currency / travel card", "documents", `International travel to ${foreignDest}`);
       add("Plug adapter", "electronics", `International travel to ${foreignDest}`);
       add("Travel adapter (universal)", "electronics", `Different plug types in ${foreignDest}`);
       add("Copies of booking confirmations", "documents", `International travel to ${foreignDest}`);
+    } else {
+      // Domestic trip — photo ID is useful but passport not needed
+      add("Photo ID (driving licence)", "documents", "Domestic travel — for hotel check-in");
     }
   }
 
