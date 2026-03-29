@@ -982,8 +982,23 @@ export function ChatProvider({ children }) {
       const locMatch = lower.replace(/\s+(?:on|for|during)\s+day\s*\d+/i, '').match(/\b(?:in|at|near|around)\s+([a-z\s]+?)$/i);
       const dayMatch = lower.match(/day\s*(\d+)/);
       const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
-      const queryLoc = locMatch ? locMatch[1].trim() : null;
+      let queryLoc = locMatch ? locMatch[1].trim() : null;
       const dayLoc = locForDay(targetDay);
+
+      // ── Resolve stay names to their actual location ──
+      // e.g. "near millwood manor" → resolves to the stay's location (Windermere, Lake District, etc.)
+      if (queryLoc) {
+        const matchedStay = (trip?.stays || []).find(s =>
+          s.name && queryLoc.toLowerCase().includes(s.name.toLowerCase().split(/\s+/).slice(0, 2).join(" ")) ||
+          s.name && s.name.toLowerCase().includes(queryLoc.toLowerCase())
+        );
+        if (matchedStay) {
+          // Use stay's location/address, or infer from places list
+          const stayGeoLoc = matchedStay.location || matchedStay.address || (trip?.places || []).find(p => findCoords(p)) || dayLoc;
+          queryLoc = stayGeoLoc;
+        }
+      }
+
       const searchLoc = queryLoc || dayLoc;
 
       const isFoodQuery = /\b(lunch|dinner|breakfast|brunch|food|eat|restaurant|cafe|pub|bar|meal|snack|dine|dining)/i.test(lower);
@@ -1032,7 +1047,14 @@ export function ChatProvider({ children }) {
             saveChatMessage(trip?.dbId, 'ai', reply);
             return;
           }
-        } catch (e) { /* Places API failed — fall through to static */ }
+        } catch (e) { console.warn('Places API failed for food query:', e.message); }
+        // Food query but no Places results — give a helpful response instead of falling through to activities
+        const locLabel = searchLoc.charAt(0).toUpperCase() + searchLoc.slice(1);
+        const fallbackReply = `🍽️ I couldn't find specific restaurants near **${locLabel}** right now. Try:\n\n• **"restaurants near ${dayLoc}"** (broader area)\n• **"restaurants nearby"** (uses your GPS)\n• Ask me for a specific cuisine: **"Italian restaurants in ${dayLoc}"**`;
+        setTripChatTyping(false);
+        setTripChatMessages(prev => [...prev, { role: "ai", text: fallbackReply }]);
+        saveChatMessage(trip?.dbId, 'ai', fallbackReply);
+        return;
       }
 
       // ── Non-food activity queries: use static location activities ──
