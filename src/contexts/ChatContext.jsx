@@ -10,6 +10,8 @@ import { fetchTripIntelligence, buildSmartGreeting, buildSmartTips } from "../ut
 import { getLocationActivities, estimateTravelHours, findCoords } from "../utils/locationHelpers";
 import { getRestaurantBookingMarkdown } from "../utils/bookingLinks";
 import { TEMPLATE_PROFILES } from "../constants/templateProfiles";
+import { useExpenses } from "./ExpenseContext";
+import { getCatInfo } from "../constants/expenses";
 
 const ChatContext = createContext(null);
 
@@ -94,6 +96,7 @@ export function ChatProvider({ children }) {
   const { user } = useAuth();
   const { screen, showToast, navigate } = useNavigation();
   const { createdTrips, setCreatedTrips, selectedCreatedTrip, selectedDay, setSelectedDay, setTripDetailTab, findSmartSlot, addTimelineItem, logActivity, buildTripSummary, generateAndSetTimeline, saveTimelineToDB } = useTrip();
+  const { expenses, calculateSettlement } = useExpenses();
 
   // Chat state
   const [chatMessages, setChatMessages] = useState([]);
@@ -1105,6 +1108,72 @@ export function ChatProvider({ children }) {
       // If no activities found locally, let it fall through to Claude API
     }
 
+    // ── Budget / cost / spending queries — pull real expense data ──
+    if (/\b(budget|cost|spend|spending|expense|money|how much|total|balance|owe|owes|settlement|split)\b/i.test(lower)
+      && !/\b(add|include|plug|remove|delete)\b/i.test(lower)) {
+      const tripBudget = trip?.budget || "";
+      const totalSpent = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+      // Per-person spending (what each person owes based on splits)
+      const perPerson = {};
+      const paidBy = {};
+      expenses.forEach(exp => {
+        paidBy[exp.paid_by] = (paidBy[exp.paid_by] || 0) + (parseFloat(exp.amount) || 0);
+        (exp.splits || []).forEach(s => {
+          perPerson[s.participant_name] = (perPerson[s.participant_name] || 0) + (parseFloat(s.share_amount) || 0);
+        });
+      });
+
+      // Category breakdown
+      const byCategory = {};
+      expenses.forEach(e => {
+        byCategory[e.category] = (byCategory[e.category] || 0) + (parseFloat(e.amount) || 0);
+      });
+      const categoryLines = Object.entries(byCategory)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, amt]) => {
+          const info = getCatInfo(cat);
+          const pct = totalSpent > 0 ? Math.round((amt / totalSpent) * 100) : 0;
+          return `${info.icon} **${info.label}:** £${amt.toFixed(2)} (${pct}%)`;
+        });
+
+      // Settlement
+      const settlements = calculateSettlement(expenses);
+
+      let reply;
+      if (expenses.length === 0) {
+        reply = `💰 **Trip Budget${tripBudget ? `: ${tripBudget}` : ""}**\n\nNo expenses logged yet. Add expenses via the **Expenses** tab to track spending.\n\nOnce you do, ask me "budget" again and I'll show:\n• Total spent vs budget\n• Per-person breakdown\n• Category split\n• Who owes whom`;
+      } else {
+        const budgetLine = tripBudget ? `\n📊 **Budget:** ${tripBudget}` : "";
+        const budgetParsed = parseFloat(String(tripBudget).replace(/[^0-9.]/g, ''));
+        const remainingLine = !isNaN(budgetParsed) && budgetParsed > 0
+          ? `\n${totalSpent <= budgetParsed ? "✅" : "⚠️"} **Remaining:** £${(budgetParsed - totalSpent).toFixed(2)}${totalSpent > budgetParsed ? " (over budget!)" : ""}`
+          : "";
+
+        const personLines = Object.entries(perPerson)
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, owes]) => {
+            const paid = paidBy[name] || 0;
+            return `• **${name}:** owes £${owes.toFixed(2)}${paid > 0 ? ` · paid £${paid.toFixed(2)}` : ""}`;
+          });
+
+        const settlementLines = settlements.length > 0
+          ? settlements.map(s => `• **${s.from}** → **${s.to}:** £${s.amount.toFixed(2)}`)
+          : ["• ✅ All settled!"];
+
+        reply = `💰 **Trip Budget Summary**${budgetLine}\n\n`
+          + `**Total spent:** £${totalSpent.toFixed(2)} across ${expenses.length} expense${expenses.length !== 1 ? "s" : ""}${remainingLine}\n\n`
+          + `**📂 By category:**\n${categoryLines.join("\n")}\n\n`
+          + `**👤 Per person:**\n${personLines.join("\n")}\n\n`
+          + `**🤝 Settlements:**\n${settlementLines.join("\n")}`;
+      }
+
+      setTripChatTyping(false);
+      setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+      saveChatMessage(trip?.dbId, 'ai', reply);
+      return;
+    }
+
     // ── Handle "add to itinerary" commands locally BEFORE API call ──
     // This ensures the timeline is actually mutated, not just acknowledged in text.
     if (/\b(add|include|plug)\b/i.test(lower)) {
@@ -1405,7 +1474,20 @@ export function ChatProvider({ children }) {
       } else if (lower.includes("remove") || lower.includes("delete") || lower.includes("cancel")) {
         reply = `Tap ✏️ on any item, then 🗑️ to remove it. Which activity would you like to remove?`;
       } else if (lower.includes("budget") || lower.includes("cost") || lower.includes("spend") || lower.includes("price")) {
-        reply = `${contextLine}Your **${budget || "unspecified"}** budget shapes all recommendations:\n• 🍽️ ${budgetLabel} restaurants (${foodPref})\n• 🎯 ${budgetLabel} activities\n• 🏨 Stays: ${trip?.stayNames?.join(", ") || "not set"}\n\nTrack actual costs by marking items as "Booked" and entering the price.`;
+        const totalSpent = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+        if (expenses.length > 0) {
+          const byCategory = {};
+          expenses.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + (parseFloat(e.amount) || 0); });
+          const catLines = Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
+            const info = getCatInfo(cat);
+            return `${info.icon} ${info.label}: £${amt.toFixed(2)}`;
+          }).join("\n");
+          const budgetParsed = parseFloat(String(budget).replace(/[^0-9.]/g, ''));
+          const remainLine = !isNaN(budgetParsed) && budgetParsed > 0 ? `\n📊 Budget: ${budget} · Remaining: £${(budgetParsed - totalSpent).toFixed(2)}` : "";
+          reply = `💰 **Spent so far:** £${totalSpent.toFixed(2)} across ${expenses.length} expenses${remainLine}\n\n${catLines}\n\nSay **"who owes what"** for settlement details.`;
+        } else {
+          reply = `💰 **Budget: ${budget || "not set"}**\n\nNo expenses logged yet. Add them in the **Expenses** tab, then ask me again!`;
+        }
       } else if (lower.includes("suggest") || lower.includes("activit") || lower.includes("things to do") || lower.includes("what can") || lower.includes("what should") || lower.includes("recommend") || lower.includes("ideas")) {
         const dayLoc = locForDay(selectedDay);
         const locActs = getLocationActivities(dayLoc);

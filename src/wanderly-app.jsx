@@ -60,13 +60,13 @@ export default function TripWithMeApp() {
         <NavigationProvider>
           <TripProvider>
             <WizardProvider>
-              <ChatProvider>
-                <ExpenseProvider>
+              <ExpenseProvider>
+                <ChatProvider>
                   <MemoriesProvider>
                       <AppShell />
                   </MemoriesProvider>
-                </ExpenseProvider>
-              </ChatProvider>
+                </ChatProvider>
+              </ExpenseProvider>
             </WizardProvider>
           </TripProvider>
         </NavigationProvider>
