@@ -66,10 +66,33 @@ export function TripDataProvider({ children }) {
     if (dbWriteLockRef.current) return;
     setSyncing(true);
     try {
-      const { data: trips, error } = await supabase
-        .from('trips')
-        .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
-        .order('created_at', { ascending: false });
+      // Fetch trips where user is the lead OR is listed as a traveller
+      const [ownRes, memberRes] = await Promise.all([
+        supabase
+          .from('trips')
+          .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
+          .eq('lead_user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('trip_travellers')
+          .select('trip_id')
+          .eq('user_id', user.id),
+      ]);
+      if (ownRes.error) throw ownRes.error;
+      const memberTripIds = (memberRes.data || []).map(r => r.trip_id).filter(Boolean);
+      // Fetch any trips user is a traveller on but didn't create
+      const ownIds = new Set((ownRes.data || []).map(t => t.id));
+      const extraIds = memberTripIds.filter(id => !ownIds.has(id));
+      let extraTrips = [];
+      if (extraIds.length > 0) {
+        const { data } = await supabase
+          .from('trips')
+          .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
+          .in('id', extraIds);
+        extraTrips = data || [];
+      }
+      const trips = [...(ownRes.data || []), ...extraTrips];
+      const error = null;
 
       if (error) throw error;
 
