@@ -87,6 +87,20 @@ export function mapTripForInsert(tripData, userId) {
   };
 }
 
+// Minimal insert row — fallback if full insert fails (missing columns)
+export function mapTripForInsertMinimal(tripData, userId) {
+  return {
+    name: tripData.name,
+    brief: tripData.brief,
+    start_date: tripData.rawStart || null,
+    end_date: tripData.rawEnd || null,
+    places: tripData.places,
+    travel_modes: Array.from(tripData.travel || []),
+    status: 'draft',
+    lead_user_id: userId,
+  };
+}
+
 /**
  * Map app travellers to Supabase trip_travellers insert rows
  */

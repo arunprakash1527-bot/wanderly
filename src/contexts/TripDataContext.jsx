@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
-import { mapTripFromDB, mapTripForInsert, mapTravellersForInsert, mapStaysForInsert, mapPrefsForInsert } from "../utils/tripMappers";
+import { mapTripFromDB, mapTripForInsert, mapTripForInsertMinimal, mapTravellersForInsert, mapStaysForInsert, mapPrefsForInsert } from "../utils/tripMappers";
 import { generateMultiDayTimeline } from "../utils/timelineGenerator";
 import { useAuth } from "./AuthContext";
 import { useNavigation } from "./NavigationContext";
@@ -136,13 +136,24 @@ export function TripDataProvider({ children }) {
     if (!user || user.id === 'demo') return tripData;
 
     try {
-      const { data: trip, error: tripError } = await supabase
+      let trip, tripError;
+      // Try full insert first, fall back to minimal if columns don't exist
+      ({ data: trip, error: tripError } = await supabase
         .from('trips')
         .insert(mapTripForInsert(tripData, user.id))
         .select()
-        .single();
+        .single());
 
-      if (tripError) throw tripError;
+      if (tripError) {
+        // Retry with minimal columns (without start_location, budget, summary)
+        console.warn('Full insert failed, retrying with minimal columns:', tripError.message);
+        ({ data: trip, error: tripError } = await supabase
+          .from('trips')
+          .insert(mapTripForInsertMinimal(tripData, user.id))
+          .select()
+          .single());
+        if (tripError) throw tripError;
+      }
 
       const travellerRows = mapTravellersForInsert(tripData, trip.id, user.id);
       if (travellerRows.length > 0) {
