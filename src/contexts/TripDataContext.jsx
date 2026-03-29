@@ -92,9 +92,27 @@ export function TripDataProvider({ children }) {
               activationPrefs: localTrip.activationPrefs,
               // Preserve activity log (not always in DB)
               activity: dbTrip.activity?.length > 0 ? dbTrip.activity : (localTrip.activity || []),
+              // Preserve startLocation/budget if DB has none but local does
+              startLocation: dbTrip.startLocation || localTrip.startLocation || "",
+              budget: dbTrip.budget || localTrip.budget || "",
+              brief: dbTrip.brief || localTrip.brief || "",
             };
           });
         });
+
+        // Backfill: push local data to DB for fields that weren't persisted on creation
+        for (const dbTrip of mapped) {
+          const localTrip = createdTrips.find(lt => lt.dbId === dbTrip.dbId || lt.id === dbTrip.id);
+          if (!localTrip || !dbTrip.dbId) continue;
+          const patch = {};
+          if (!dbTrip.startLocation && localTrip.startLocation) patch.start_location = localTrip.startLocation;
+          if (!dbTrip.budget && localTrip.budget) patch.budget = localTrip.budget;
+          if (!dbTrip.brief && localTrip.brief) patch.brief = localTrip.brief;
+          if (Object.keys(patch).length > 0) {
+            patch.updated_at = new Date().toISOString();
+            supabase.from('trips').update(patch).eq('id', dbTrip.dbId).then(() => {});
+          }
+        }
       }
     } catch (err) {
       console.error('Error loading trips:', err);
