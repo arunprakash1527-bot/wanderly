@@ -490,8 +490,9 @@ export function ChatProvider({ children }) {
       || (/\b(rain|cold|hot|warm|snow|wind|sunny|cloudy|storm|thunder|ice|frost|hail)\b/i.test(lower) && /\b(how|what|will|is|any|check|look|today|tomorrow|day\s*\d+|this week|expect)\b/i.test(lower));
     if (isWeatherQuery) {
       const weatherDayMatch = lower.match(/day\s*(\d+)/);
-      const weatherDay = weatherDayMatch ? parseInt(weatherDayMatch[1]) : selectedDay;
-      const weatherLoc = locForDay(weatherDay) || firstLoc;
+      const isTomorrow = /\btomorrow\b/i.test(lower);
+      const weatherDay = weatherDayMatch ? parseInt(weatherDayMatch[1]) : isTomorrow ? selectedDay + 1 : selectedDay;
+      const weatherLoc = mentionedLoc || locForDay(weatherDay) || firstLoc;
       const weatherCoords = findCoords(weatherLoc);
 
       setTypingContext("Checking weather...");
@@ -556,7 +557,7 @@ export function ChatProvider({ children }) {
     }
 
     // ── EV charger queries — Open Charge Map for detailed results ──
-    if (/ev|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
+    if (/\bev\b|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
       // Extract connector type preference from message, fall back to EV profile
       const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/);
       const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "") : evDefaultConnector;
@@ -767,8 +768,9 @@ export function ChatProvider({ children }) {
 
     // ── "Nearby" queries (restaurants, food, cafes, activities, petrol) — use GPS + Places API ──
     const isNearbyQuery = /nearby|nearest|near me|near here|around me|close by|closest/i.test(lower);
-    const isPlaceQuery = /restaurant|food|eat|dining|cafe|coffee|pub|bar|pizza|burger|takeaway|lunch|dinner|breakfast|brunch|supermarket|petrol|fuel|pharmacy|hospital|atm/i.test(lower);
-    if (isNearbyQuery || (isPlaceQuery && isNearbyQuery)) {
+    const isPlaceQuery = /restaurant|food|eat|dining|cafe|coffee|pub|bar|pizza|burger|takeaway|lunch|dinner|breakfast|brunch|supermarket|petrol|fuel|pharmacy|hospital|atm|playground|park|swimming|pool|play area/i.test(lower);
+    const hasPlaceVerb = /\b(find|search|look for|where(?:'s| is| are| can))\b/i.test(lower);
+    if (isNearbyQuery || (isPlaceQuery && hasPlaceVerb)) {
       // Determine search type from the query
       const searchType = /cafe|coffee/i.test(lower) ? "cafe"
         : /pub|bar/i.test(lower) ? "bar"
@@ -777,9 +779,12 @@ export function ChatProvider({ children }) {
         : /pharmacy|chemist/i.test(lower) ? "pharmacy"
         : /hospital|a&e|emergency/i.test(lower) ? "hospital"
         : /atm|cash/i.test(lower) ? "atm"
+        : /playground|play area/i.test(lower) ? "playground"
+        : /swimming|pool/i.test(lower) ? "swimming_pool"
+        : /park\b/i.test(lower) ? "park"
         : "restaurant";
-      const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType + "s";
-      const searchIcon = /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : "🍽️";
+      const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType === "swimming_pool" ? "swimming pools" : searchType === "play area" ? "play areas" : searchType + "s";
+      const searchIcon = /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : /playground|park|swimming|pool/i.test(lower) ? "🏞️" : "🍽️";
 
       setTypingContext(`Finding ${searchLabel}...`);
       const updateNearbyChat = addPlaceholder(`📍 Finding ${searchLabel} near you...`, trip?.dbId);
@@ -992,27 +997,39 @@ export function ChatProvider({ children }) {
     }
 
     // ── Handle "suggest/recommend activities" queries — show location activities ──
-    const isSuggestQuery = /\b(suggest|recommend|what(?:'s| is| are| can)|show me|list|things to do|activities|attractions|places to visit|can be done|ideas|what.+do\b)/i.test(lower)
+    const isSuggestQuery = /\b(suggest|recommend|what(?:'s| is| are| can)|where(?:'s| is| are| can| should)|show me|list|things to do|activities|attractions|places to visit|can be done|ideas|best|top|what.+do\b)/i.test(lower)
       && /\b(activit|attraction|thing|place|do\b|done|visit|see|sight|experience|idea|option|lunch|dinner|breakfast|brunch|food|eat|restaurant|cafe|meal|snack|pub|bar)/i.test(lower);
     if (isSuggestQuery) {
       // Extract location from the query
-      const locMatch = lower.replace(/\s+(?:on|for|during)\s+day\s*\d+/i, '').match(/\b(?:in|at|near|around)\s+([a-z\s]+?)$/i);
+      const locMatch = lower.replace(/\s+(?:on|for|during)\s+day\s*\d+/i, '').replace(/[?.!]+$/, '').match(/\b(?:in|at|near|around)\s+([a-z\s]+?)$/i);
       const dayMatch = lower.match(/day\s*(\d+)/);
-      const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
-      let queryLoc = locMatch ? locMatch[1].trim() : null;
+      const isTomorrowSuggest = /\btomorrow\b/i.test(lower);
+      const targetDay = dayMatch ? parseInt(dayMatch[1]) : isTomorrowSuggest ? selectedDay + 1 : selectedDay;
+      let queryLoc = locMatch ? locMatch[1].trim() : mentionedLoc;
       const dayLoc = locForDay(targetDay);
 
-      // ── Resolve stay names to their actual location ──
+      // ── Resolve stay names / pronouns to their actual location ──
       // e.g. "near millwood manor" → resolves to the stay's location (Windermere, Lake District, etc.)
+      // Also handles "our hotel", "the hotel", "our stay", "our accommodation"
       if (queryLoc) {
-        const matchedStay = (trip?.stays || []).find(s =>
-          s.name && queryLoc.toLowerCase().includes(s.name.toLowerCase().split(/\s+/).slice(0, 2).join(" ")) ||
-          s.name && s.name.toLowerCase().includes(queryLoc.toLowerCase())
-        );
-        if (matchedStay) {
-          // Use stay's location/address, or infer from places list
-          const stayGeoLoc = matchedStay.location || matchedStay.address || (trip?.places || []).find(p => findCoords(p)) || dayLoc;
-          queryLoc = stayGeoLoc;
+        const isHotelPronoun = /\b(our|the|my)\s+(hotel|stay|accommodation|b&b|hostel|lodge|cabin|airbnb|villa|cottage)\b/i.test(queryLoc);
+        if (isHotelPronoun) {
+          const currentStay = (trip?.stays || []).find((s, i) => {
+            if (!s.checkIn || !s.checkOut || !trip?.rawStart) return i === 0;
+            const tripStart = new Date(trip.rawStart + "T12:00:00");
+            const dayDate = new Date(tripStart.getTime() + (targetDay - 1) * 86400000).toISOString().split("T")[0];
+            return s.checkIn <= dayDate && s.checkOut > dayDate;
+          }) || (trip?.stays || [])[0];
+          queryLoc = currentStay?.location || currentStay?.address || dayLoc;
+        } else {
+          const matchedStay = (trip?.stays || []).find(s =>
+            s.name && queryLoc.toLowerCase().includes(s.name.toLowerCase().split(/\s+/).slice(0, 2).join(" ")) ||
+            s.name && s.name.toLowerCase().includes(queryLoc.toLowerCase())
+          );
+          if (matchedStay) {
+            const stayGeoLoc = matchedStay.location || matchedStay.address || (trip?.places || []).find(p => findCoords(p)) || dayLoc;
+            queryLoc = stayGeoLoc;
+          }
         }
       }
 
