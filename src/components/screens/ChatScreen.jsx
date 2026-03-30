@@ -335,8 +335,9 @@ export function ChatScreen() {
       const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType === "electric_vehicle_charging_station" ? "EV chargers" : searchType + "s";
       const searchIcon = /ev|charger|charging/i.test(lower) ? "⚡" : /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : "🍽️";
       const fallbackLoc = DAYS[selectedDay - 1]?.location || TRIP.places?.[0] || "your destination";
+      const placeholderId = `ph_${Date.now()}`;
 
-      setChatMessages(prev => [...prev, { role: "ai", text: `📍 Finding ${searchLabel} near your current location...` }]);
+      setChatMessages(prev => [...prev, { id: placeholderId, role: "ai", text: `📍 Finding ${searchLabel} near your current location...` }]);
 
       const handleResults = async (lat, lng, locLabel) => {
         try {
@@ -368,8 +369,9 @@ export function ChatScreen() {
         setChatTyping(false);
         setChatMessages(prev => {
           const updated = [...prev];
-          const idx = updated.findLastIndex(m => m.text.includes(`Finding ${searchLabel} near`));
-          if (idx >= 0) updated[idx] = { role: "ai", text: reply };
+          let idx = -1;
+          for (let i = updated.length - 1; i >= 0; i--) { if (updated[i].id === placeholderId) { idx = i; break; } }
+          if (idx >= 0) updated[idx] = { ...updated[idx], text: reply };
           else updated.push({ role: "ai", text: reply });
           return updated;
         });
@@ -400,22 +402,36 @@ export function ChatScreen() {
 
     try {
       const gps = isPlaceSearch ? await getGpsContext() : null;
+      // Use real user trip data if available, otherwise fall back to demo TRIP
+      const realTrip = selectedCreatedTrip || createdTrips[0];
+      const tripContext = realTrip ? {
+        dates: realTrip.start && realTrip.end ? `${realTrip.start} – ${realTrip.end}` : null,
+        places: realTrip.places,
+        travelMode: Array.isArray(realTrip.travel) ? realTrip.travel.join(", ") : realTrip.travel,
+        travellers: realTrip.travellers,
+        stays: realTrip.stays,
+        budget: realTrip.budget,
+        brief: realTrip.brief || null,
+        currentDay: selectedDay,
+        currentLocation: realTrip.places?.[(selectedDay - 1) % (realTrip.places?.length || 1)] || "your destination",
+        ...(gps ? { gpsLocation: gps } : {}),
+      } : {
+        tripName: TRIP.name,
+        dates: `${TRIP.start} – ${TRIP.end} ${TRIP.year}`,
+        places: TRIP.places,
+        travelMode: TRIP.travelMode,
+        travellers: TRIP.travellers,
+        stays: TRIP.stays,
+        currentDay: selectedDay,
+        currentLocation: DAYS[selectedDay - 1]?.location,
+        ...(gps ? { gpsLocation: gps } : {}),
+      };
       const res = await authFetch(API.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: msg.trim(),
-          tripContext: {
-            tripName: TRIP.name,
-            dates: `${TRIP.start} – ${TRIP.end} ${TRIP.year}`,
-            places: TRIP.places,
-            travelMode: TRIP.travelMode,
-            travellers: TRIP.travellers,
-            stays: TRIP.stays,
-            currentDay: selectedDay,
-            currentLocation: DAYS[selectedDay - 1]?.location,
-            ...(gps ? { gpsLocation: gps } : {}),
-          },
+          tripContext,
           chatHistory: chatMessages.slice(-8),
         }),
       });
@@ -425,16 +441,17 @@ export function ChatScreen() {
         setChatMessages(prev => [...prev, { role: "ai", text: data.reply }]);
         return;
       }
-      // API ok but empty — fall through to local (typing indicator cleared below)
-    } catch (e) { /* API unavailable — fall back to local */ }
+      // API ok but empty — fall through to local
+      setChatTyping(false);
+    } catch (e) {
+      /* API unavailable — fall back to local */
+      setChatTyping(false);
+    }
 
     // Local fallback (always clears typing indicator)
     const response = findResponse(msg.trim());
-    const delay = Math.min(2500, Math.max(800, response.length * 6));
-    setTimeout(() => {
-      setChatTyping(false);
-      setChatMessages(prev => [...prev, { role: "ai", text: response }]);
-    }, delay);
+    setChatTyping(false);
+    setChatMessages(prev => [...prev, { role: "ai", text: response }]);
   };
 
   // Day-aware quick action chips — adapt to conversation flow
