@@ -236,8 +236,8 @@ export function ChatProvider({ children }) {
   };
 
   // ─── Trip Chat Handler ───
-  const handleTripChat = async (tripId) => {
-    const msg = tripChatInput.trim();
+  const handleTripChat = async (tripId, overrideMsg) => {
+    const msg = (overrideMsg || tripChatInput).trim();
     if (!msg) return;
     setTripChatMessages(prev => [...prev, { id: msgId(), role: "user", text: msg }]);
     setTripChatInput("");
@@ -1307,9 +1307,10 @@ export function ChatProvider({ children }) {
           logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
         }
         setSelectedDay(targetDay);
+        const addDayLoc = locForDay(targetDay) || firstLoc;
         const addReply = replacedTitle
-          ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust.`
-          : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust the time.`;
+          ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${addDayLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust.`
+          : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${addDayLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust the time.`;
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: addReply }]);
         saveChatMessage(trip?.dbId, 'ai', addReply);
@@ -1519,10 +1520,10 @@ export function ChatProvider({ children }) {
     if (!ref) return;
     // Remove the failed AI response
     setTripChatMessages(prev => prev.filter(m => !m.failed));
-    // Re-inject the original message and re-trigger
-    setTripChatInput(ref.msg);
+    setTripChatInput("");
     lastFailedMsgRef.current = null;
-    setTimeout(() => handleTripChat(ref.tripId), 50);
+    // Pass the message directly to avoid React state flush race condition
+    handleTripChat(ref.tripId, ref.msg);
   };
 
   // ─── Generate smart follow-up chips based on last AI response ───
