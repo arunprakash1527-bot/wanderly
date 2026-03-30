@@ -186,8 +186,13 @@ export function TripDataProvider({ children }) {
 
       const stayRows = mapStaysForInsert(tripData.stays, trip.id);
       if (stayRows.length > 0) {
-        const { error: sErr } = await supabase.from('trip_stays').insert(stayRows);
-        if (sErr) console.error('Error saving stays:', sErr);
+        let { error: sErr } = await supabase.from('trip_stays').insert(stayRows);
+        if (sErr) {
+          console.warn('Full stays insert failed, retrying without extended columns:', sErr.message);
+          const minimalRows = stayRows.map(({ check_in, check_out, cost, booking_ref, address, ...rest }) => rest);
+          const { error: retryErr } = await supabase.from('trip_stays').insert(minimalRows);
+          if (retryErr) console.error('Error saving stays (both attempts failed):', retryErr);
+        }
       }
 
       const prefsRow = mapPrefsForInsert(tripData.prefs, trip.id);
@@ -236,12 +241,27 @@ export function TripDataProvider({ children }) {
       }).eq('id', tripId);
       if (tripError) throw tripError;
 
-      // Replace stays: delete old, insert new (must happen atomically from UI perspective)
-      await supabase.from('trip_stays').delete().eq('trip_id', tripId);
+      // Replace stays: insert new first, only delete old if insert succeeds
       const stayRows = mapStaysForInsert(tripData.stays, tripId);
       if (stayRows.length > 0) {
-        const { error: sErr } = await supabase.from('trip_stays').insert(stayRows);
-        if (sErr) console.error('Error saving stays:', sErr);
+        // Try full insert first
+        let { data: newStays, error: sErr } = await supabase.from('trip_stays').insert(stayRows).select('id');
+        if (sErr) {
+          console.warn('Full stays insert failed, retrying without extended columns:', sErr.message);
+          // Retry with only base columns (in case DB schema is missing check_in, check_out, etc.)
+          const minimalRows = stayRows.map(({ check_in, check_out, cost, booking_ref, address, ...rest }) => rest);
+          ({ data: newStays, error: sErr } = await supabase.from('trip_stays').insert(minimalRows).select('id'));
+        }
+        if (!sErr && newStays?.length > 0) {
+          // Insert succeeded — delete old stays (exclude newly inserted IDs)
+          const newIds = newStays.map(s => s.id);
+          await supabase.from('trip_stays').delete().eq('trip_id', tripId).not('id', 'in', `(${newIds.join(',')})`);
+        } else if (sErr) {
+          console.error('Error saving stays (both attempts failed):', sErr);
+          // Do NOT delete old stays — preserve existing data
+        }
+      } else {
+        await supabase.from('trip_stays').delete().eq('trip_id', tripId);
       }
 
       // Replace travellers: delete old, insert new
@@ -315,6 +335,49 @@ export function TripDataProvider({ children }) {
       console.error('Error joining trip:', err);
       return false;
     }
+  };
+
+  // ─── Remove Traveller ───
+  const removeTraveller = async (tripDbId, traveller) => {
+    // Update local state immediately
+    setCreatedTrips(prev => prev.map(t => {
+      if (t.dbId !== tripDbId && t.id !== tripDbId) return t;
+      const travellers = { ...t.travellers };
+      const removeFrom = (list) => (list || []).filter(a => a.dbId !== traveller.dbId);
+      travellers.adults = removeFrom(travellers.adults);
+      travellers.olderKids = removeFrom(travellers.olderKids);
+      travellers.youngerKids = removeFrom(travellers.youngerKids);
+      travellers.infants = removeFrom(travellers.infants);
+      return { ...t, travellers };
+    }));
+    setSelectedCreatedTrip(prev => {
+      if (!prev || (prev.dbId !== tripDbId && prev.id !== tripDbId)) return prev;
+      const travellers = { ...prev.travellers };
+      const removeFrom = (list) => (list || []).filter(a => a.dbId !== traveller.dbId);
+      travellers.adults = removeFrom(travellers.adults);
+      travellers.olderKids = removeFrom(travellers.olderKids);
+      travellers.youngerKids = removeFrom(travellers.youngerKids);
+      travellers.infants = removeFrom(travellers.infants);
+      return { ...prev, travellers };
+    });
+    // Delete from DB
+    if (user && user.id !== 'demo' && traveller.dbId) {
+      try {
+        const { error } = await supabase.from('trip_travellers').delete().eq('id', traveller.dbId);
+        if (error) {
+          console.error('Error removing traveller:', error);
+          showToast("Failed to remove — try again", "error");
+          loadTripsFromDB(); // Re-sync on failure
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error('Error removing traveller:', err);
+        showToast("Failed to remove — try again", "error");
+        return false;
+      }
+    }
+    return true;
   };
 
   // ─── Build Trip Summary ───
@@ -555,10 +618,13 @@ export function TripDataProvider({ children }) {
           setCreatedTrips(prev => prev.map(t => {
             if (t.dbId === newTraveller.trip_id) {
               const role = newTraveller.role;
-              const entry = { name: newTraveller.name, dbId: newTraveller.id, email: newTraveller.email || "" };
+              const entry = { name: newTraveller.name, dbId: newTraveller.id, email: newTraveller.email || "", isClaimed: newTraveller.is_claimed, claimedUserId: newTraveller.user_id || null };
               const travellers = { ...t.travellers };
+              // Check for duplicate — skip if traveller with same dbId already exists
+              const allExisting = [...(travellers.adults || []), ...(travellers.olderKids || []), ...(travellers.youngerKids || []), ...(travellers.infants || [])];
+              if (allExisting.some(a => a.dbId === newTraveller.id)) return t;
               if (role === 'lead' || role === 'adult') {
-                travellers.adults = [...(travellers.adults || []), { ...entry, isLead: role === 'lead', isClaimed: newTraveller.is_claimed }];
+                travellers.adults = [...(travellers.adults || []), { ...entry, isLead: role === 'lead' }];
               } else if (role === 'child_older' || role === 'teen') {
                 travellers.olderKids = [...(travellers.olderKids || []), { ...entry, age: newTraveller.age || 14 }];
               } else if (role === 'child_younger' || role === 'child') {
@@ -573,8 +639,24 @@ export function TripDataProvider({ children }) {
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trip_travellers' }, (payload) => {
-        if (payload.new?.is_claimed) {
-          showToast(`${payload.new.name || "Someone"} joined the trip!`);
+        if (payload.new) {
+          const updated = payload.new;
+          // Update local traveller state when a slot is claimed
+          setCreatedTrips(prev => prev.map(t => {
+            if (t.dbId !== updated.trip_id) return t;
+            const travellers = { ...t.travellers };
+            const updateList = (list) => (list || []).map(a =>
+              a.dbId === updated.id ? { ...a, name: updated.name || a.name, isClaimed: updated.is_claimed && !!updated.user_id, claimedUserId: updated.user_id || null } : a
+            );
+            travellers.adults = updateList(travellers.adults);
+            travellers.olderKids = updateList(travellers.olderKids);
+            travellers.youngerKids = updateList(travellers.youngerKids);
+            travellers.infants = updateList(travellers.infants);
+            return { ...t, travellers };
+          }));
+          if (updated.is_claimed) {
+            showToast(`${updated.name || "Someone"} joined the trip!`);
+          }
         }
       })
       .subscribe();
@@ -586,6 +668,12 @@ export function TripDataProvider({ children }) {
   useEffect(() => {
     if (user && user.id !== 'demo') {
       loadTripsFromDB();
+    } else if (user && user.id === 'demo') {
+      // Guest mode: restore trips from offline cache so they persist across refreshes
+      const cached = getOfflineTrips();
+      if (cached && cached.length > 0) {
+        setCreatedTrips(cached);
+      }
     }
   }, [user, loadTripsFromDB]);
 
@@ -695,6 +783,7 @@ export function TripDataProvider({ children }) {
     updateTripStatusInDB,
     lookupTripByShareCode,
     joinTripAsTraveller,
+    removeTraveller,
     buildTripSummary,
     createTrip,
     logActivity,

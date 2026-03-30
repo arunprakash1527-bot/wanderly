@@ -206,17 +206,29 @@ export function generateMultiDayTimeline(trip) {
   };
 
   const usedActivities = new Set();
-  const pickAct = (pool, dayIdx, avoid) => {
+  const usedPerDay = {};  // Track activities used on each day to avoid same-day repeats
+  const pickAct = (pool, dayIdx, avoid, dayNum) => {
     if (!pool || pool.length === 0) return null;
+    const dayKey = dayNum || 0;
+    if (!usedPerDay[dayKey]) usedPerDay[dayKey] = new Set();
     // Try to find an unused activity starting from dayIdx
     for (let offset = 0; offset < pool.length; offset++) {
       const candidate = pool[(dayIdx + offset) % pool.length];
       if (usedActivities.has(candidate)) continue;
       if (avoid && avoid.test(candidate.toLowerCase())) continue;
       usedActivities.add(candidate);
+      usedPerDay[dayKey].add(candidate);
       return candidate;
     }
-    // All used — fall back to rotation (allow repeat)
+    // All globally used — find one not used on THIS day (avoid back-to-back on same day)
+    for (let offset = 0; offset < pool.length; offset++) {
+      const candidate = pool[(dayIdx + offset) % pool.length];
+      if (usedPerDay[dayKey].has(candidate)) continue;
+      if (avoid && avoid.test(candidate.toLowerCase())) continue;
+      usedPerDay[dayKey].add(candidate);
+      return candidate;
+    }
+    // Truly exhausted — fall back to rotation
     let act = pool[dayIdx % pool.length];
     if (avoid && avoid.test(act.toLowerCase())) {
       act = pool.find(a => !avoid.test(a.toLowerCase())) || act;
@@ -291,7 +303,7 @@ export function generateMultiDayTimeline(trip) {
           const lunchHr = Math.min(exploreHr + 2, 15);
           items.push({ time: fmtTime(lunchHr), title: `Lunch — ${foodForDay(d - 1)}`, desc: `${budgetTier.label} ${wantsPubs ? "pub" : "restaurant"} nearby · ${budgetTier.price}`, group: "Everyone", color: T.coral });
           if (remainingHours >= 6) {
-            const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Evening stroll in ${loc}`;
+            const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest, d) || `Evening stroll in ${loc}`;
             items.push({ time: fmtTime(Math.min(lunchHr + 2, 17)), title: pmAct, desc: tags(`${loc} · Afternoon`), group: "Everyone", color: T.blue });
           }
         }
@@ -312,10 +324,10 @@ export function generateMultiDayTimeline(trip) {
       items.push({ time: fmtTime(8), title: "Breakfast", desc: departureStay, group: "Everyone", color: T.coral });
       items.push({ time: fmtTime(9, 30), title: "Check out & pack", desc: `${departureStay} · Bags ready`, group: "Everyone", color: T.t3 });
       if (!earlyFinish) {
-        const lastAct = pickAct(locPools.morning, nextActIdx(departureLoc, "m"), steepTest) || `Farewell stroll in ${departureLoc}`;
+        const lastAct = pickAct(locPools.morning, nextActIdx(departureLoc, "m"), steepTest, d) || `Farewell stroll in ${departureLoc}`;
         items.push({ time: fmtTime(10), title: lastAct, desc: tags(`${departureLoc} · Final morning`), group: "Everyone", color: T.blue });
         if (hasKids) {
-          const kidAct = pickAct(kidPool, nextActIdx(departureLoc, "k"), null);
+          const kidAct = pickAct(kidPool, nextActIdx(departureLoc, "k"), null, d);
           if (kidAct) items.push({ time: fmtTime(10, 30), title: kidAct, desc: tags(`${departureLoc} · Last day fun`), group: "Kids", color: T.pink });
         }
       }
@@ -361,19 +373,19 @@ export function generateMultiDayTimeline(trip) {
 
         const exploreStartHr = isNearby ? departHr + 1.5 : Math.min(departHr + 1 + legHrs + 0.5, 12);
         const mIdx = nextActIdx(loc, "m");
-        const morningAct = pickAct(locPools.morning, mIdx, steepTest) || `Explore ${loc}`;
+        const morningAct = pickAct(locPools.morning, mIdx, steepTest, d) || `Explore ${loc}`;
         items.push({ time: fmtTime(Math.min(exploreStartHr, 12)), title: morningAct, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
-          const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+          const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null, d) || `Family time in ${loc}`;
           items.push({ time: fmtTime(Math.min(exploreStartHr + 0.5, 12), 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
 
         items.push({ time: fmtTime(13), title: `Lunch in ${loc}`, desc: `${foodForDay(d - 1)} · ${budgetTier.label} · ${budgetTier.price}`, group: "Everyone", color: T.coral });
 
-        const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Afternoon in ${loc}`;
+        const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest, d) || `Afternoon in ${loc}`;
         items.push({ time: fmtTime(14, 30), title: pmAct, desc: tags(`${loc} · Afternoon`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
-          const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
+          const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null, d) || "Free play";
           items.push({ time: fmtTime(15), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
         }
 
@@ -407,10 +419,10 @@ export function generateMultiDayTimeline(trip) {
         items.push({ time: fmtTime(arriveHr), title: `Arrive ${loc}`, desc: `Check in at ${stayName} · Settle in`, group: "Everyone", color: T.a });
 
         const freeHr = Math.min(arriveHr + 1, 15);
-        const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || `Explore ${loc}`;
+        const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest, d) || `Explore ${loc}`;
         items.push({ time: fmtTime(freeHr), title: pmAct, desc: tags(`${loc} · First impressions`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         if (hasKids) {
-          const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+          const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null, d) || `Family time in ${loc}`;
           items.push({ time: fmtTime(freeHr, 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         }
       } else {
@@ -423,10 +435,10 @@ export function generateMultiDayTimeline(trip) {
 
         items.push({ time: fmtTime(startHour), title: "Breakfast", desc: stayName, group: "Everyone", color: T.coral });
         const mIdx = nextActIdx(loc, morningPrefix);
-        const morningAct = pickAct(tpKey === "adventure" ? (locPools.morning.filter(a => /hik|trail|climb|trek|kayak|cycl|outdoor/i.test(a)).length > 0 ? locPools.morning.filter(a => /hik|trail|climb|trek|kayak|cycl|outdoor/i.test(a)) : locPools.morning) : locPools.morning, mIdx, steepTest) || (tpKey === "romantic" ? `Leisurely explore ${loc}` : `Explore ${loc}`);
+        const morningAct = pickAct(tpKey === "adventure" ? (locPools.morning.filter(a => /hik|trail|climb|trek|kayak|cycl|outdoor/i.test(a)).length > 0 ? locPools.morning.filter(a => /hik|trail|climb|trek|kayak|cycl|outdoor/i.test(a)) : locPools.morning) : locPools.morning, mIdx, steepTest, d) || (tpKey === "romantic" ? `Leisurely explore ${loc}` : `Explore ${loc}`);
         if (hasKids) {
           items.push({ time: fmtTime(startHour + 2), title: morningAct, desc: morningDesc, group: "Adults", color: T.blue });
-          const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || `Family time in ${loc}`;
+          const kidAct = pickAct(kidPool, nextActIdx(loc, "k"), null, d) || `Family time in ${loc}`;
           items.push({ time: fmtTime(startHour + 2, 30), title: kidAct, desc: tags(`${loc} · Family-friendly`), group: "Kids", color: T.pink });
         } else {
           items.push({ time: fmtTime(startHour + 2), title: morningAct, desc: morningDesc, group: "Everyone", color: T.blue });
@@ -435,7 +447,7 @@ export function generateMultiDayTimeline(trip) {
         // Packed templates: add a second morning activity
         if (isPacked && tpMaxActivities && tpMaxActivities >= 6) {
           const m2Idx = nextActIdx(loc, "m");
-          const morningAct2 = pickAct(locPools.morning, m2Idx, steepTest) || `More of ${loc}`;
+          const morningAct2 = pickAct(locPools.morning, m2Idx, steepTest, d) || `More of ${loc}`;
           items.push({ time: fmtTime(startHour + 3.5), title: morningAct2, desc: tags(`${loc} · ${budgetTier.label}`), group: hasKids ? "Adults" : "Everyone", color: T.blue });
         }
 
@@ -448,10 +460,10 @@ export function generateMultiDayTimeline(trip) {
 
         // Relaxed templates with max 3 activities: skip afternoon activity
         if (!(isRelaxed && tpMaxActivities && tpMaxActivities <= 3)) {
-          const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest) || (tpKey === "romantic" ? `Scenic stroll in ${loc}` : "Afternoon activity");
+          const pmAct = pickAct(locPools.afternoon, nextActIdx(loc, "a"), steepTest, d) || (tpKey === "romantic" ? `Scenic stroll in ${loc}` : "Afternoon activity");
           if (hasKids) {
             items.push({ time: fmtTime(14, 30), title: pmAct, desc: pmDesc, group: "Adults", color: T.blue });
-            const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null) || "Free play";
+            const kidPmAct = pickAct(kidPool, nextActIdx(loc, "k"), null, d) || "Free play";
             items.push({ time: fmtTime(15), title: kidPmAct, desc: tags(`${loc} · Fun for kids`), group: "Kids", color: T.pink });
           } else {
             items.push({ time: fmtTime(14, 30), title: pmAct, desc: pmDesc, group: "Everyone", color: T.blue });

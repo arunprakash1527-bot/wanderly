@@ -214,19 +214,40 @@ BEGIN
   ) INTO _already_member;
 
   IF NOT _already_member THEN
-    -- Add the user as a new traveller
-    INSERT INTO public.trip_travellers (trip_id, user_id, name, role, is_claimed, joined_at)
-    VALUES (
-      _trip.id,
-      auth.uid(),
-      COALESCE(
-        (SELECT name FROM public.profiles WHERE id = auth.uid()),
-        'New Traveller'
-      ),
-      'adult',
-      true,
-      now()
+    -- Try to claim an existing unclaimed slot first (don't create duplicates)
+    UPDATE public.trip_travellers
+    SET user_id = auth.uid(),
+        name = COALESCE(
+          (SELECT name FROM public.profiles WHERE id = auth.uid()),
+          'New Traveller'
+        ),
+        is_claimed = true,
+        joined_at = now()
+    WHERE id = (
+      SELECT id FROM public.trip_travellers
+      WHERE trip_id = _trip.id
+        AND role = 'adult'
+        AND (is_claimed = false OR is_claimed IS NULL)
+        AND (user_id IS NULL)
+      ORDER BY id
+      LIMIT 1
     );
+
+    -- If no unclaimed slot was found, insert a new traveller
+    IF NOT FOUND THEN
+      INSERT INTO public.trip_travellers (trip_id, user_id, name, role, is_claimed, joined_at)
+      VALUES (
+        _trip.id,
+        auth.uid(),
+        COALESCE(
+          (SELECT name FROM public.profiles WHERE id = auth.uid()),
+          'New Traveller'
+        ),
+        'adult',
+        true,
+        now()
+      );
+    END IF;
   END IF;
 
   -- Return the trip data

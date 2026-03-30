@@ -91,7 +91,7 @@ export function AuthScreen() {
 
           {/* Skip login for demo */}
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: `.5px solid ${T.border}`, textAlign: "center" }}>
-            <button onClick={() => { setUser({ id: 'demo', email: 'demo@tripwithme.app' }); setAuthLoading(false); }}
+            <button onClick={() => { sessionStorage.setItem('twm_guest', '1'); setUser({ id: 'demo', email: 'demo@tripwithme.app' }); setAuthLoading(false); }}
               style={{ ...css.btn, fontSize: 12, color: T.t3, cursor: "pointer", margin: "0 auto" }}>
               Skip — explore as guest
             </button>

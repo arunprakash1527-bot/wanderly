@@ -266,6 +266,17 @@ export function ChatProvider({ children }) {
     const contextLine = "";
     const lower = msg.toLowerCase();
 
+    // ── Extract user-mentioned location from the message ──
+    // If the user names a trip place (e.g. "near windermere"), use that instead of selectedDay location
+    const mentionedLoc = (() => {
+      const places = trip?.places || [];
+      for (const p of places) {
+        if (lower.includes(p.toLowerCase())) return p;
+      }
+      return null;
+    })();
+    const effectiveLoc = mentionedLoc || firstLoc;
+
     // ── Handle "pick attraction" flow — user selecting from suggested options ──
     if (tripChatFlow?.step === "pick_attraction") {
       // If user is issuing a NEW explicit command (e.g. "day 2 – Add X"), clear the flow and let it fall through
@@ -1326,7 +1337,7 @@ export function ChatProvider({ children }) {
             prefs: trip?.prefs,
             budget,
             brief: trip?.brief || null,
-            currentLocation: firstLoc,
+            currentLocation: effectiveLoc,
             currentDay: selectedDay,
             templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),
           }),
@@ -1488,8 +1499,8 @@ export function ChatProvider({ children }) {
         } else {
           reply = `💰 **Budget: ${budget || "not set"}**\n\nNo expenses logged yet. Add them in the **Expenses** tab, then ask me again!`;
         }
-      } else if (lower.includes("suggest") || lower.includes("activit") || lower.includes("things to do") || lower.includes("what can") || lower.includes("what should") || lower.includes("recommend") || lower.includes("ideas")) {
-        const dayLoc = locForDay(selectedDay);
+      } else if (lower.includes("suggest") || lower.includes("activit") || lower.includes("things to do") || lower.includes("what can") || lower.includes("what should") || lower.includes("recommend") || lower.includes("ideas") || lower.includes("explore") || lower.includes("places near") || lower.includes("places to")) {
+        const dayLoc = mentionedLoc || locForDay(selectedDay);
         const locActs = getLocationActivities(dayLoc);
         if (locActs) {
           const morning = locActs.morning || [];
@@ -1501,7 +1512,7 @@ export function ChatProvider({ children }) {
           const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
           reply = `Here are activities I'd recommend in **${dayLoc}** for Day ${selectedDay}:\n\n${optionsList}\n\nReply with a number to add it to your itinerary, or type something specific!`;
         } else {
-          reply = `${contextLine}For activities in **${dayLoc}**, try saying:\n• "Add [activity name] to Day ${selectedDay}"\n• "Add popular attractions"\n\nOr ask about restaurants, timing, or budget!`;
+          reply = `${contextLine}For activities in **${dayLoc}**, try asking something specific like:\n• "Add [activity name] to Day ${selectedDay}"\n• "What outdoor activities are in ${dayLoc}?"\n• "Find quad biking near ${dayLoc}"\n\nOr ask about restaurants, timing, or budget!`;
         }
       } else if (lower.includes("summary") || lower.includes("plan") || lower.includes("overview")) {
         reply = `${contextLine}All itinerary items above are tailored to this context. Ask me about restaurants, activities, timing, or budget — I'll factor in everything.`;
@@ -1509,7 +1520,7 @@ export function ChatProvider({ children }) {
         generateAndSetTimeline(tripId);
         reply = `${contextLine}Done! I've regenerated your itinerary based on all your preferences. The timeline above is updated.`;
       } else {
-        reply = `${contextLine}I'm using all of the above to personalise your ${firstLoc} trip. Ask me about:\n• 🍽️ Restaurants & food\n• ⏰ Timing adjustments\n• 🎯 Activities to add\n• 💰 Budget & costs\n• 🔄 Regenerate itinerary`;
+        reply = `I couldn't find a specific answer for that right now. Try rephrasing, or ask me about:\n• 🍽️ Restaurants & food in **${effectiveLoc}**\n• ⏰ Timing adjustments\n• 🎯 Activities to add to **${effectiveLoc}**\n• 💰 Budget & costs\n• 🔄 Regenerate itinerary`;
       }
       setTripChatTyping(false);
       setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);

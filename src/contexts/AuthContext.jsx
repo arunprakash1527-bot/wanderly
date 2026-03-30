@@ -41,19 +41,36 @@ export function AuthProvider({ children }) {
 
   // Auth listener
   useEffect(() => {
+    // Restore guest session if it was active before reload
+    const wasGuest = sessionStorage.getItem('twm_guest');
+    if (wasGuest) {
+      setUser({ id: 'demo', email: 'demo@tripwithme.app' });
+      setAuthLoading(false);
+      // Still check for a real session — if user signed in, clear guest flag
+    }
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
-      setUser(u);
+      if (u) {
+        setUser(u);
+        sessionStorage.removeItem('twm_guest');
+        ensureProfile(u);
+      } else if (!wasGuest) {
+        setUser(null);
+      }
       setAuthLoading(false);
-      if (u) ensureProfile(u);
     }).catch(() => {
       setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
-      setUser(u);
+      if (u) {
+        setUser(u);
+        sessionStorage.removeItem('twm_guest');
+        ensureProfile(u);
+      } else if (!sessionStorage.getItem('twm_guest')) {
+        setUser(null);
+      }
       setAuthLoading(false);
-      if (u) ensureProfile(u);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -114,6 +131,7 @@ export function AuthProvider({ children }) {
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith("twm_")) localStorage.removeItem(key);
     });
+    sessionStorage.removeItem('twm_guest');
     // Clear Supabase API cache from service worker
     try { await caches.delete("supabase-api"); } catch {} // eslint-disable-line
     setUser(null);

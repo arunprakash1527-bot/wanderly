@@ -35,7 +35,7 @@ export function JoinPreviewScreen() {
         </div>
 
         <div style={css.sectionTitle}>Join as:</div>
-        {(trip.travellers?.adults || []).filter(a => !a.isLead).map((a, i) => {
+        {(trip.travellers?.adults || []).filter(a => !a.isLead && !a.isClaimed).map((a, i) => {
           const realIdx = i + 1;
           const slotName = a.name || `Adult ${realIdx + 1}`;
           const isJoined = joinedSlot === realIdx;
@@ -60,7 +60,7 @@ export function JoinPreviewScreen() {
             </div>
           );
         })}
-        {(trip.travellers?.adults || []).filter(a => !a.isLead).length === 0 && (
+        {(trip.travellers?.adults || []).filter(a => !a.isLead && !a.isClaimed).length === 0 && (
           <p style={{ fontSize: 13, color: T.t3, textAlign: "center", padding: 16 }}>No unclaimed adult slots available.</p>
         )}
 

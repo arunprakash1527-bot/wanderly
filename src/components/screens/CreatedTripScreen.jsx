@@ -60,7 +60,7 @@ const CS = getLocaleCurrencySymbol();
 export function CreatedTripScreen() {
   const { user } = useAuth();
   const { navigate, showToast } = useNavigation();
-  const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, finaliseTimelineEdit, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections, endTrip } = useTrip();
+  const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, finaliseTimelineEdit, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections, endTrip, removeTraveller } = useTrip();
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
   const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages, intelligence, smartTips, tripChatFlow } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
@@ -1189,7 +1189,22 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
 
           {/* ── EXPENSES TAB ── */}
           {tripDetailTab === "expenses" && (() => {
-            const adults = (trip.travellers?.adults || []).map(a => a.name).filter(Boolean);
+            // Deduplicate adults: if multiple entries share the same claimedUserId, keep only the first (original slot)
+            const seenUserIds = new Set();
+            const seenNames = new Set();
+            const adults = (trip.travellers?.adults || []).filter(a => {
+              if (!a.name) return false;
+              // Deduplicate by claimedUserId (WhatsApp join bug created extra rows for same user)
+              if (a.claimedUserId) {
+                if (seenUserIds.has(a.claimedUserId)) return false;
+                seenUserIds.add(a.claimedUserId);
+              }
+              // Also deduplicate by name
+              const key = a.name.toLowerCase();
+              if (seenNames.has(key)) return false;
+              seenNames.add(key);
+              return true;
+            }).map(a => a.name);
             // Include accommodation costs from stays
             const stayCosts = (trip.stays || []).filter(s => s.cost && parseFloat(s.cost) > 0).map(s => ({
               id: `stay-${s.name}`, description: s.name || "Accommodation", amount: parseFloat(s.cost),
@@ -1966,11 +1981,17 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                     const status = a.isLead ? "Organiser" : a.isClaimed ? "Joined" : "Invited";
                     const statusColor = a.isLead ? T.ad : a.isClaimed ? T.blue : T.t3;
                     const displayName = (a.name === "You" && a.isLead && user) ? (user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || a.name) : (a.name || `Adult ${i + 1}`);
+                    const isOrganiser = trip.travellers?.adults?.find(ad => ad.isLead)?.isLead && user;
+                    const canRemove = !a.isLead && isOrganiser;
                     return (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < (trip.travellers?.adults?.length || 0) - 1 ? `.5px solid ${T.border}` : "none" }}>
                         <Avatar bg={adultColors[i % adultColors.length]} label={getInit(displayName)} size={24} />
                         <p style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{displayName}</p>
                         <p style={{ fontSize: 10, color: statusColor }}>{status}</p>
+                        {canRemove && (
+                          <button onClick={() => { if (window.confirm(`Remove ${displayName} from this trip?`)) { removeTraveller(trip.dbId || trip.id, a); showToast(`${displayName} removed`); } }}
+                            style={{ background: "none", border: "none", fontSize: 12, cursor: "pointer", color: T.t3, padding: "2px 4px" }} title="Remove traveller">✕</button>
+                        )}
                       </div>
                     );
                   })}

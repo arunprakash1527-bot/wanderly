@@ -198,7 +198,8 @@ Be warm, helpful, and specific with recommendations.`;
   parts.push(`
 Guidelines:
 - Keep responses concise (under 200 words), use markdown with **bold** and bullet points
-- ALWAYS base recommendations on the Current location (the place the user is at on their selected day) — never default to another city
+- If the user mentions a specific place in their message, base recommendations on THAT place — even if it differs from the current day's location
+- Otherwise base recommendations on the Current location (the place the user is at on their selected day)
 - Give specific, real recommendations with ratings and prices when possible
 - Consider the group composition (kids' ages, dietary prefs) in all suggestions
 - USE THE REAL-TIME INTELLIGENCE above to give weather-aware, currency-aware, context-rich advice:

@@ -76,8 +76,21 @@ create table public.trip_stays (
   rating numeric(2,1),
   price text,
   location text,
+  check_in date,
+  check_out date,
+  cost numeric,
+  booking_ref text,
+  address text,
   created_at timestamptz default now()
 );
+
+-- Migration: add missing columns to trip_stays if table already exists
+-- Run these ALTER statements if you already have the table without these columns:
+-- ALTER TABLE public.trip_stays ADD COLUMN IF NOT EXISTS check_in date;
+-- ALTER TABLE public.trip_stays ADD COLUMN IF NOT EXISTS check_out date;
+-- ALTER TABLE public.trip_stays ADD COLUMN IF NOT EXISTS cost numeric;
+-- ALTER TABLE public.trip_stays ADD COLUMN IF NOT EXISTS booking_ref text;
+-- ALTER TABLE public.trip_stays ADD COLUMN IF NOT EXISTS address text;
 
 -- Trip preferences
 create table public.trip_preferences (
