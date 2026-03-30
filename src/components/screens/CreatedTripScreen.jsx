@@ -62,7 +62,7 @@ export function CreatedTripScreen() {
   const { navigate, showToast } = useNavigation();
   const { createdTrips, selectedCreatedTrip, setCreatedTrips, setSelectedCreatedTrip, tripDetailTab, setTripDetailTab, selectedDay, setSelectedDay, expandedItem, setExpandedItem, editingTimelineIdx, setEditingTimelineIdx, addTimelineItem, updateTimelineItem, finaliseTimelineEdit, deleteTimelineItem, moveTimelineItem, getDayItems, hasTimeline, findSmartSlot, generateAndSetTimeline, makeTripLive, deleteCreatedTrip, logActivity, getUnreadCount, markTripSeen, showMap, setShowMap, tripDirections, setTripDirections, getFullRouteFromStays, showPollCreator, setShowPollCreator, newPollQuestion, setNewPollQuestion, newPollOptions, setNewPollOptions, createNewPoll, shareToWhatsApp, expandedSections, setExpandedSections, endTrip, removeTraveller } = useTrip();
   const { setWizTrip, setWizTravellers, setWizStays, setWizPrefs, setWizStep, setEditingTripId } = useWizard();
-  const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages, intelligence, smartTips, tripChatFlow } = useChat();
+  const { tripChatInput, setTripChatInput, tripChatMessages, tripChatTyping, tripChatEndRef, handleTripChat, chatAddDayPicker, setChatAddDayPicker, loadTripMessages, intelligence, smartTips, tripChatFlow, typingContext, retryLastMessage, getFollowUpChips } = useChat();
   const { expenses, showAddExpense, setShowAddExpense, editingExpense, setEditingExpense, expenseDesc, setExpenseDesc, expenseAmount, setExpenseAmount, expenseCategory, setExpenseCategory, expensePaidBy, setExpensePaidBy, expenseSplitMethod, setExpenseSplitMethod, expenseParticipants, setExpenseParticipants, expenseCustomSplits, setExpenseCustomSplits, showSettlement, setShowSettlement, expenseDate, setExpenseDate, resetExpenseForm, saveExpense, deleteExpense, getCategoryBreakdown, calculateSettlement, loadExpenses } = useExpenses();
   const { uploadedPhotos, setUploadedPhotos, viewingPhoto, setViewingPhoto, reelPlaying, setReelPlaying, reelIndex, setReelIndex, reelPaused, setReelPaused, reelStyle, setReelStyle, reelTrack, setReelTrack, reelPhotos, setReelPhotos, wrappedPlaying, setWrappedPlaying, memoriesView, setMemoriesView, autoOrderEnabled, setAutoOrderEnabled, photoInputRef, uploadDayTagRef, updatePhotoInSupabase, deletePhotoFromSupabase, handlePhotoUpload, loadTripPhotos } = useMemories();
 
@@ -102,6 +102,10 @@ export function CreatedTripScreen() {
   // Conflict detection
   const [conflicts, setConflicts] = useState([]);
   const [showConflicts, setShowConflicts] = useState(false);
+
+  // Voice input state
+  const [isListening, setIsListening] = useState(false);
+  const speechRecRef = useRef(null);
 
   // Swipe between days — only on the day nav pills, not the content area (to avoid blocking scroll)
   const swipeStart = useRef(null);
@@ -888,6 +892,21 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
               return items;
             };
 
+            // ─── Voice input handler ───
+            const toggleVoiceInput = () => {
+              const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+              if (!SpeechRecognition) { showToast && showToast("Voice input not supported in this browser"); return; }
+              if (isListening && speechRecRef.current) { speechRecRef.current.stop(); setIsListening(false); return; }
+              const rec = new SpeechRecognition();
+              rec.continuous = false; rec.interimResults = false; rec.lang = "en-US";
+              rec.onresult = (e) => { const transcript = e.results[0][0].transcript; setTripChatInput(prev => prev ? prev + " " + transcript : transcript); setIsListening(false); };
+              rec.onerror = () => setIsListening(false);
+              rec.onend = () => setIsListening(false);
+              speechRecRef.current = rec;
+              rec.start();
+              setIsListening(true);
+            };
+
             // Render a suggestion card
             const renderSuggestionCard = (item, msgIdx, itemIdx) => {
               const addedKey = `${msgIdx}_${itemIdx}`;
@@ -1025,6 +1044,13 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                         wordBreak: "break-word", overflowWrap: "break-word" }}
                         dangerouslySetInnerHTML={{ __html: renderChatHtml(displayText, msg.role === "user" ? "#fff" : T.a) }} />
                     )}
+                    {/* Retry button on failed messages */}
+                    {msg.failed && (
+                      <button onClick={retryLastMessage} className="w-btn"
+                        style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: T.redL, border: `1px solid ${T.red}`, borderRadius: 20, fontSize: 12, fontWeight: 600, color: T.red, cursor: "pointer", fontFamily: T.font, transition: "all .15s" }}>
+                        🔄 Retry
+                      </button>
+                    )}
                     {/* Structured suggestion cards */}
                     {suggestions.length > 0 && (
                       <div style={{ width: "100%", maxWidth: "92%", marginTop: 6 }}>
@@ -1036,11 +1062,23 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                 })}
                 {tripChatTyping && (
                   <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 8 }}>
-                    <div style={{ padding: "12px 18px", background: T.s2, borderRadius: "16px 16px 16px 4px", display: "flex", gap: 4, alignItems: "center" }}>
+                    <div style={{ padding: "10px 16px", background: T.s2, borderRadius: "16px 16px 16px 4px", display: "flex", gap: 6, alignItems: "center" }}>
+                      {typingContext && <span style={{ fontSize: 11, color: T.t2, fontWeight: 500, marginRight: 4 }}>{typingContext}</span>}
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0s" }} />
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0.2s" }} />
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.t3, animation: "typingDot 1.2s infinite", animationDelay: "0.4s" }} />
                     </div>
+                  </div>
+                )}
+                {/* Follow-up suggestion chips */}
+                {!tripChatTyping && getFollowUpChips().length > 0 && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, paddingLeft: 4 }}>
+                    {getFollowUpChips().map((chip, i) => (
+                      <button key={i} onClick={() => { setTripChatInput(chip.label); }} className="w-btn"
+                        style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 12px", background: T.al, border: `1px solid ${T.a}22`, borderRadius: 20, fontSize: 11, fontWeight: 500, color: T.ad, cursor: "pointer", fontFamily: T.font, transition: "all .15s" }}>
+                        <span style={{ fontSize: 13 }}>{chip.icon}</span> {chip.label}
+                      </button>
+                    ))}
                   </div>
                 )}
                 <div ref={tripChatEndRef} />
@@ -1073,6 +1111,12 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                     onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
                     style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 13, background: "#fff", outline: "none" }}
                     placeholder={tripChatFlow?.step === "pick_attraction" ? "Pick a number or type your own..." : `Ask about ${currentLoc}...`} aria-label="Trip chat input" />
+                  {(window.SpeechRecognition || window.webkitSpeechRecognition) && (
+                    <button onClick={toggleVoiceInput} aria-label={isListening ? "Stop listening" : "Voice input"}
+                      style={{ width: 38, height: 38, borderRadius: "50%", border: isListening ? `2px solid ${T.red}` : `.5px solid ${T.border}`, background: isListening ? T.redL : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, transition: "all .2s", animation: isListening ? "pulse 1.5s infinite" : "none" }}>
+                      🎙️
+                    </button>
+                  )}
                   <button onClick={() => handleTripChat(trip.id)} aria-label="Send trip message" style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 16px", fontSize: 12 }}>Send</button>
                 </div>
               </div>
