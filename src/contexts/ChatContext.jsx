@@ -1326,12 +1326,19 @@ export function ChatProvider({ children }) {
         return `Earlier in this conversation (${earlier.length} messages), topics discussed: ${topics.join('; ') || 'general trip planning'}`;
       })() : null,
     };
+    // Helper: make the Claude API call (used for retry)
+    const callChatApi = () => authFetch(API.CHAT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(chatPayload),
+    });
     try {
-      const res = await authFetch(API.CHAT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(chatPayload),
-      });
+      let res = await callChatApi();
+      // Auto-retry once on network/server failure before giving up
+      if (!res.ok && res.status >= 500) {
+        await new Promise(r => setTimeout(r, 1500));
+        res = await callChatApi();
+      }
 
       if (res.ok && res.headers.get("content-type")?.includes("text/event-stream")) {
         // ── SSE streaming: show text as it arrives ──
@@ -1387,9 +1394,23 @@ export function ChatProvider({ children }) {
         }
       }
 
-      // API returned ok but empty/no reply — show fallback
+      // API returned ok but empty/no reply — retry without streaming
       if (res.ok) {
-        console.warn('Chat API returned ok but empty reply');
+        console.warn('Chat API returned ok but empty reply — retrying non-stream');
+        try {
+          const retryRes = await authFetch(API.CHAT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...chatPayload, stream: false }),
+          });
+          const retryData = await retryRes.json();
+          if (retryRes.ok && retryData.reply) {
+            setTripChatTyping(false);
+            setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: retryData.reply }]);
+            saveChatMessage(trip?.dbId, 'ai', retryData.reply);
+            return;
+          }
+        } catch (e) { /* fall through */ }
         setTripChatTyping(false);
         setTypingContext("");
         setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: `I'm having trouble responding right now. Try rephrasing, or ask about restaurants, activities, or weather in **${effectiveLoc}**.`, failed: true }]);
@@ -1401,16 +1422,78 @@ export function ChatProvider({ children }) {
       setTypingContext("");
     } catch (e) {
       console.warn('Chat API unavailable:', e.message);
+      // Retry once on network error
+      try {
+        const retryRes = await authFetch(API.CHAT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...chatPayload, stream: false }),
+        });
+        const retryData = await retryRes.json();
+        if (retryRes.ok && retryData.reply) {
+          setTripChatTyping(false);
+          setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: retryData.reply }]);
+          saveChatMessage(trip?.dbId, 'ai', retryData.reply);
+          return;
+        }
+      } catch (e2) { /* fall through to smart fallback */ }
       setTripChatTyping(false);
       setTypingContext("");
-      /* fall back to local */
     }
 
-    // Local fallback — Claude API was unavailable, show retry-able error
-    const fallbackReply = `I'm having trouble connecting right now. Tap **Retry** below, or try a specific command like **"Find restaurants"** or **"Weather"**.`;
+    // Local fallback — Claude API was unavailable, provide a smart context-aware response
+    const smartFallback = (() => {
+      const locActs = getLocationActivities(effectiveLoc) || getLocationActivities(firstLoc);
+      const intelData = intelligenceRef.current;
+
+      // Weather-related follow-ups
+      if (/rain|umbrella|waterproof|coat|layer|pack|packing|cold|warm/i.test(lower) && intelData?.weather) {
+        const w = intelData.weather;
+        const tips = [];
+        if (w.today) tips.push(`Today: ${w.today.high}°/${w.today.low}°C, ${w.today.condition}${w.today.rainMm > 0 ? ` — ${w.today.rainMm}mm rain expected` : ""}`);
+        if (w.daily?.length > 1) w.daily.slice(1, 3).forEach(d => tips.push(`${d.date}: ${d.high}°/${d.low}°C, ${d.condition}`));
+        const packTips = [];
+        if (w.daily?.some(d => d.rainMm > 1)) packTips.push("🌂 Pack waterproofs");
+        if (w.daily?.some(d => d.low <= 5)) packTips.push("🧥 Bring warm layers");
+        if (w.current?.temp > 25) packTips.push("🧴 Sun cream essential");
+        return `Based on the forecast for **${effectiveLoc}**:\n\n${tips.join("\n")}\n\n${packTips.length > 0 ? packTips.join(" · ") : ""}`;
+      }
+
+      // Activity/trek/hike difficulty/info questions — provide what we know + suggest alternatives
+      if (/difficult|easy|hard|strenuous|steep|suitable|accessible|wheelchair|kid|child|toddler|pushchair|buggy|parking|open|close|hour|time|ticket|entry|fee|price|cost|duration|long|far|distance/i.test(lower)) {
+        const activityName = msg.replace(/\b(how|is|are|what|the|it|this|do|does|would|could|will|can|much|many|far|long|about|for|to|in|at|of|a|an)\b/gi, '').trim();
+        let reply = `I don't have specific details about **${activityName}** offline, but here's what I can help with:\n\n`;
+        if (locActs) {
+          const allActs = [...new Set([...(locActs.morning || []), ...(locActs.afternoon || []), ...(locActs.kids || [])])].slice(0, 5);
+          reply += `**Popular activities in ${effectiveLoc}:**\n${allActs.map(a => `• ${a}`).join("\n")}\n\n`;
+        }
+        if (intelData?.weather?.current) {
+          reply += `**Current weather:** ${intelData.weather.current.temp}°C, ${intelData.weather.current.description}\n\n`;
+        }
+        reply += `Try asking:\n• **"Suggest activities in ${effectiveLoc}"** for recommendations\n• **"Weather"** to check conditions\n• **"Find restaurants"** for dining`;
+        return reply;
+      }
+
+      // General question — provide trip context as best we can
+      let reply = `I couldn't reach my AI assistant for a detailed answer, but here's what I know about your trip to **${effectiveLoc}**:\n\n`;
+      const parts = [];
+      if (intelData?.weather?.current) parts.push(`🌤️ **Weather now:** ${intelData.weather.current.temp}°C, ${intelData.weather.current.description}`);
+      if (intelData?.currency?.rates) {
+        const rateStr = Object.values(intelData.currency.rates).map(r => r.example).slice(0, 2).join(", ");
+        if (rateStr) parts.push(`💱 **Exchange:** ${rateStr}`);
+      }
+      if (intelData?.language) parts.push(`🗣️ **Local language:** ${intelData.language.lang} — hello: "${intelData.language.hello}"`);
+      if (locActs) {
+        const topActs = [...new Set([...(locActs.morning || []), ...(locActs.afternoon || [])])].slice(0, 4);
+        if (topActs.length > 0) parts.push(`🎯 **Top activities:** ${topActs.join(", ")}`);
+      }
+      if (parts.length > 0) reply += parts.join("\n") + "\n\n";
+      reply += `For a detailed answer, tap **Retry** or try a specific question like:\n• **"Suggest activities for Day ${selectedDay}"**\n• **"Weather forecast"**\n• **"Find restaurants in ${effectiveLoc}"**`;
+      return reply;
+    })();
     lastFailedMsgRef.current = { tripId, msg };
-    setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: fallbackReply, failed: true }]);
-    saveChatMessage(trip?.dbId, 'ai', fallbackReply);
+    setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: smartFallback, failed: true }]);
+    saveChatMessage(trip?.dbId, 'ai', smartFallback);
   };
 
   // ─── Retry last failed message ───
