@@ -928,6 +928,19 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                       </div>
                       {item.address && <p style={{ fontSize: 10, color: T.t2, lineHeight: 1.3, marginBottom: 1 }}>📍 {item.address}</p>}
                       {item.desc && <p style={{ fontSize: 11, color: T.t3, lineHeight: 1.4 }}>{item.desc.replace(/[\d.]+★/g, "").replace(/£+/g, "").replace(/^\s*[,·\-–]\s*/, "").trim()}</p>}
+                      {/* Inline action buttons */}
+                      <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                        <button onClick={() => { const q = encodeURIComponent(item.name + (item.address ? " " + item.address : " " + currentLoc)); window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, "_blank", "noopener"); }}
+                          style={{ display: "flex", alignItems: "center", gap: 3, padding: "4px 10px", background: T.blueL, border: `1px solid ${T.blue}30`, borderRadius: 6, fontSize: 10, fontWeight: 600, color: T.blue, cursor: "pointer", fontFamily: T.font }}>
+                          📍 Map
+                        </button>
+                        {item.isRestaurant && (
+                          <button onClick={() => { const q = encodeURIComponent(item.name + " " + currentLoc + " restaurant booking"); window.open(`https://www.google.com/search?q=${q}`, "_blank", "noopener"); }}
+                            style={{ display: "flex", alignItems: "center", gap: 3, padding: "4px 10px", background: T.coralL, border: `1px solid ${T.coral}30`, borderRadius: 6, fontSize: 10, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}>
+                            🍽️ Book
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {isAdded ? (
                       <span style={{ fontSize: 11, color: T.a, fontWeight: 600, whiteSpace: "nowrap", padding: "6px 10px" }}>{chatAddDayPicker?.replaced ? `🔄 Replaced` : "✓ Added"}</span>

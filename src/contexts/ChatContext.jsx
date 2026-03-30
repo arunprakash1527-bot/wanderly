@@ -1300,45 +1300,95 @@ export function ChatProvider({ children }) {
       }
     }
 
-    // Try Claude API first for richer, context-aware responses
+    // Try Claude API first — with SSE streaming for real-time text
     setTypingContext(/restaurant|food|eat|lunch|dinner|breakfast/i.test(lower) ? "Looking up restaurants..." : /activit|suggest|recommend|things to do/i.test(lower) ? "Finding activities..." : /budget|cost|spend/i.test(lower) ? "Crunching numbers..." : "Thinking...");
+    const chatPayload = {
+      message: msg,
+      stream: true,
+      tripContext: sanitiseTripContext({
+        dates: trip?.start && trip?.end ? `${trip.start} – ${trip.end}` : null,
+        places: trip?.places,
+        travelMode: trip?.travel?.join(", "),
+        travellers: trip?.travellers,
+        stays: trip?.stays,
+        prefs: trip?.prefs,
+        budget,
+        brief: trip?.brief || null,
+        currentLocation: effectiveLoc,
+        currentDay: selectedDay,
+        templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),
+      }),
+      intelligence: intelligenceRef.current,
+      chatHistory: tripChatMessages.slice(-10),
+      chatSummary: tripChatMessages.length > 10 ? (() => {
+        const earlier = tripChatMessages.slice(0, -10);
+        const topics = [...new Set(earlier.filter(m => m.role === 'user').map(m => m.text).filter(Boolean).map(t => t.slice(0, 60)))].slice(-5);
+        return `Earlier in this conversation (${earlier.length} messages), topics discussed: ${topics.join('; ') || 'general trip planning'}`;
+      })() : null,
+    };
     try {
       const res = await authFetch(API.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: msg,
-          tripContext: sanitiseTripContext({
-            dates: trip?.start && trip?.end ? `${trip.start} – ${trip.end}` : null,
-            places: trip?.places,
-            travelMode: trip?.travel?.join(", "),
-            travellers: trip?.travellers,
-            stays: trip?.stays,
-            prefs: trip?.prefs,
-            budget,
-            brief: trip?.brief || null,
-            currentLocation: effectiveLoc,
-            currentDay: selectedDay,
-            templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),
-          }),
-          intelligence: intelligenceRef.current, // Real-time signals from connectors
-          chatHistory: tripChatMessages.slice(-10),
-          chatSummary: tripChatMessages.length > 10 ? (() => {
-            const earlier = tripChatMessages.slice(0, -10);
-            const topics = [...new Set(earlier.filter(m => m.role === 'user').map(m => m.text).filter(Boolean).map(t => t.slice(0, 60)))].slice(-5);
-            return `Earlier in this conversation (${earlier.length} messages), topics discussed: ${topics.join('; ') || 'general trip planning'}`;
-          })() : null,
-        }),
+        body: JSON.stringify(chatPayload),
       });
-      const data = await res.json();
-      if (res.ok && data.reply) {
+
+      if (res.ok && res.headers.get("content-type")?.includes("text/event-stream")) {
+        // ── SSE streaming: show text as it arrives ──
+        const streamId = msgId();
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: data.reply }]);
-        saveChatMessage(trip?.dbId, 'ai', data.reply);
-        return;
+        setTypingContext("");
+        setTripChatMessages(prev => [...prev, { id: streamId, role: "ai", text: "" }]);
+        let fullText = "";
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let sseBuffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split("\n");
+          sseBuffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed.text) {
+                fullText += parsed.text;
+                const snapshot = fullText;
+                setTripChatMessages(prev => {
+                  const updated = [...prev];
+                  const idx = findLastIdx(updated, m => m.id === streamId);
+                  if (idx >= 0) updated[idx] = { ...updated[idx], text: snapshot };
+                  return updated;
+                });
+              }
+              if (parsed.error) { console.warn("Stream error:", parsed.error); break; }
+            } catch (e) { /* skip */ }
+          }
+        }
+
+        if (fullText) {
+          saveChatMessage(trip?.dbId, 'ai', fullText);
+          return;
+        }
+        // Stream ended with no text — fall through to fallback
+      } else if (res.ok) {
+        // ── Non-streaming fallback (server didn't support stream) ──
+        const data = await res.json();
+        if (data.reply) {
+          setTripChatTyping(false);
+          setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: data.reply }]);
+          saveChatMessage(trip?.dbId, 'ai', data.reply);
+          return;
+        }
       }
-      // API returned ok but empty reply — clear typing and show fallback
-      if (res.ok && !data.reply) {
+
+      // API returned ok but empty/no reply — show fallback
+      if (res.ok) {
         console.warn('Chat API returned ok but empty reply');
         setTripChatTyping(false);
         setTypingContext("");
