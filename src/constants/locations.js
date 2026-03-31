@@ -202,7 +202,7 @@ export const LOCATION_COORDS = {
   keswick: [54.60, -3.13], bowness: [54.36, -2.92], penrith: [54.66, -2.75],
   kendal: [54.33, -2.74], coniston: [54.37, -3.07], ullswater: [54.57, -2.87],
   cockermouth: [54.66, -3.36], "roe island": [54.07, -3.17], "roa island": [54.07, -3.17], "piel island": [54.06, -3.17],
-  "barrow in furness": [54.11, -3.23], "grange over sands": [54.19, -2.91],
+  "millwood manor": [54.35, -2.93], "barrow in furness": [54.11, -3.23], "grange over sands": [54.19, -2.91],
   "cotswolds": [51.83, -1.68], "peak district": [53.35, -1.80],
   inverness: [57.48, -4.22], aberdeen: [57.15, -2.09], "isle of skye": [57.30, -6.30],
   "loch ness": [57.32, -4.45], "fort william": [56.82, -5.10], oban: [56.41, -5.47],
