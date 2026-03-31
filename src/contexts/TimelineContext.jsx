@@ -357,17 +357,49 @@ export function TimelineProvider({ children }) {
 
     const isRestaurant = /restaurant|food|eat|cafe|dinner|lunch|breakfast|brunch/i.test(itemType);
     if (isRestaurant) {
-      const slots = [
-        { time: "12:30 PM", mins: 750, label: "Lunch" },
-        { time: "7:00 PM", mins: 1140, label: "Dinner" },
-        { time: "8:30 AM", mins: 510, label: "Breakfast" },
-        { time: "1:00 PM", mins: 780, label: "Lunch" },
-        { time: "6:30 PM", mins: 1110, label: "Dinner" },
-      ];
+      // Prioritize slots based on meal context from the query
+      const isDinner = /dinner|supper|evening/i.test(itemType);
+      const isBreakfast = /breakfast/i.test(itemType);
+      const isBrunch = /brunch/i.test(itemType);
+      const isLunch = /lunch|midday/i.test(itemType);
+
+      let slots;
+      if (isDinner) {
+        slots = [
+          { time: "7:00 PM", mins: 1140, label: "Dinner" },
+          { time: "6:30 PM", mins: 1110, label: "Dinner" },
+          { time: "7:30 PM", mins: 1170, label: "Dinner" },
+          { time: "8:00 PM", mins: 1200, label: "Dinner" },
+        ];
+      } else if (isBreakfast) {
+        slots = [
+          { time: "8:30 AM", mins: 510, label: "Breakfast" },
+          { time: "8:00 AM", mins: 480, label: "Breakfast" },
+          { time: "9:00 AM", mins: 540, label: "Breakfast" },
+        ];
+      } else if (isBrunch) {
+        slots = [
+          { time: "10:30 AM", mins: 630, label: "Brunch" },
+          { time: "11:00 AM", mins: 660, label: "Brunch" },
+        ];
+      } else if (isLunch) {
+        slots = [
+          { time: "12:30 PM", mins: 750, label: "Lunch" },
+          { time: "1:00 PM", mins: 780, label: "Lunch" },
+        ];
+      } else {
+        slots = [
+          { time: "12:30 PM", mins: 750, label: "Lunch" },
+          { time: "7:00 PM", mins: 1140, label: "Dinner" },
+          { time: "8:30 AM", mins: 510, label: "Breakfast" },
+          { time: "1:00 PM", mins: 780, label: "Lunch" },
+          { time: "6:30 PM", mins: 1110, label: "Dinner" },
+        ];
+      }
       for (const slot of slots) {
         if (!existingTimes.some(t => Math.abs(t - slot.mins) < 60)) return slot;
       }
-      return { time: "12:30 PM", mins: 750, label: "Meal" };
+      return slots[0] || { time: "12:30 PM", mins: 750, label: "Meal" };
     }
     const actSlots = [
       { time: "10:00 AM", mins: 600, label: "Morning" },

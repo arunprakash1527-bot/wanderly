@@ -859,6 +859,12 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
               const items = [];
               const lines = text.split("\n");
               let current = null;
+              // Detect meal context from the message header (e.g. "Dinner options", "Breakfast spots")
+              const headerText = lines.slice(0, 3).join(" ").toLowerCase();
+              const mealContext = /dinner|supper|evening meal/i.test(headerText) ? "dinner"
+                : /breakfast|morning meal/i.test(headerText) ? "breakfast"
+                : /brunch/i.test(headerText) ? "brunch"
+                : /lunch|midday/i.test(headerText) ? "lunch" : null;
               for (const line of lines) {
                 // Match "1. **Name** ..." or "- **Name** ..."
                 const m = line.match(/^\s*(?:\d+\.\s*|\-\s*)\*\*([^*]+)\*\*\s*(.*)/);
@@ -875,7 +881,7 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                     .map(c => c.replace(/^·\s*/, "").trim())
                     .filter(c => !/^(Open|Closed|Restaurant)$/i.test(c) && !/★|£/.test(c))
                     .slice(0, 2) : [];
-                  current = { name, desc: rest, rating: ratingM ? ratingM[1] : null, price: priceM ? priceM[1] : null, isRestaurant, cuisineTags };
+                  current = { name, desc: rest, rating: ratingM ? ratingM[1] : null, price: priceM ? priceM[1] : null, isRestaurant, cuisineTags, mealContext };
                 } else if (current && line.match(/^\s{2,}/) && !line.match(/^\s*(\*|#|Pro|💡|Say)/)) {
                   const trimmed = line.trim();
                   // Capture 📍 address specifically
@@ -912,7 +918,8 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
               const addedKey = `${msgIdx}_${itemIdx}`;
               const isAdded = chatAddDayPicker?.added === addedKey;
               const showDayPicker = chatAddDayPicker?.msgIdx === msgIdx && chatAddDayPicker?.itemIdx === itemIdx && !isAdded;
-              const slot = findSmartSlot(trip.id, selectedDay, item.isRestaurant ? "restaurant" : "activity");
+              const slotType = item.isRestaurant ? (item.mealContext || "restaurant") : "activity";
+              const slot = findSmartSlot(trip.id, selectedDay, slotType);
 
               return (
                 <div key={itemIdx} style={{ background: T.s, border: `.5px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 6, transition: "all .15s" }}>
@@ -956,7 +963,7 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                       <p style={{ fontSize: 10, color: T.t3, fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>Add to which day?</p>
                       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
                         {Array.from({ length: tripDays }, (_, d) => d + 1).map(day => {
-                          const daySlot = findSmartSlot(trip.id, day, item.isRestaurant ? "restaurant" : "activity");
+                          const daySlot = findSmartSlot(trip.id, day, slotType);
                           const dayLoc = trip.places?.[(day - 1) % (trip.places?.length || 1)] || "";
                           // Check if an existing item would be replaced
                           const parseTm = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
