@@ -185,6 +185,7 @@ AS $$
 DECLARE
   _trip public.trips;
   _already_member BOOLEAN;
+  _slot_id uuid;
 BEGIN
   -- Validate input
   IF code IS NULL OR trim(code) = '' THEN
@@ -202,7 +203,6 @@ BEGIN
 
   -- Check if the calling user is already the lead
   IF _trip.lead_user_id = auth.uid() THEN
-    -- Already the trip owner; just return the trip
     RETURN NEXT _trip;
     RETURN;
   END IF;
@@ -214,40 +214,34 @@ BEGIN
   ) INTO _already_member;
 
   IF NOT _already_member THEN
-    -- Try to claim an existing unclaimed slot first (don't create duplicates)
-    UPDATE public.trip_travellers
-    SET user_id = auth.uid(),
-        name = COALESCE(
-          (SELECT name FROM public.profiles WHERE id = auth.uid()),
-          'New Traveller'
-        ),
-        is_claimed = true,
-        joined_at = now()
-    WHERE id = (
-      SELECT id FROM public.trip_travellers
-      WHERE trip_id = _trip.id
-        AND role = 'adult'
-        AND (is_claimed = false OR is_claimed IS NULL)
-        AND (user_id IS NULL)
-      ORDER BY id
-      LIMIT 1
-    );
+    -- Try to claim an existing unclaimed slot (any role except lead)
+    -- Use FOR UPDATE SKIP LOCKED to prevent race conditions between concurrent joins
+    SELECT id INTO _slot_id
+    FROM public.trip_travellers
+    WHERE trip_id = _trip.id
+      AND role IN ('adult', 'child_older', 'child_younger', 'child', 'teen')
+      AND (is_claimed = false OR is_claimed IS NULL)
+      AND (user_id IS NULL)
+    ORDER BY
+      CASE WHEN role = 'adult' THEN 0 ELSE 1 END, -- Prefer adult slots first
+      id
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED;
 
-    -- If no unclaimed slot was found, insert a new traveller
-    IF NOT FOUND THEN
-      INSERT INTO public.trip_travellers (trip_id, user_id, name, role, is_claimed, joined_at)
-      VALUES (
-        _trip.id,
-        auth.uid(),
-        COALESCE(
-          (SELECT name FROM public.profiles WHERE id = auth.uid()),
-          'New Traveller'
-        ),
-        'adult',
-        true,
-        now()
-      );
+    IF _slot_id IS NOT NULL THEN
+      UPDATE public.trip_travellers
+      SET user_id = auth.uid(),
+          name = COALESCE(
+            (SELECT name FROM public.profiles WHERE id = auth.uid()),
+            name  -- Keep existing slot name if no profile name
+          ),
+          is_claimed = true,
+          joined_at = now()
+      WHERE id = _slot_id;
     END IF;
+    -- If no unclaimed slot was found, do NOT insert a new traveller.
+    -- The UI (JoinPreviewScreen) will show "No unclaimed slots available."
+    -- This prevents phantom "New Traveller" rows from appearing.
   END IF;
 
   -- Return the trip data

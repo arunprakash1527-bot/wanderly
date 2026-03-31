@@ -98,6 +98,8 @@ export function mapTripForInsertMinimal(tripData, userId) {
     travel_modes: Array.from(tripData.travel || []),
     status: 'draft',
     lead_user_id: userId,
+    start_location: tripData.startLocation || null,
+    budget: tripData.budget || null,
   };
 }
 
@@ -148,20 +150,24 @@ export function mapTravellersForInsert(tripData, tripId, userId) {
  * Map app stays to Supabase trip_stays insert rows
  */
 export function mapStaysForInsert(stays, tripId) {
-  return (stays || []).map(s => ({
-    trip_id: tripId,
-    name: s.name,
-    type: s.type,
-    tags: s.tags || [],
-    rating: s.rating,
-    price: s.price,
-    location: s.location,
-    check_in: s.checkIn || null,
-    check_out: s.checkOut || null,
-    cost: s.cost ? parseFloat(s.cost) : null,
-    booking_ref: s.bookingRef || null,
-    address: s.address || null,
-  }));
+  return (stays || []).map(s => {
+    const row = {
+      trip_id: tripId,
+      name: s.name,
+      type: s.type,
+      tags: s.tags || [],
+      rating: s.rating,
+      price: s.price,
+      location: s.location,
+      check_in: s.checkIn || null,
+      check_out: s.checkOut || null,
+      cost: s.cost ? parseFloat(s.cost) : null,
+      booking_ref: s.bookingRef || null,
+      address: s.address || null,
+    };
+    if (s.dbId) row.id = s.dbId; // Preserve DB ID for upsert
+    return row;
+  });
 }
 
 /**
