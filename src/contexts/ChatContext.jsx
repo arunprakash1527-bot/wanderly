@@ -15,6 +15,37 @@ import { getCatInfo } from "../constants/expenses";
 
 const ChatContext = createContext(null);
 
+// ─── Unique message ID generator ───
+let _msgIdCounter = 0;
+function msgId() { return `msg_${Date.now()}_${++_msgIdCounter}`; }
+
+// ─── Safari-safe findLastIndex polyfill ───
+function findLastIdx(arr, predicate) {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (predicate(arr[i], i, arr)) return i;
+  }
+  return -1;
+}
+
+// ─── Helper: add placeholder msg and return updater that replaces it by ID ───
+function usePlaceholder(setMessages, saveFn) {
+  return (text, tripDbId) => {
+    const id = msgId();
+    setMessages(prev => [...prev, { id, role: "ai", text }]);
+    const update = (reply) => {
+      setMessages(prev => {
+        const updated = [...prev];
+        const idx = findLastIdx(updated, m => m.id === id);
+        if (idx >= 0) updated[idx] = { ...updated[idx], text: reply };
+        else updated.push({ id: msgId(), role: "ai", text: reply });
+        return updated;
+      });
+      if (saveFn && tripDbId) saveFn(tripDbId, 'ai', reply);
+    };
+    return update;
+  };
+}
+
 // ─── PII Sanitisation Helper ───
 // Strips personally identifiable information from trip data before sending to the Claude API.
 // Keeps: places, dates, travel mode, budget range, template style, activities/preferences, day, weather.
@@ -113,8 +144,14 @@ export function ChatProvider({ children }) {
   const [tripChatInput, setTripChatInput] = useState("");
   const [tripChatMessages, setTripChatMessages] = useState([]);
   const tripChatEndRef = useRef(null);
-  const [tripChatTyping, setTripChatTyping] = useState(false);
+  const [_tripChatTyping, _setTripChatTyping] = useState(false);
   const [tripChatFlow, setTripChatFlow] = useState(null); // { step, data }
+  const [typingContext, setTypingContext] = useState(""); // contextual typing label e.g. "Looking up restaurants..."
+  const lastFailedMsgRef = useRef(null); // store last failed user message for retry
+
+  // Wrapper: auto-clear typing context when typing stops
+  const tripChatTyping = _tripChatTyping;
+  const setTripChatTyping = (v) => { _setTripChatTyping(v); if (!v) setTypingContext(""); };
 
   // Trip Intelligence state
   const [intelligence, setIntelligence] = useState(null);
@@ -146,14 +183,16 @@ export function ChatProvider({ children }) {
       currentLoc = places[(selectedDay - 1) % places.length];
     }
 
-    // Fetch intelligence in background
+    // Fetch intelligence in background with cleanup guard
+    let cancelled = false;
     fetchTripIntelligence(trip, selectedDay, currentLoc).then(intel => {
-      if (intel) {
+      if (intel && !cancelled) {
         setIntelligence(intel);
         intelligenceRef.current = intel;
         setSmartTips(buildSmartTips(intel));
       }
     });
+    return () => { cancelled = true; };
   }, [selectedDay, selectedCreatedTrip, createdTrips]);
 
   // Reset tripChatFlow when day changes — prevents stale pick_attraction/ev flows
@@ -170,27 +209,41 @@ export function ChatProvider({ children }) {
   const loadTripMessages = async (tripDbId) => {
     if (!tripDbId) return;
     try {
-      const { data } = await supabase.from('messages').select('*').eq('trip_id', tripDbId).order('created_at', { ascending: true });
-      if (data && data.length > 0) {
-        setTripChatMessages(data.map(m => ({ id: m.id, role: m.sender_role || 'user', text: m.text, senderName: m.sender_name })));
+      const { data, error } = await supabase.from('messages').select('*').eq('trip_id', tripDbId).order('created_at', { ascending: true });
+      if (error) {
+        // Table may not exist yet — only warn for unexpected errors
+        if (!error.message?.includes('does not exist')) console.warn('Failed to load chat messages:', error.message);
+        return;
       }
-    } catch (e) { /* messages table may not exist yet — silent fail */ }
+      if (data && data.length > 0) {
+        setTripChatMessages(data.map(m => ({ id: m.id || msgId(), role: m.sender_role || 'user', text: m.text, senderName: m.sender_name })));
+      }
+    } catch (e) {
+      console.warn('Chat message load error:', e.message);
+    }
   };
 
   const saveChatMessage = async (tripDbId, role, text, senderName) => {
     if (!tripDbId) return;
     try {
-      await supabase.from('messages').insert({ trip_id: tripDbId, sender_role: role, text, sender_name: senderName || (role === 'ai' ? 'Trip With Me AI' : 'You') });
-    } catch (e) { /* silent fail if table doesn't exist */ }
+      const { error } = await supabase.from('messages').insert({ trip_id: tripDbId, sender_role: role, text, sender_name: senderName || (role === 'ai' ? 'Trip With Me AI' : 'You') });
+      if (error && !error.message?.includes('does not exist')) {
+        console.warn('Failed to save chat message:', error.message);
+      }
+    } catch (e) {
+      console.warn('Chat message save error:', e.message);
+    }
   };
 
   // ─── Trip Chat Handler ───
-  const handleTripChat = async (tripId) => {
-    const msg = tripChatInput.trim();
+  const handleTripChat = async (tripId, overrideMsg) => {
+    const msg = (overrideMsg || tripChatInput).trim();
     if (!msg) return;
-    setTripChatMessages(prev => [...prev, { role: "user", text: msg }]);
+    setTripChatMessages(prev => [...prev, { id: msgId(), role: "user", text: msg }]);
     setTripChatInput("");
+    const addPlaceholder = usePlaceholder(setTripChatMessages, saveChatMessage);
     setTripChatTyping(true);
+    setTypingContext("Thinking...");
     const trip = createdTrips.find(t => t.id === tripId);
     saveChatMessage(trip?.dbId, 'user', msg, user?.user_metadata?.full_name || user?.email || 'You');
     const loc = trip?.places?.join(", ") || "your destination";
@@ -261,9 +314,6 @@ export function ChatProvider({ children }) {
     const wantsAccessible = /accessible|wheelchair|mobility/.test(ctxLower);
     const wantsPubs = /pub|pubs|tavern/.test(ctxLower);
 
-    // Keep context line short — don't dump full summary into every message
-    const placesStr = trip?.places?.join(", ") || "your trip";
-    const contextLine = "";
     const lower = msg.toLowerCase();
 
     // ── Extract user-mentioned location from the message ──
@@ -327,7 +377,7 @@ export function ChatProvider({ children }) {
         setSelectedDay(targetDay);
         const reply = `✅ Added **${picked}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Check your itinerary to see it!`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
       } else if (cleanInput.length > 2
@@ -357,7 +407,7 @@ export function ChatProvider({ children }) {
         setSelectedDay(targetDay);
         const reply = `✅ Added **${customTitle}** to **Day ${targetDay}** at ${smartSlot.time} in ${flowLoc}. Check your itinerary to see it!`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
       } else {
@@ -376,7 +426,8 @@ export function ChatProvider({ children }) {
       const carCountMatch = lower.match(/(\d+)\s*(?:car|vehicle|ev)/i);
       const carCount = carCountMatch ? parseInt(carCountMatch[1]) : 1;
 
-      setTripChatMessages(prev => [...prev, { role: "ai", text: "⚡ Finding EV chargers with real-time details..." }]);
+      setTypingContext("Finding EV chargers...");
+      const updateEvFlow = addPlaceholder("⚡ Finding EV chargers with real-time details...", trip?.dbId);
 
       const handleEvResults = async (lat, lng, locLabel) => {
         try {
@@ -420,25 +471,15 @@ export function ChatProvider({ children }) {
         return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
       };
 
-      const updateEvReply = (reply) => {
-        setTripChatTyping(false);
-        setTripChatMessages(prev => {
-          const updated = [...prev];
-          const idx = updated.findLastIndex(m => m.text === "⚡ Finding EV chargers with real-time details...");
-          if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-          else updated.push({ role: "ai", text: reply });
-          return updated;
-        });
-        saveChatMessage(trip?.dbId, 'ai', reply);
-      };
-
       // Use the current day's location for the flow follow-up
       const flowDayLoc = locForDay(selectedDay);
       const flowDayCoords = findCoords(flowDayLoc);
       if (flowDayCoords) {
-        updateEvReply(await handleEvResults(flowDayCoords[0], flowDayCoords[1], flowDayLoc));
+        setTripChatTyping(false);
+        updateEvFlow(await handleEvResults(flowDayCoords[0], flowDayCoords[1], flowDayLoc));
       } else {
-        updateEvReply(await handleEvResults(null, null, flowDayLoc || firstLoc));
+        setTripChatTyping(false);
+        updateEvFlow(await handleEvResults(null, null, flowDayLoc || firstLoc));
       }
       return;
     }
@@ -449,11 +490,13 @@ export function ChatProvider({ children }) {
       || (/\b(rain|cold|hot|warm|snow|wind|sunny|cloudy|storm|thunder|ice|frost|hail)\b/i.test(lower) && /\b(how|what|will|is|any|check|look|today|tomorrow|day\s*\d+|this week|expect)\b/i.test(lower));
     if (isWeatherQuery) {
       const weatherDayMatch = lower.match(/day\s*(\d+)/);
-      const weatherDay = weatherDayMatch ? parseInt(weatherDayMatch[1]) : selectedDay;
-      const weatherLoc = locForDay(weatherDay) || firstLoc;
+      const isTomorrow = /\btomorrow\b/i.test(lower);
+      const weatherDay = weatherDayMatch ? parseInt(weatherDayMatch[1]) : isTomorrow ? selectedDay + 1 : selectedDay;
+      const weatherLoc = mentionedLoc || locForDay(weatherDay) || firstLoc;
       const weatherCoords = findCoords(weatherLoc);
 
-      setTripChatMessages(prev => [...prev, { role: "ai", text: `🌤️ Checking weather for **${weatherLoc}**...` }]);
+      setTypingContext("Checking weather...");
+      const updateWeather = addPlaceholder(`🌤️ Checking weather for **${weatherLoc}**...`, trip?.dbId);
 
       (async () => {
         try {
@@ -504,31 +547,17 @@ export function ChatProvider({ children }) {
           }
 
           setTripChatTyping(false);
-          setTripChatMessages(prev => {
-            const updated = [...prev];
-            const idx = updated.findLastIndex(m => m.text.includes("Checking weather for"));
-            if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-            else updated.push({ role: "ai", text: reply });
-            return updated;
-          });
-          saveChatMessage(trip?.dbId, 'ai', reply);
+          updateWeather(reply);
         } catch (e) {
-          const errReply = `🌤️ Couldn't fetch weather right now. Check [BBC Weather](https://www.bbc.co.uk/weather) for ${weatherLoc}.`;
           setTripChatTyping(false);
-          setTripChatMessages(prev => {
-            const updated = [...prev];
-            const idx = updated.findLastIndex(m => m.text.includes("Checking weather for"));
-            if (idx >= 0) updated[idx] = { role: "ai", text: errReply };
-            else updated.push({ role: "ai", text: errReply });
-            return updated;
-          });
+          updateWeather(`🌤️ Couldn't fetch weather right now. Check [BBC Weather](https://www.bbc.co.uk/weather) for ${weatherLoc}.`);
         }
       })();
       return;
     }
 
     // ── EV charger queries — Open Charge Map for detailed results ──
-    if (/ev|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
+    if (/\bev\b|charger|charging|charge point|charge station/i.test(lower) && !/add|schedule|time/.test(lower)) {
       // Extract connector type preference from message, fall back to EV profile
       const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/);
       const connectorType = connectorMatch ? connectorMatch[1].replace(/\s+/g, "") : evDefaultConnector;
@@ -550,7 +579,7 @@ export function ChatProvider({ children }) {
       if (needsMultiCarPrompt) {
         setTripChatFlow({ step: "ev_charger_details", data: { query: lower } });
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: `🚗 Your trip has ${totalTravellers} travellers. How many EVs need charging? Also, what connector type do you need?\n\n• **CCS** (most common for rapid charging)\n• **CHAdeMO**\n• **Type 2** (standard AC)\n\nJust reply like: "2 cars, CCS" or "1 car, Type 2"` }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: `🚗 Your trip has ${totalTravellers} travellers. How many EVs need charging? Also, what connector type do you need?\n\n• **CCS** (most common for rapid charging)\n• **CHAdeMO**\n• **Type 2** (standard AC)\n\nJust reply like: "2 cars, CCS" or "1 car, Type 2"` }]);
         return;
       }
 
@@ -601,7 +630,8 @@ export function ChatProvider({ children }) {
         const fromCoords = findCoords(fromLoc);
         const toCoords = findCoords(toLoc);
 
-        setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Finding EV chargers along the route from **${fromLoc}** to **${toLoc}**...` }]);
+        setTypingContext("Searching route for chargers...");
+        const updateRouteEv = addPlaceholder(`⚡ Finding EV chargers along the route from **${fromLoc}** to **${toLoc}**...`, trip?.dbId);
 
         (async () => {
           try {
@@ -654,23 +684,17 @@ export function ChatProvider({ children }) {
             }
 
             setTripChatTyping(false);
-            setTripChatMessages(prev => {
-              const updated = [...prev];
-              const idx = updated.findLastIndex(m => m.text.includes("Finding EV chargers along the route"));
-              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-              else updated.push({ role: "ai", text: reply });
-              return updated;
-            });
-            saveChatMessage(trip?.dbId, 'ai', reply);
+            updateRouteEv(reply);
           } catch (e) {
             setTripChatTyping(false);
-            setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Error searching for route chargers. Try [Zap-Map](https://www.zap-map.com/live/) for real-time availability.` }]);
+            updateRouteEv(`⚡ Error searching for route chargers. Try [Zap-Map](https://www.zap-map.com/live/) for real-time availability.`);
           }
         })();
         return;
       }
 
-      setTripChatMessages(prev => [...prev, { role: "ai", text: "⚡ Finding EV chargers with real-time details..." }]);
+      setTypingContext("Finding EV chargers...");
+      const updateEvReply = addPlaceholder("⚡ Finding EV chargers with real-time details...", trip?.dbId);
 
       const handleEvResults = async (lat, lng, locLabel) => {
         try {
@@ -714,43 +738,29 @@ export function ChatProvider({ children }) {
         return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
       };
 
-      const updateEvReply = (reply) => {
-        setTripChatTyping(false);
-        setTripChatMessages(prev => {
-          const updated = [...prev];
-          const idx = updated.findLastIndex(m => m.text === "⚡ Finding EV chargers with real-time details...");
-          if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-          else updated.push({ role: "ai", text: reply });
-          return updated;
-        });
-        saveChatMessage(trip?.dbId, 'ai', reply);
-      };
+      const finishEvReply = (reply) => { setTripChatTyping(false); updateEvReply(reply); };
 
       if (evTargetCoords) {
-        // User specified a location — use its coordinates directly, no GPS
-        updateEvReply(await handleEvResults(evTargetCoords[0], evTargetCoords[1], evTargetLoc));
+        finishEvReply(await handleEvResults(evTargetCoords[0], evTargetCoords[1], evTargetLoc));
       } else if (evTargetLoc) {
-        // Location name but no coordinates — pass as location name
-        updateEvReply(await handleEvResults(null, null, evTargetLoc));
+        finishEvReply(await handleEvResults(null, null, evTargetLoc));
       } else if (/near me|nearby|near here|around me/i.test(lower)) {
-        // User explicitly asked for nearby — use GPS
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
-            async (pos) => updateEvReply(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")),
-            async () => updateEvReply(await handleEvResults(null, null, firstLoc)),
+            async (pos) => finishEvReply(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")),
+            async () => finishEvReply(await handleEvResults(null, null, firstLoc)),
             { enableHighAccuracy: false, timeout: 8000 }
           );
         } else {
-          updateEvReply(await handleEvResults(null, null, firstLoc));
+          finishEvReply(await handleEvResults(null, null, firstLoc));
         }
       } else {
-        // No location specified — use the current day's location
         const dayLoc = locForDay(selectedDay);
         const dayCoords = findCoords(dayLoc);
         if (dayCoords) {
-          updateEvReply(await handleEvResults(dayCoords[0], dayCoords[1], dayLoc));
+          finishEvReply(await handleEvResults(dayCoords[0], dayCoords[1], dayLoc));
         } else {
-          updateEvReply(await handleEvResults(null, null, dayLoc || firstLoc));
+          finishEvReply(await handleEvResults(null, null, dayLoc || firstLoc));
         }
       }
       return;
@@ -758,8 +768,9 @@ export function ChatProvider({ children }) {
 
     // ── "Nearby" queries (restaurants, food, cafes, activities, petrol) — use GPS + Places API ──
     const isNearbyQuery = /nearby|nearest|near me|near here|around me|close by|closest/i.test(lower);
-    const isPlaceQuery = /restaurant|food|eat|dining|cafe|coffee|pub|bar|pizza|burger|takeaway|lunch|dinner|breakfast|brunch|supermarket|petrol|fuel|pharmacy|hospital|atm/i.test(lower);
-    if (isNearbyQuery || (isPlaceQuery && isNearbyQuery)) {
+    const isPlaceQuery = /restaurant|food|eat|dining|cafe|coffee|pub|bar|pizza|burger|takeaway|lunch|dinner|breakfast|brunch|supermarket|petrol|fuel|pharmacy|hospital|atm|playground|park|swimming|pool|play area/i.test(lower);
+    const hasPlaceVerb = /\b(find|search|look for|where(?:'s| is| are| can))\b/i.test(lower);
+    if (isNearbyQuery || (isPlaceQuery && hasPlaceVerb)) {
       // Determine search type from the query
       const searchType = /cafe|coffee/i.test(lower) ? "cafe"
         : /pub|bar/i.test(lower) ? "bar"
@@ -768,11 +779,16 @@ export function ChatProvider({ children }) {
         : /pharmacy|chemist/i.test(lower) ? "pharmacy"
         : /hospital|a&e|emergency/i.test(lower) ? "hospital"
         : /atm|cash/i.test(lower) ? "atm"
+        : /playground|play area/i.test(lower) ? "playground"
+        : /swimming|pool/i.test(lower) ? "swimming_pool"
+        : /park\b/i.test(lower) ? "park"
         : "restaurant";
-      const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType + "s";
-      const searchIcon = /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : "🍽️";
+      const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType === "swimming_pool" ? "swimming pools" : searchType === "play area" ? "play areas" : searchType + "s";
+      const searchIcon = /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : /playground|park|swimming|pool/i.test(lower) ? "🏞️" : "🍽️";
 
-      setTripChatMessages(prev => [...prev, { role: "ai", text: `📍 Finding ${searchLabel} near you...` }]);
+      setTypingContext(`Finding ${searchLabel}...`);
+      const updateNearbyChat = addPlaceholder(`📍 Finding ${searchLabel} near you...`, trip?.dbId);
+      const finishNearby = (reply) => { setTripChatTyping(false); updateNearbyChat(reply); };
 
       const handleNearbyResults = async (lat, lng, locLabel) => {
         try {
@@ -800,26 +816,14 @@ export function ChatProvider({ children }) {
         return `${searchIcon} Couldn't find ${searchLabel} via search. Try [Google Maps](https://www.google.com/maps/search/${encodeURIComponent(searchType + " near me")}) for real-time results near you.`;
       };
 
-      const updateNearbyChat = (reply) => {
-        setTripChatTyping(false);
-        setTripChatMessages(prev => {
-          const updated = [...prev];
-          const idx = updated.findLastIndex(m => m.text.includes(`Finding ${searchLabel} near you`));
-          if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-          else updated.push({ role: "ai", text: reply });
-          return updated;
-        });
-        saveChatMessage(trip?.dbId, 'ai', reply);
-      };
-
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          async (pos) => updateNearbyChat(await handleNearbyResults(pos.coords.latitude, pos.coords.longitude, "your location")),
-          async () => updateNearbyChat(await handleNearbyResults(null, null, firstLoc)),
+          async (pos) => finishNearby(await handleNearbyResults(pos.coords.latitude, pos.coords.longitude, "your location")),
+          async () => finishNearby(await handleNearbyResults(null, null, firstLoc)),
           { enableHighAccuracy: false, timeout: 8000 }
         );
       } else {
-        handleNearbyResults(null, null, firstLoc).then(updateNearbyChat);
+        handleNearbyResults(null, null, firstLoc).then(finishNearby);
       }
       return;
     }
@@ -835,7 +839,8 @@ export function ChatProvider({ children }) {
       const toLoc = dayLoc;
 
       const evNote = evModelLabel ? ` for your ${evModelLabel}` : "";
-      setTripChatMessages(prev => [...prev, { role: "ai", text: `⚡ Searching for EV charging stations${evNote} between **${fromLoc}** and **${toLoc}**...` }]);
+      setTypingContext("Searching for charging stations...");
+      const updateAddEv = addPlaceholder(`⚡ Searching for EV charging stations${evNote} between **${fromLoc}** and **${toLoc}**...`, trip?.dbId);
 
       (async () => {
         try {
@@ -898,14 +903,7 @@ export function ChatProvider({ children }) {
             const evInfo = evModelLabel ? `\n🔋 Matched for your **${evModelLabel}**${evDefaultConnector ? ` (${evDefaultConnector})` : ""} · ${evRangeMiles ? `${evRangeMiles}mi range` : ""}` : "";
             const reply = `⚡ Found a charging station!\n\n**${station.name}**${rating}${addr}${nav}${evInfo}\n\n✅ Added to **Day ${targetDay}** at ${smartSlot.time}. Check your itinerary to see it!`;
             setTripChatTyping(false);
-            setTripChatMessages(prev => {
-              const updated = [...prev];
-              const idx = updated.findLastIndex(m => m.text.includes("Searching for EV charging stations"));
-              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-              else updated.push({ role: "ai", text: reply });
-              return updated;
-            });
-            saveChatMessage(trip?.dbId, 'ai', reply);
+            updateAddEv(reply);
           } else {
             // Fallback — no results, add a generic placeholder
             const smartSlot = findSmartSlot(tripId, targetDay, "ev charging break");
@@ -922,26 +920,12 @@ export function ChatProvider({ children }) {
             }));
             const reply = `⚡ Couldn't find a specific charger between ${fromLoc} and ${toLoc}, but I've added a charging stop placeholder to **Day ${targetDay}** at ${smartSlot.time}. Check [Zap-Map](https://www.zap-map.com/live/) for real-time availability along your route.`;
             setTripChatTyping(false);
-            setTripChatMessages(prev => {
-              const updated = [...prev];
-              const idx = updated.findLastIndex(m => m.text.includes("Searching for EV charging stations"));
-              if (idx >= 0) updated[idx] = { role: "ai", text: reply };
-              else updated.push({ role: "ai", text: reply });
-              return updated;
-            });
-            saveChatMessage(trip?.dbId, 'ai', reply);
+            updateAddEv(reply);
           }
         } catch (err) {
           console.error("EV charger add error:", err);
           setTripChatTyping(false);
-          const errReply = `⚡ Had trouble searching for chargers. Try [Zap-Map](https://www.zap-map.com/live/) to find one along your route, then say "add [station name] to day ${targetDay}".`;
-          setTripChatMessages(prev => {
-            const updated = [...prev];
-            const idx = updated.findLastIndex(m => m.text.includes("Searching for EV charging stations"));
-            if (idx >= 0) updated[idx] = { role: "ai", text: errReply };
-            else updated.push({ role: "ai", text: errReply });
-            return updated;
-          });
+          updateAddEv(`⚡ Had trouble searching for chargers. Try [Zap-Map](https://www.zap-map.com/live/) to find one along your route, then say "add [station name] to day ${targetDay}".`);
         }
       })();
       return;
@@ -999,41 +983,53 @@ export function ChatProvider({ children }) {
         setSelectedDay(clearDay);
         const reply = `🗑️ Cleared Day ${clearDay} itinerary.\n\n✅ Added your requested activities:\n${itemsList}\n\nTap the Itinerary tab to see them — tap ✏️ to adjust times.`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
       } else {
         setSelectedDay(clearDay);
         const reply = `🗑️ Cleared all activities from **Day ${clearDay}**. You can now add new ones — try "add [activity] to day ${clearDay}" or "suggest activities for day ${clearDay}".`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
       }
     }
 
     // ── Handle "suggest/recommend activities" queries — show location activities ──
-    const isSuggestQuery = /\b(suggest|recommend|what(?:'s| is| are| can)|show me|list|things to do|activities|attractions|places to visit|can be done|ideas|what.+do\b)/i.test(lower)
+    const isSuggestQuery = /\b(suggest|recommend|what(?:'s| is| are| can)|where(?:'s| is| are| can| should)|show me|list|things to do|activities|attractions|places to visit|can be done|ideas|best|top|what.+do\b)/i.test(lower)
       && /\b(activit|attraction|thing|place|do\b|done|visit|see|sight|experience|idea|option|lunch|dinner|breakfast|brunch|food|eat|restaurant|cafe|meal|snack|pub|bar)/i.test(lower);
     if (isSuggestQuery) {
       // Extract location from the query
-      const locMatch = lower.replace(/\s+(?:on|for|during)\s+day\s*\d+/i, '').match(/\b(?:in|at|near|around)\s+([a-z\s]+?)$/i);
+      const locMatch = lower.replace(/\s+(?:on|for|during)\s+day\s*\d+/i, '').replace(/[?.!]+$/, '').match(/\b(?:in|at|near|around)\s+([a-z\s]+?)$/i);
       const dayMatch = lower.match(/day\s*(\d+)/);
-      const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
-      let queryLoc = locMatch ? locMatch[1].trim() : null;
+      const isTomorrowSuggest = /\btomorrow\b/i.test(lower);
+      const targetDay = dayMatch ? parseInt(dayMatch[1]) : isTomorrowSuggest ? selectedDay + 1 : selectedDay;
+      let queryLoc = locMatch ? locMatch[1].trim() : mentionedLoc;
       const dayLoc = locForDay(targetDay);
 
-      // ── Resolve stay names to their actual location ──
+      // ── Resolve stay names / pronouns to their actual location ──
       // e.g. "near millwood manor" → resolves to the stay's location (Windermere, Lake District, etc.)
+      // Also handles "our hotel", "the hotel", "our stay", "our accommodation"
       if (queryLoc) {
-        const matchedStay = (trip?.stays || []).find(s =>
-          s.name && queryLoc.toLowerCase().includes(s.name.toLowerCase().split(/\s+/).slice(0, 2).join(" ")) ||
-          s.name && s.name.toLowerCase().includes(queryLoc.toLowerCase())
-        );
-        if (matchedStay) {
-          // Use stay's location/address, or infer from places list
-          const stayGeoLoc = matchedStay.location || matchedStay.address || (trip?.places || []).find(p => findCoords(p)) || dayLoc;
-          queryLoc = stayGeoLoc;
+        const isHotelPronoun = /\b(our|the|my)\s+(hotel|stay|accommodation|b&b|hostel|lodge|cabin|airbnb|villa|cottage)\b/i.test(queryLoc);
+        if (isHotelPronoun) {
+          const currentStay = (trip?.stays || []).find((s, i) => {
+            if (!s.checkIn || !s.checkOut || !trip?.rawStart) return i === 0;
+            const tripStart = new Date(trip.rawStart + "T12:00:00");
+            const dayDate = new Date(tripStart.getTime() + (targetDay - 1) * 86400000).toISOString().split("T")[0];
+            return s.checkIn <= dayDate && s.checkOut > dayDate;
+          }) || (trip?.stays || [])[0];
+          queryLoc = currentStay?.location || currentStay?.address || dayLoc;
+        } else {
+          const matchedStay = (trip?.stays || []).find(s =>
+            s.name && queryLoc.toLowerCase().includes(s.name.toLowerCase().split(/\s+/).slice(0, 2).join(" ")) ||
+            s.name && s.name.toLowerCase().includes(queryLoc.toLowerCase())
+          );
+          if (matchedStay) {
+            const stayGeoLoc = matchedStay.location || matchedStay.address || (trip?.places || []).find(p => findCoords(p)) || dayLoc;
+            queryLoc = stayGeoLoc;
+          }
         }
       }
 
@@ -1082,7 +1078,7 @@ export function ChatProvider({ children }) {
             const locLabel = searchLoc.charAt(0).toUpperCase() + searchLoc.slice(1);
             const reply = `🍽️ **${mealType.charAt(0).toUpperCase() + mealType.slice(1)} options near ${locLabel}** (Day ${targetDay}):${filterStr}\n\n${placesList}\n\n💡 Say **"Add [name] to Day ${targetDay}"** to plug it into your itinerary!`;
             setTripChatTyping(false);
-            setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+            setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
             saveChatMessage(trip?.dbId, 'ai', reply);
             return;
           }
@@ -1091,7 +1087,7 @@ export function ChatProvider({ children }) {
         const locLabel = searchLoc.charAt(0).toUpperCase() + searchLoc.slice(1);
         const fallbackReply = `🍽️ I couldn't find specific restaurants near **${locLabel}** right now. Try:\n\n• **"restaurants near ${dayLoc}"** (broader area)\n• **"restaurants nearby"** (uses your GPS)\n• Ask me for a specific cuisine: **"Italian restaurants in ${dayLoc}"**`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: fallbackReply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: fallbackReply }]);
         saveChatMessage(trip?.dbId, 'ai', fallbackReply);
         return;
       }
@@ -1112,7 +1108,7 @@ export function ChatProvider({ children }) {
         const distNote = distHrs >= 0.25 ? `\n\n📍 ${searchLoc} is ~${distHrs >= 1 ? Math.round(distHrs * 10) / 10 + " hrs" : Math.round(distHrs * 60) + " min"} from ${stayBaseLoc}` : "";
         const reply = `🎯 **Activities in ${searchLoc.charAt(0).toUpperCase() + searchLoc.slice(1)}** for Day ${targetDay}:\n\n${optionsList}${dinnerNote}${distNote}\n\nReply with a number to add it, or type your own activity!`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
       }
@@ -1180,7 +1176,7 @@ export function ChatProvider({ children }) {
       }
 
       setTripChatTyping(false);
-      setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+      setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
       saveChatMessage(trip?.dbId, 'ai', reply);
       return;
     }
@@ -1231,7 +1227,7 @@ export function ChatProvider({ children }) {
         const addedNote = namedActivity.length > 2 ? `✅ Added **${namedActivity}** to Day ${targetDay}.\n\n` : "";
         const reply = `${addedNote}Here are more activities in **${suggestLoc}** for Day ${targetDay}:\n\n${optionsList}\n\nReply with a number to add it, or type something specific!`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         setSelectedDay(targetDay);
         return;
@@ -1258,7 +1254,7 @@ export function ChatProvider({ children }) {
         const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
         const reply = `Here are popular attractions in **${dayLoc}** for Day ${targetDay}:\n\n${optionsList}${distNote}\n\nReply with a number to add it, or type something specific!`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: reply }]);
         saveChatMessage(trip?.dbId, 'ai', reply);
         return;
       }
@@ -1311,222 +1307,254 @@ export function ChatProvider({ children }) {
           logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
         }
         setSelectedDay(targetDay);
+        const addDayLoc = locForDay(targetDay) || firstLoc;
         const addReply = replacedTitle
-          ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust.`
-          : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust the time.`;
+          ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${addDayLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust.`
+          : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${addDayLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust the time.`;
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: addReply }]);
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: addReply }]);
         saveChatMessage(trip?.dbId, 'ai', addReply);
         return;
       }
     }
 
-    // Try Claude API first for richer, context-aware responses
+    // Try Claude API first — with SSE streaming for real-time text
+    setTypingContext(/restaurant|food|eat|lunch|dinner|breakfast/i.test(lower) ? "Looking up restaurants..." : /activit|suggest|recommend|things to do/i.test(lower) ? "Finding activities..." : /budget|cost|spend/i.test(lower) ? "Crunching numbers..." : "Thinking...");
+    const chatPayload = {
+      message: msg,
+      stream: true,
+      tripContext: sanitiseTripContext({
+        dates: trip?.start && trip?.end ? `${trip.start} – ${trip.end}` : null,
+        places: trip?.places,
+        travelMode: trip?.travel?.join(", "),
+        travellers: trip?.travellers,
+        stays: trip?.stays,
+        prefs: trip?.prefs,
+        budget,
+        brief: trip?.brief || null,
+        currentLocation: effectiveLoc,
+        currentDay: selectedDay,
+        templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),
+      }),
+      intelligence: intelligenceRef.current,
+      chatHistory: tripChatMessages.slice(-10),
+      chatSummary: tripChatMessages.length > 10 ? (() => {
+        const earlier = tripChatMessages.slice(0, -10);
+        const topics = [...new Set(earlier.filter(m => m.role === 'user').map(m => m.text).filter(Boolean).map(t => t.slice(0, 60)))].slice(-5);
+        return `Earlier in this conversation (${earlier.length} messages), topics discussed: ${topics.join('; ') || 'general trip planning'}`;
+      })() : null,
+    };
+    // Helper: make the Claude API call (used for retry)
+    const callChatApi = () => authFetch(API.CHAT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(chatPayload),
+    });
     try {
-      const res = await authFetch(API.CHAT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: msg,
-          tripContext: sanitiseTripContext({
-            dates: trip?.start && trip?.end ? `${trip.start} – ${trip.end}` : null,
-            places: trip?.places,
-            travelMode: trip?.travel?.join(", "),
-            travellers: trip?.travellers,
-            stays: trip?.stays,
-            prefs: trip?.prefs,
-            budget,
-            brief: trip?.brief || null,
-            currentLocation: effectiveLoc,
-            currentDay: selectedDay,
-            templateStyle: (() => { const tp = TEMPLATE_PROFILES[trip?.templateKey]; return tp ? `Trip style: ${trip.templateKey}. Bias recommendations towards: ${tp.chatBias}.` : null; })(),
-          }),
-          intelligence: intelligenceRef.current, // Real-time signals from connectors
-          chatHistory: tripChatMessages.slice(-10),
-          chatSummary: tripChatMessages.length > 10 ? (() => {
-            const earlier = tripChatMessages.slice(0, -10);
-            const topics = [...new Set(earlier.filter(m => m.role === 'user').map(m => m.text).filter(Boolean).map(t => t.slice(0, 60)))].slice(-5);
-            return `Earlier in this conversation (${earlier.length} messages), topics discussed: ${topics.join('; ') || 'general trip planning'}`;
-          })() : null,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.reply) {
+      let res = await callChatApi();
+      // Auto-retry once on network/server failure before giving up
+      if (!res.ok && res.status >= 500) {
+        await new Promise(r => setTimeout(r, 1500));
+        res = await callChatApi();
+      }
+
+      if (res.ok && res.headers.get("content-type")?.includes("text/event-stream")) {
+        // ── SSE streaming: show text as it arrives ──
+        const streamId = msgId();
         setTripChatTyping(false);
-        setTripChatMessages(prev => [...prev, { role: "ai", text: data.reply }]);
-        saveChatMessage(trip?.dbId, 'ai', data.reply);
-        return;
-      }
-      // API returned ok but empty reply — don't leave typing indicator stuck
-      if (res.ok && !data.reply) {
-        console.warn('Chat API returned ok but empty reply');
-      }
-    } catch (e) { console.warn('Chat API unavailable:', e.message); /* fall back to local */ }
+        setTypingContext("");
+        setTripChatMessages(prev => [...prev, { id: streamId, role: "ai", text: "" }]);
+        let fullText = "";
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let sseBuffer = "";
 
-    // Local fallback — ensure typing indicator is always cleared
-    setTimeout(async () => {
-      let reply = "";
-      const lower = msg.toLowerCase();
-      if (lower.includes("restaurant") || lower.includes("food") || lower.includes("eat") || lower.includes("lunch") || lower.includes("dinner") || lower.includes("nearby")) {
-        // Use Places API for real restaurant search — always try GPS first
-        const extras = [];
-        if (wantsDog) extras.push("🐕 dog-friendly");
-        if (wantsAccessible) extras.push("♿ accessible");
-        if (hasKids) extras.push("👧 kids' menus");
-        const filterStr = extras.length > 0 ? `\nFiltering for: ${extras.join(", ")}` : "";
-        const searchQuery = `${budgetLabel} ${foodPref} restaurants ${hasKids ? "family friendly" : ""} in ${firstLoc}`;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split("\n");
+          sseBuffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed.text) {
+                fullText += parsed.text;
+                const snapshot = fullText;
+                setTripChatMessages(prev => {
+                  const updated = [...prev];
+                  const idx = findLastIdx(updated, m => m.id === streamId);
+                  if (idx >= 0) updated[idx] = { ...updated[idx], text: snapshot };
+                  return updated;
+                });
+              }
+              if (parsed.error) { console.warn("Stream error:", parsed.error); break; }
+            } catch (e) { /* skip */ }
+          }
+        }
 
-        // Always try GPS first for restaurant searches — traveller might be en route
-        const doPlacesSearch = async (gpsLat, gpsLng) => {
-          const body = { query: searchQuery, type: "restaurant" };
-          if (gpsLat && gpsLng) { body.location = { lat: gpsLat, lng: gpsLng }; body.radius = 5000; }
-          const placesRes = await authFetch(API.PLACES, {
+        if (fullText) {
+          saveChatMessage(trip?.dbId, 'ai', fullText);
+          return;
+        }
+        // Stream ended with no text — fall through to fallback
+      } else if (res.ok) {
+        // ── Non-streaming fallback (server didn't support stream) ──
+        const data = await res.json();
+        if (data.reply) {
+          setTripChatTyping(false);
+          setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: data.reply }]);
+          saveChatMessage(trip?.dbId, 'ai', data.reply);
+          return;
+        }
+      }
+
+      // API returned ok but empty/no reply — retry without streaming
+      if (res.ok) {
+        console.warn('Chat API returned ok but empty reply — retrying non-stream');
+        try {
+          const retryRes = await authFetch(API.CHAT, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ ...chatPayload, stream: false }),
           });
-          return placesRes;
-        };
-
-        // Try Places API — always attempt GPS first, fall back to location name
-        try {
-          let placesRes;
-          let usedGps = false;
-          if (navigator.geolocation) {
-            try {
-              const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
-              placesRes = await doPlacesSearch(pos.coords.latitude, pos.coords.longitude);
-              usedGps = true;
-            } catch (gpsErr) {
-              placesRes = await doPlacesSearch(null, null);
-            }
-          } else {
-            placesRes = await doPlacesSearch(null, null);
-          }
-          const placesData = await placesRes.json();
-          if (placesRes.ok && placesData.places?.length > 0) {
-            const top5 = placesData.places.slice(0, 5);
-            const placesList = top5.map((p, i) => {
-              const stars = p.rating ? `${p.rating}★` : "";
-              const price = p.priceLevel || "";
-              const status = p.openNow === true ? "Open now" : p.openNow === false ? "Closed" : "";
-              // Extract cuisine/type from types array
-              const cuisineTypes = (p.types || [])
-                .filter(t => !["restaurant","food","point_of_interest","establishment","meal_takeaway","meal_delivery","store","bar"].includes(t))
-                .map(t => t.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()))
-                .slice(0, 2);
-              const cuisineLabel = cuisineTypes.length > 0 ? cuisineTypes.join(" · ") : "";
-              const mapLink = `https://www.google.com/maps/place/?q=place_id:${p.placeId}`;
-              return `${i + 1}. **${p.name}** ${stars} ${price}${cuisineLabel ? ` · ${cuisineLabel}` : ""}\n   ${p.address}${status ? ` · ${status}` : ""}\n   [View on Maps](${mapLink})`;
-            }).join("\n\n");
-
-            const locNote = usedGps ? "your current location" : firstLoc;
-            reply = `🍽️ **Top restaurants near ${locNote}** (Day ${selectedDay}, ${foodPref}):${filterStr}\n\n${placesList}\n\n📍 *Results based on ${usedGps ? "your GPS location" : "trip destination"}*\n\n💡 Say **"Add [name] to Day ${selectedDay}"** to plug it into your itinerary!`;
+          const retryData = await retryRes.json();
+          if (retryRes.ok && retryData.reply) {
             setTripChatTyping(false);
-            setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
+            setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: retryData.reply }]);
+            saveChatMessage(trip?.dbId, 'ai', retryData.reply);
             return;
           }
-        } catch (e) { /* Places API unavailable — use static fallback */ }
-
-        reply = `For ${budgetLabel} dining in ${firstLoc} (${foodPref}):${filterStr}\n\n🍽️ I'd suggest ${budgetLabel} ${wantsPubs ? "pubs & gastropubs" : "restaurants"} with ${foodPref} options.${hasKids ? `\n👧 With ${kidNames}, look for family-friendly spots.` : ""}\n\nTap ✏️ on any meal to update.`;
-      } else if (lower.includes("earlier") || lower.includes("later") || lower.includes("time") || lower.includes("move")) {
-        reply = `${contextLine}Tap ✏️ on any timeline item to adjust times.`;
-        if (hasKids) {
-          const youngest = Math.min(...allKids.map(k => parseInt(k.age) || 10));
-          reply += youngest <= 7 ? `\n\n💡 With young kids (${kidNames}), I'd recommend:\n• Dinner by 5:30 PM\n• Rest breaks every 2 hours\n• Late starts if mornings are tough` : `\n\n💡 With ${kidNames}, earlier dinner (6 PM) works well.`;
-        }
-      } else if (lower.includes("add") || lower.includes("include") || lower.includes("plug")) {
-        // Check if user wants to add a specific item (e.g., "add Oink to day 2")
-        const dayMatch = lower.match(/day\s*(\d+)/);
-        const targetDay = dayMatch ? parseInt(dayMatch[1]) : selectedDay;
-        // Extract what to add — text after "add"/"include"/"plug"
-        const addMatch = msg.match(/(?:add|include|plug(?:\s*in)?)\s+(.+?)(?:\s+(?:to|into|on|for)\s+day\s*\d+)?$/i);
-        const itemTitle = addMatch ? addMatch[1].trim().replace(/(?:to|into|on|for)\s+day\s*\d+$/i, '').trim() : null;
-        if (itemTitle && itemTitle.length > 2) {
-          // Add a specific named item to the specified day — smart time slot, replace if conflict
-          const smartSlot = findSmartSlot(tripId, targetDay, lower);
-          const newItem = { time: smartSlot.time, title: itemTitle, desc: `${firstLoc} · Added via chat`, group: "Everyone", color: T.blue };
-          const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
-          let replacedTitle = null;
-          setCreatedTrips(prev => prev.map(t => {
-            if (t.id !== tripId) return t;
-            const tl = t.timeline || {};
-            let dayTl = [...(tl[targetDay] || [])];
-            const slotMins = parseT(smartSlot.time);
-            const existIdx = dayTl.findIndex(it => Math.abs(parseT(it.time) - slotMins) < 30);
-            if (existIdx >= 0) {
-              replacedTitle = dayTl[existIdx].title;
-              dayTl[existIdx] = { ...dayTl[existIdx], ...newItem };
-            } else {
-              dayTl = [...dayTl, newItem];
-            }
-            dayTl.sort((a, b) => parseT(a.time) - parseT(b.time));
-            const newTimeline = { ...tl, [targetDay]: dayTl };
-            saveTimelineToDB(t.dbId || t.id, newTimeline);
-            return { ...t, timeline: newTimeline };
-          }));
-          if (replacedTitle) {
-            logActivity(tripId, "🔄", `Replaced "${replacedTitle}" with "${itemTitle}" on Day ${targetDay} · ${smartSlot.time}`, "itinerary");
-          } else {
-            logActivity(tripId, "📍", `Added "${itemTitle}" to Day ${targetDay}`, "itinerary");
-          }
-          // Auto-switch to itinerary on the added day
-          setSelectedDay(targetDay);
-          reply = replacedTitle
-            ? `🔄 Replaced **${replacedTitle}** with **${itemTitle}** on **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust.`
-            : `✅ Added **${itemTitle}** to **Day ${targetDay}** at ${smartSlot.time} (${smartSlot.label}) in ${firstLoc}. Tap the Itinerary tab to see it — tap ✏️ to adjust the time.`;
-        } else {
-          addTimelineItem(tripId);
-          reply = `${contextLine}Added a new activity slot for ${firstLoc}.`;
-          if (hasKids) reply += `\n\n👧 Tip: Split adult/kid activities — ${kidNames} might enjoy something different!`;
-          if (wantsDog) reply += `\n🐕 Remember: check venue is dog-friendly before booking.`;
-          reply += `\n\nTap ✏️ to customise.`;
-        }
-      } else if (lower.includes("remove") || lower.includes("delete") || lower.includes("cancel")) {
-        reply = `Tap ✏️ on any item, then 🗑️ to remove it. Which activity would you like to remove?`;
-      } else if (lower.includes("budget") || lower.includes("cost") || lower.includes("spend") || lower.includes("price")) {
-        const totalSpent = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-        if (expenses.length > 0) {
-          const byCategory = {};
-          expenses.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + (parseFloat(e.amount) || 0); });
-          const catLines = Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
-            const info = getCatInfo(cat);
-            return `${info.icon} ${info.label}: £${amt.toFixed(2)}`;
-          }).join("\n");
-          const budgetParsed = parseFloat(String(budget).replace(/[^0-9.]/g, ''));
-          const remainLine = !isNaN(budgetParsed) && budgetParsed > 0 ? `\n📊 Budget: ${budget} · Remaining: £${(budgetParsed - totalSpent).toFixed(2)}` : "";
-          reply = `💰 **Spent so far:** £${totalSpent.toFixed(2)} across ${expenses.length} expenses${remainLine}\n\n${catLines}\n\nSay **"who owes what"** for settlement details.`;
-        } else {
-          reply = `💰 **Budget: ${budget || "not set"}**\n\nNo expenses logged yet. Add them in the **Expenses** tab, then ask me again!`;
-        }
-      } else if (lower.includes("suggest") || lower.includes("activit") || lower.includes("things to do") || lower.includes("what can") || lower.includes("what should") || lower.includes("recommend") || lower.includes("ideas") || lower.includes("explore") || lower.includes("places near") || lower.includes("places to")) {
-        const dayLoc = mentionedLoc || locForDay(selectedDay);
-        const locActs = getLocationActivities(dayLoc);
-        if (locActs) {
-          const morning = locActs.morning || [];
-          const afternoon = locActs.afternoon || [];
-          const kidsActs = (hasKids && locActs.kids) ? locActs.kids : [];
-          const allOptions = [...morning.slice(0, 3), ...afternoon.slice(0, 3), ...kidsActs.slice(0, 2)];
-          const uniqueOptions = [...new Set(allOptions)].slice(0, 6);
-          setTripChatFlow({ step: "pick_attraction", data: { options: uniqueOptions, targetDay: selectedDay, loc: dayLoc } });
-          const optionsList = uniqueOptions.map((o, i) => `${i + 1}. **${o}**`).join("\n");
-          reply = `Here are activities I'd recommend in **${dayLoc}** for Day ${selectedDay}:\n\n${optionsList}\n\nReply with a number to add it to your itinerary, or type something specific!`;
-        } else {
-          reply = `${contextLine}For activities in **${dayLoc}**, try asking something specific like:\n• "Add [activity name] to Day ${selectedDay}"\n• "What outdoor activities are in ${dayLoc}?"\n• "Find quad biking near ${dayLoc}"\n\nOr ask about restaurants, timing, or budget!`;
-        }
-      } else if (lower.includes("summary") || lower.includes("plan") || lower.includes("overview")) {
-        reply = `${contextLine}All itinerary items above are tailored to this context. Ask me about restaurants, activities, timing, or budget — I'll factor in everything.`;
-      } else if (lower.includes("regenerate") || lower.includes("refresh") || lower.includes("redo")) {
-        generateAndSetTimeline(tripId);
-        reply = `${contextLine}Done! I've regenerated your itinerary based on all your preferences. The timeline above is updated.`;
-      } else {
-        reply = `I couldn't find a specific answer for that right now. Try rephrasing, or ask me about:\n• 🍽️ Restaurants & food in **${effectiveLoc}**\n• ⏰ Timing adjustments\n• 🎯 Activities to add to **${effectiveLoc}**\n• 💰 Budget & costs\n• 🔄 Regenerate itinerary`;
+        } catch (e) { /* fall through */ }
+        setTripChatTyping(false);
+        setTypingContext("");
+        setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: `I'm having trouble responding right now. Try rephrasing, or ask about restaurants, activities, or weather in **${effectiveLoc}**.`, failed: true }]);
+        lastFailedMsgRef.current = { tripId, msg };
+        return;
       }
+      // API error — clear typing before falling through to local fallback
       setTripChatTyping(false);
-      setTripChatMessages(prev => [...prev, { role: "ai", text: reply }]);
-      saveChatMessage(trip?.dbId, 'ai', reply);
-    }, Math.min(2500, Math.max(800, 1200)));
+      setTypingContext("");
+    } catch (e) {
+      console.warn('Chat API unavailable:', e.message);
+      // Retry once on network error
+      try {
+        const retryRes = await authFetch(API.CHAT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...chatPayload, stream: false }),
+        });
+        const retryData = await retryRes.json();
+        if (retryRes.ok && retryData.reply) {
+          setTripChatTyping(false);
+          setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: retryData.reply }]);
+          saveChatMessage(trip?.dbId, 'ai', retryData.reply);
+          return;
+        }
+      } catch (e2) { /* fall through to smart fallback */ }
+      setTripChatTyping(false);
+      setTypingContext("");
+    }
+
+    // Local fallback — Claude API was unavailable, provide a smart context-aware response
+    const smartFallback = (() => {
+      const locActs = getLocationActivities(effectiveLoc) || getLocationActivities(firstLoc);
+      const intelData = intelligenceRef.current;
+
+      // Weather-related follow-ups
+      if (/rain|umbrella|waterproof|coat|layer|pack|packing|cold|warm/i.test(lower) && intelData?.weather) {
+        const w = intelData.weather;
+        const tips = [];
+        if (w.today) tips.push(`Today: ${w.today.high}°/${w.today.low}°C, ${w.today.condition}${w.today.rainMm > 0 ? ` — ${w.today.rainMm}mm rain expected` : ""}`);
+        if (w.daily?.length > 1) w.daily.slice(1, 3).forEach(d => tips.push(`${d.date}: ${d.high}°/${d.low}°C, ${d.condition}`));
+        const packTips = [];
+        if (w.daily?.some(d => d.rainMm > 1)) packTips.push("🌂 Pack waterproofs");
+        if (w.daily?.some(d => d.low <= 5)) packTips.push("🧥 Bring warm layers");
+        if (w.current?.temp > 25) packTips.push("🧴 Sun cream essential");
+        return `Based on the forecast for **${effectiveLoc}**:\n\n${tips.join("\n")}\n\n${packTips.length > 0 ? packTips.join(" · ") : ""}`;
+      }
+
+      // Activity/trek/hike difficulty/info questions — provide what we know + suggest alternatives
+      if (/difficult|easy|hard|strenuous|steep|suitable|accessible|wheelchair|kid|child|toddler|pushchair|buggy|parking|open|close|hour|time|ticket|entry|fee|price|cost|duration|long|far|distance/i.test(lower)) {
+        const activityName = msg.replace(/\b(how|is|are|what|the|it|this|do|does|would|could|will|can|much|many|far|long|about|for|to|in|at|of|a|an)\b/gi, '').trim();
+        let reply = `I don't have specific details about **${activityName}** offline, but here's what I can help with:\n\n`;
+        if (locActs) {
+          const allActs = [...new Set([...(locActs.morning || []), ...(locActs.afternoon || []), ...(locActs.kids || [])])].slice(0, 5);
+          reply += `**Popular activities in ${effectiveLoc}:**\n${allActs.map(a => `• ${a}`).join("\n")}\n\n`;
+        }
+        if (intelData?.weather?.current) {
+          reply += `**Current weather:** ${intelData.weather.current.temp}°C, ${intelData.weather.current.description}\n\n`;
+        }
+        reply += `Try asking:\n• **"Suggest activities in ${effectiveLoc}"** for recommendations\n• **"Weather"** to check conditions\n• **"Find restaurants"** for dining`;
+        return reply;
+      }
+
+      // General question — provide trip context as best we can
+      let reply = `I couldn't reach my AI assistant for a detailed answer, but here's what I know about your trip to **${effectiveLoc}**:\n\n`;
+      const parts = [];
+      if (intelData?.weather?.current) parts.push(`🌤️ **Weather now:** ${intelData.weather.current.temp}°C, ${intelData.weather.current.description}`);
+      if (intelData?.currency?.rates) {
+        const rateStr = Object.values(intelData.currency.rates).map(r => r.example).slice(0, 2).join(", ");
+        if (rateStr) parts.push(`💱 **Exchange:** ${rateStr}`);
+      }
+      if (intelData?.language) parts.push(`🗣️ **Local language:** ${intelData.language.lang} — hello: "${intelData.language.hello}"`);
+      if (locActs) {
+        const topActs = [...new Set([...(locActs.morning || []), ...(locActs.afternoon || [])])].slice(0, 4);
+        if (topActs.length > 0) parts.push(`🎯 **Top activities:** ${topActs.join(", ")}`);
+      }
+      if (parts.length > 0) reply += parts.join("\n") + "\n\n";
+      reply += `For a detailed answer, tap **Retry** or try a specific question like:\n• **"Suggest activities for Day ${selectedDay}"**\n• **"Weather forecast"**\n• **"Find restaurants in ${effectiveLoc}"**`;
+      return reply;
+    })();
+    lastFailedMsgRef.current = { tripId, msg };
+    setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: smartFallback, failed: true }]);
+    saveChatMessage(trip?.dbId, 'ai', smartFallback);
   };
+
+  // ─── Retry last failed message ───
+  const retryLastMessage = () => {
+    const ref = lastFailedMsgRef.current;
+    if (!ref) return;
+    // Remove the failed AI response
+    setTripChatMessages(prev => prev.filter(m => !m.failed));
+    setTripChatInput("");
+    lastFailedMsgRef.current = null;
+    // Pass the message directly to avoid React state flush race condition
+    handleTripChat(ref.tripId, ref.msg);
+  };
+
+  // ─── Generate smart follow-up chips based on last AI response ───
+  const getFollowUpChips = useCallback(() => {
+    if (tripChatMessages.length === 0) return [];
+    const lastAi = [...tripChatMessages].reverse().find(m => m.role === "ai" && !m.failed);
+    if (!lastAi) return [];
+    const t = lastAi.text.toLowerCase();
+    const trip = selectedCreatedTrip || createdTrips[0];
+    const loc = trip?.places?.[0] || "your destination";
+
+    if (/restaurant|dining|food|🍽️/.test(t) && /\d+\.\s*\*\*/.test(lastAi.text)) {
+      return [{ label: "Show more options", icon: "🔄" }, { label: `Add to Day ${selectedDay}`, icon: "➕" }, { label: "Different cuisine", icon: "🍜" }];
+    }
+    if (/activit|attraction|things to do|🎯/.test(t) && /\d+\.\s*\*\*/.test(lastAi.text)) {
+      return [{ label: "Show more", icon: "🔄" }, { label: "Kid-friendly options", icon: "👧" }, { label: "Indoor alternatives", icon: "🏠" }];
+    }
+    if (/weather|forecast|🌤️|☀️|🌧️/.test(t)) {
+      return [{ label: "Packing tips", icon: "🎒" }, { label: "Indoor activities", icon: "🏠" }, { label: `Suggest activities`, icon: "🎯" }];
+    }
+    if (/budget|spent|expense|💰/.test(t)) {
+      return [{ label: "Who owes what?", icon: "🤝" }, { label: "Set budget limit", icon: "📊" }];
+    }
+    if (/added.*to.*day|✅.*added/i.test(t)) {
+      return [{ label: "Suggest more activities", icon: "🎯" }, { label: `Find restaurants in ${loc}`, icon: "🍽️" }, { label: "View itinerary", icon: "📋" }];
+    }
+    if (/ev charg|⚡/.test(t)) {
+      return [{ label: "Add charging stop", icon: "➕" }, { label: "Show route chargers", icon: "🗺️" }];
+    }
+    return [];
+  }, [tripChatMessages, selectedDay, selectedCreatedTrip, createdTrips]);
 
   // ─── Day-Aware Chat Greeting (uses real trip data) ───
   const buildDayGreeting = useCallback((dayNum) => {
@@ -1618,9 +1646,9 @@ export function ChatProvider({ children }) {
     if (screen === "chat" && chatDayInit !== selectedDay) {
       const greeting = buildDayGreeting(selectedDay);
       if (chatDayInit === null) {
-        setChatMessages([{ role: "ai", text: greeting }]);
+        setChatMessages([{ id: msgId(), role: "ai", text: greeting }]);
       } else {
-        setChatMessages(prev => [...prev, { role: "ai", text: `— Switching to Day ${selectedDay} —\n\n${greeting}` }]);
+        setChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: `— Switching to Day ${selectedDay} —\n\n${greeting}` }]);
       }
       setChatDayInit(selectedDay);
     }
@@ -1641,9 +1669,12 @@ export function ChatProvider({ children }) {
     tripChatEndRef,
     tripChatTyping, setTripChatTyping,
     tripChatFlow,
+    typingContext,
     loadTripMessages,
     saveChatMessage,
     handleTripChat,
+    retryLastMessage,
+    getFollowUpChips,
     buildDayGreeting,
     intelligence,
     smartTips,

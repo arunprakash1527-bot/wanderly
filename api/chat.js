@@ -3,19 +3,23 @@
 
 import { createClient } from "@supabase/supabase-js";
 
+const ALLOWED_ORIGINS = ["https://tripwithme.app", "https://www.tripwithme.app", "http://localhost:3000"];
+
 function getAllowedOrigin(req) {
   const origin = req.headers?.origin || "";
-  const allowed = ["https://tripwithme.app", "https://www.tripwithme.app", "http://localhost:3000"];
-  return allowed.includes(origin) ? origin : allowed[0];
+  return ALLOWED_ORIGINS.includes(origin) ? origin : null;
 }
 
 export default async function handler(req, res) {
   // CORS headers
-  res.setHeader("Access-Control-Allow-Origin", getAllowedOrigin(req));
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  const origin = getAllowedOrigin(req);
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
 
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") return res.status(origin ? 200 : 403).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   // Verify Supabase auth token
@@ -47,7 +51,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, tripContext, chatHistory, intelligence } = req.body;
+    const { message, tripContext, chatHistory, intelligence, stream: wantStream } = req.body;
 
     if (!message) return res.status(400).json({ error: "Message is required" });
 
@@ -82,6 +86,69 @@ export default async function handler(req, res) {
       messages[0] = { role: messages[0].role, content: `[Context: ${req.body.chatSummary}]\n\n${messages[0].content}` };
     }
 
+    // ── SSE streaming mode ──
+    if (wantStream) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 800,
+          stream: true,
+          system: systemPrompt,
+          messages,
+        }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error("Claude API stream error:", response.status, errBody);
+        res.write(`data: ${JSON.stringify({ error: "API request failed" })}\n\n`);
+        return res.end();
+      }
+
+      const reader = response.body;
+      let buffer = "";
+
+      reader.on("data", (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") { res.write("data: [DONE]\n\n"); continue; }
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+              res.write(`data: ${JSON.stringify({ text: parsed.delta.text })}\n\n`);
+            }
+            if (parsed.type === "message_stop") {
+              res.write("data: [DONE]\n\n");
+            }
+          } catch (e) { /* skip unparseable lines */ }
+        }
+      });
+
+      reader.on("end", () => { res.write("data: [DONE]\n\n"); res.end(); });
+      reader.on("error", (err) => {
+        console.error("Stream read error:", err);
+        res.write(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`);
+        res.end();
+      });
+      return;
+    }
+
+    // ── Non-streaming mode (original) ──
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
