@@ -241,24 +241,30 @@ export function TripDataProvider({ children }) {
       }).eq('id', tripId);
       if (tripError) throw tripError;
 
-      // Replace stays: insert new first, only delete old if insert succeeds
+      // Upsert stays: update existing, insert new, delete removed (same pattern as travellers)
       const stayRows = mapStaysForInsert(tripData.stays, tripId);
+      const staysWithId = stayRows.filter(r => r.id);
+      const staysWithoutId = stayRows.filter(r => !r.id);
+      if (staysWithId.length > 0) {
+        const { error: uErr } = await supabase.from('trip_stays').upsert(staysWithId, { onConflict: 'id' });
+        if (uErr) console.error('Error upserting stays:', uErr);
+      }
+      if (staysWithoutId.length > 0) {
+        const { error: iErr } = await supabase.from('trip_stays').insert(staysWithoutId);
+        if (iErr) console.error('Error inserting new stays:', iErr);
+      }
+      // Delete stays that were removed locally
+      const keepStayIds = staysWithId.map(r => r.id);
       if (stayRows.length > 0) {
-        // Try full insert first
-        let { data: newStays, error: sErr } = await supabase.from('trip_stays').insert(stayRows).select('id');
-        if (sErr) {
-          console.warn('Full stays insert failed, retrying without extended columns:', sErr.message);
-          // Retry with only base columns (in case DB schema is missing check_in, check_out, etc.)
-          const minimalRows = stayRows.map(({ check_in, check_out, cost, booking_ref, address, ...rest }) => rest);
-          ({ data: newStays, error: sErr } = await supabase.from('trip_stays').insert(minimalRows).select('id'));
+        const { data: existingStays } = await supabase.from('trip_stays').select('id').eq('trip_id', tripId);
+        const allNewIds = [...keepStayIds];
+        if (staysWithoutId.length > 0) {
+          const { data: justInserted } = await supabase.from('trip_stays').select('id').eq('trip_id', tripId);
+          justInserted?.forEach(s => { if (!allNewIds.includes(s.id)) allNewIds.push(s.id); });
         }
-        if (!sErr && newStays?.length > 0) {
-          // Insert succeeded — delete old stays (exclude newly inserted IDs)
-          const newIds = newStays.map(s => s.id);
-          await supabase.from('trip_stays').delete().eq('trip_id', tripId).not('id', 'in', `(${newIds.join(',')})`);
-        } else if (sErr) {
-          console.error('Error saving stays (both attempts failed):', sErr);
-          // Do NOT delete old stays — preserve existing data
+        const toDeleteStays = (existingStays || []).filter(r => !allNewIds.includes(r.id)).map(r => r.id);
+        if (toDeleteStays.length > 0) {
+          await supabase.from('trip_stays').delete().in('id', toDeleteStays);
         }
       } else {
         await supabase.from('trip_stays').delete().eq('trip_id', tripId);
@@ -297,6 +303,22 @@ export function TripDataProvider({ children }) {
       if (prefsRow) {
         const { error: pErr } = await supabase.from('trip_preferences').insert(prefsRow);
         if (pErr) console.error('Error saving preferences:', pErr);
+      }
+
+      // Re-fetch the full trip from DB to ensure local state is fresh
+      const { data: refreshed } = await supabase
+        .from('trips')
+        .select('*, trip_travellers(*), trip_stays(*), trip_preferences(*)')
+        .eq('id', tripId)
+        .single();
+      if (refreshed) {
+        const fresh = mapTripFromDB(refreshed);
+        setCreatedTrips(prev => prev.map(t =>
+          (t.dbId === tripId || t.id === tripId) ? { ...t, ...fresh, timeline: t.timeline || fresh.timeline, activity: t.activity || fresh.activity, activationPrefs: t.activationPrefs } : t
+        ));
+        if (selectedCreatedTrip && (selectedCreatedTrip.dbId === tripId || selectedCreatedTrip.id === tripId)) {
+          setSelectedCreatedTrip(prev => ({ ...prev, ...fresh, timeline: prev.timeline || fresh.timeline, activity: prev.activity || fresh.activity, activationPrefs: prev.activationPrefs }));
+        }
       }
     } catch (err) {
       console.error('Error updating trip:', err);
@@ -665,9 +687,10 @@ export function TripDataProvider({ children }) {
               const role = newTraveller.role;
               const entry = { name: newTraveller.name, dbId: newTraveller.id, email: newTraveller.email || "", isClaimed: newTraveller.is_claimed, claimedUserId: newTraveller.user_id || null };
               const travellers = { ...t.travellers };
-              // Check for duplicate — skip if traveller with same dbId OR same name+role already exists
+              // Check for duplicate — skip if traveller with same dbId, same user_id, or same name+role already exists
               const allExisting = [...(travellers.adults || []), ...(travellers.olderKids || []), ...(travellers.youngerKids || []), ...(travellers.infants || [])];
               if (allExisting.some(a => a.dbId === newTraveller.id)) return t;
+              if (newTraveller.user_id && allExisting.some(a => a.claimedUserId === newTraveller.user_id)) return t; // same user already has a slot
               if (allExisting.some(a => a.name === newTraveller.name && !a.dbId)) return t; // name match for freshly added travellers without dbId yet
               if (role === 'lead' || role === 'adult') {
                 travellers.adults = [...(travellers.adults || []), { ...entry, isLead: role === 'lead' }];
