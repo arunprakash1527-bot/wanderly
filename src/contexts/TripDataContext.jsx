@@ -346,6 +346,16 @@ export function TripDataProvider({ children }) {
   const joinTripAsTraveller = async (tripId, travellerId, userName) => {
     if (!user || user.id === 'demo') return false;
     try {
+      // Check if user is already claimed on any slot in this trip (prevent double-claim)
+      const { data: existing } = await supabase.from('trip_travellers')
+        .select('id')
+        .eq('trip_id', tripId)
+        .eq('user_id', user.id)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        // Already claimed — skip the update to avoid double-claim
+        return true;
+      }
       await supabase.from('trip_travellers')
         .update({ user_id: user.id, is_claimed: true, name: userName, joined_at: new Date().toISOString() })
         .eq('id', travellerId);
@@ -576,27 +586,42 @@ export function TripDataProvider({ children }) {
 
   // ─── Effects ───
 
-  // Check for share code in URL
+  // Check for share code in URL — requires authenticated user
+  const pendingJoinRef = React.useRef(null);
+
+  // Extract join code from URL on mount (before auth may be ready)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const joinCode = params.get('join');
     const tab = params.get('tab');
     if (tab) setJoinTab(tab);
     if (joinCode) {
+      pendingJoinRef.current = joinCode;
       setJoinShareCode(joinCode);
-      lookupTripByShareCode(joinCode).then(data => {
-        if (data) {
-          const mapped = mapTripFromDB(data);
-          setSelectedCreatedTrip(mapped);
-          navigate('joinPreview');
-        } else {
-          navigate('joinPreview');
-        }
-      });
       // Clean up URL params without reload
       try { window.history.replaceState({}, '', window.location.origin + window.location.pathname); } catch {}
     }
   }, []);
+
+  // Process the join code once user is authenticated
+  useEffect(() => {
+    const code = pendingJoinRef.current;
+    if (!code) return;
+    // Wait for auth — don't process if not logged in or demo user
+    if (!user || user.id === 'demo') return;
+    pendingJoinRef.current = null; // Clear so it doesn't re-fire
+
+    lookupTripByShareCode(code).then(data => {
+      if (data) {
+        const mapped = mapTripFromDB(data);
+        setSelectedCreatedTrip(mapped);
+        navigate('joinPreview');
+      } else {
+        showToast("Invalid or expired invite link", "error");
+        navigate('home');
+      }
+    });
+  }, [user]);
 
   // Real-time Supabase subscriptions
   useEffect(() => {
