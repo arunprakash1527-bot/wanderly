@@ -264,12 +264,31 @@ export function TripDataProvider({ children }) {
         await supabase.from('trip_stays').delete().eq('trip_id', tripId);
       }
 
-      // Replace travellers: delete old, insert new
-      await supabase.from('trip_travellers').delete().eq('trip_id', tripId);
+      // Upsert travellers: insert new, update existing, delete removed
       const travellerRows = mapTravellersForInsert(tripData, tripId, user.id);
-      if (travellerRows.length > 0) {
-        const { error: tErr } = await supabase.from('trip_travellers').insert(travellerRows);
-        if (tErr) console.error('Error saving travellers:', tErr);
+      const rowsWithId = travellerRows.filter(r => r.id);
+      const rowsWithoutId = travellerRows.filter(r => !r.id);
+      // Upsert rows that have existing IDs (preserves them, avoids DELETE+INSERT cycle)
+      if (rowsWithId.length > 0) {
+        const { error: uErr } = await supabase.from('trip_travellers').upsert(rowsWithId, { onConflict: 'id' });
+        if (uErr) console.error('Error upserting travellers:', uErr);
+      }
+      // Insert genuinely new travellers (no dbId yet)
+      if (rowsWithoutId.length > 0) {
+        const { error: iErr } = await supabase.from('trip_travellers').insert(rowsWithoutId);
+        if (iErr) console.error('Error inserting new travellers:', iErr);
+      }
+      // Delete travellers that were removed locally (exist in DB but not in current data)
+      const keepIds = rowsWithId.map(r => r.id);
+      if (keepIds.length > 0) {
+        const { data: existingRows } = await supabase.from('trip_travellers').select('id').eq('trip_id', tripId);
+        const toDelete = (existingRows || []).filter(r => !keepIds.includes(r.id) && !rowsWithoutId.length).map(r => r.id);
+        if (toDelete.length > 0) {
+          await supabase.from('trip_travellers').delete().in('id', toDelete);
+        }
+      } else if (travellerRows.length === 0) {
+        // No travellers at all — clear the table
+        await supabase.from('trip_travellers').delete().eq('trip_id', tripId);
       }
 
       // Replace preferences: delete old, insert new
@@ -613,6 +632,7 @@ export function TripDataProvider({ children }) {
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trip_travellers' }, (payload) => {
+        if (dbWriteLockRef.current) return; // Skip during delete+reinsert in updateTripInDB
         if (payload.new) {
           const newTraveller = payload.new;
           setCreatedTrips(prev => prev.map(t => {
@@ -620,9 +640,10 @@ export function TripDataProvider({ children }) {
               const role = newTraveller.role;
               const entry = { name: newTraveller.name, dbId: newTraveller.id, email: newTraveller.email || "", isClaimed: newTraveller.is_claimed, claimedUserId: newTraveller.user_id || null };
               const travellers = { ...t.travellers };
-              // Check for duplicate — skip if traveller with same dbId already exists
+              // Check for duplicate — skip if traveller with same dbId OR same name+role already exists
               const allExisting = [...(travellers.adults || []), ...(travellers.olderKids || []), ...(travellers.youngerKids || []), ...(travellers.infants || [])];
               if (allExisting.some(a => a.dbId === newTraveller.id)) return t;
+              if (allExisting.some(a => a.name === newTraveller.name && !a.dbId)) return t; // name match for freshly added travellers without dbId yet
               if (role === 'lead' || role === 'adult') {
                 travellers.adults = [...(travellers.adults || []), { ...entry, isLead: role === 'lead' }];
               } else if (role === 'child_older' || role === 'teen') {
@@ -657,6 +678,23 @@ export function TripDataProvider({ children }) {
           if (updated.is_claimed) {
             showToast(`${updated.name || "Someone"} joined the trip!`);
           }
+        }
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'trip_travellers' }, (payload) => {
+        if (dbWriteLockRef.current) return; // Skip during delete+reinsert in updateTripInDB
+        if (payload.old) {
+          const deletedId = payload.old.id;
+          const deletedTripId = payload.old.trip_id;
+          setCreatedTrips(prev => prev.map(t => {
+            if (t.dbId !== deletedTripId) return t;
+            const travellers = { ...t.travellers };
+            const removeFrom = (list) => (list || []).filter(a => a.dbId !== deletedId);
+            travellers.adults = removeFrom(travellers.adults);
+            travellers.olderKids = removeFrom(travellers.olderKids);
+            travellers.youngerKids = removeFrom(travellers.youngerKids);
+            travellers.infants = removeFrom(travellers.infants);
+            return { ...t, travellers };
+          }));
         }
       })
       .subscribe();
