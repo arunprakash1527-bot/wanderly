@@ -636,13 +636,27 @@ export function ChatProvider({ children }) {
         (async () => {
           try {
             const body = { maxResults: 5 };
+            // Pass trip country/region context for geocoding bias
+            const tripRegion = trip?.places?.length > 0 ? trip.places[0] : null;
+            if (tripRegion) body.regionHint = tripRegion;
+
             if (fromCoords && toCoords) {
               body.mode = "route";
               body.fromLat = fromCoords[0]; body.fromLng = fromCoords[1];
               body.toLat = toCoords[0]; body.toLng = toCoords[1];
+            } else if (fromCoords || toCoords) {
+              // One location resolved, one didn't — geocode the missing one via API
+              body.mode = "route";
+              if (fromCoords) {
+                body.fromLat = fromCoords[0]; body.fromLng = fromCoords[1];
+                body.geocodeTo = toLoc;
+              } else {
+                body.toLat = toCoords[0]; body.toLng = toCoords[1];
+                body.geocodeFrom = fromLoc;
+              }
             } else {
               // Fallback: search near midpoint or known location (no route mode)
-              const anyCoords = fromCoords || toCoords || findCoords(firstLoc);
+              const anyCoords = findCoords(firstLoc);
               if (anyCoords) { body.lat = anyCoords[0]; body.lng = anyCoords[1]; }
               else { body.locationName = fromLoc; }
             }
