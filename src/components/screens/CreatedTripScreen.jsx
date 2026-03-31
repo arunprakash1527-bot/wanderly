@@ -965,7 +965,8 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                           const wouldReplace = dayItemsForSlot.find(it => Math.abs(parseTm(it.time) - slotMins) < 30);
                           return (
                             <button key={day} onClick={() => {
-                              const newItem = { time: daySlot.time, title: item.name, desc: `${dayLoc || currentLoc} · ${item.desc ? item.desc.slice(0, 40) : "Added from chat"}`, group: "Everyone", color: item.isRestaurant ? T.coral : T.blue };
+                              const itemLoc = item.address || dayLoc || currentLoc;
+                              const newItem = { time: daySlot.time, title: item.name, desc: `${itemLoc} · ${item.desc ? item.desc.slice(0, 40) : "Added from chat"}`, group: "Everyone", color: item.isRestaurant ? T.coral : T.blue };
                               const parseT = (s) => { const m = s?.match(/(\d+):(\d+)\s*(AM|PM)/i); if (!m) return 0; let h = parseInt(m[1]); if (m[3].toUpperCase() === "PM" && h !== 12) h += 12; if (m[3].toUpperCase() === "AM" && h === 12) h = 0; return h * 60 + parseInt(m[2]); };
                               let replacedName = null;
                               setCreatedTrips(prev => prev.map(t => {
