@@ -103,9 +103,6 @@ export function CreatedTripScreen() {
   const [conflicts, setConflicts] = useState([]);
   const [showConflicts, setShowConflicts] = useState(false);
 
-  // Voice input state
-  const [isListening, setIsListening] = useState(false);
-  const speechRecRef = useRef(null);
 
   // Swipe between days — only on the day nav pills, not the content area (to avoid blocking scroll)
   const swipeStart = useRef(null);
@@ -898,20 +895,6 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
               return items;
             };
 
-            // ─── Voice input handler ───
-            const toggleVoiceInput = () => {
-              const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-              if (!SpeechRecognition) { showToast && showToast("Voice input not supported in this browser"); return; }
-              if (isListening && speechRecRef.current) { speechRecRef.current.stop(); setIsListening(false); return; }
-              const rec = new SpeechRecognition();
-              rec.continuous = false; rec.interimResults = false; rec.lang = "en-US";
-              rec.onresult = (e) => { const transcript = e.results[0][0].transcript; setTripChatInput(prev => prev ? prev + " " + transcript : transcript); setIsListening(false); };
-              rec.onerror = () => setIsListening(false);
-              rec.onend = () => setIsListening(false);
-              speechRecRef.current = rec;
-              rec.start();
-              setIsListening(true);
-            };
 
             // Render a suggestion card
             const renderSuggestionCard = (item, msgIdx, itemIdx) => {
@@ -1132,12 +1115,7 @@ if (!trip) return <div style={{ padding: 40, textAlign: "center" }}>Trip not fou
                     onKeyDown={e => e.key === "Enter" && handleTripChat(trip.id)}
                     style={{ flex: 1, padding: "10px 14px", border: `.5px solid ${T.border}`, borderRadius: 24, fontFamily: T.font, fontSize: 13, background: "#fff", outline: "none" }}
                     placeholder={tripChatFlow?.step === "pick_attraction" ? "Pick a number or type your own..." : `Ask about ${currentLoc}...`} aria-label="Trip chat input" />
-                  {(window.SpeechRecognition || window.webkitSpeechRecognition) && (
-                    <button onClick={toggleVoiceInput} aria-label={isListening ? "Stop listening" : "Voice input"}
-                      style={{ width: 38, height: 38, borderRadius: "50%", border: isListening ? `2px solid ${T.red}` : `.5px solid ${T.border}`, background: isListening ? T.redL : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, transition: "all .2s", animation: isListening ? "pulse 1.5s infinite" : "none" }}>
-                      🎙️
-                    </button>
-                  )}
+
                   <button onClick={() => handleTripChat(trip.id)} aria-label="Send trip message" style={{ ...css.btn, ...css.btnP, borderRadius: 24, padding: "10px 16px", fontSize: 12 }}>Send</button>
                 </div>
               </div>
