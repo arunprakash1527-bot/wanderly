@@ -33,13 +33,13 @@ export function mapTripFromDB(t) {
         })),
       olderKids: (t.trip_travellers || [])
         .filter(tr => tr.role === 'child_older' || tr.role === 'teen')
-        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 15, dbId: tr.id })),
+        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 15, dbId: tr.id, isClaimed: tr.is_claimed && !!tr.user_id, claimedUserId: tr.user_id || null })),
       youngerKids: (t.trip_travellers || [])
         .filter(tr => tr.role === 'child_younger' || tr.role === 'child')
-        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 7, dbId: tr.id })),
+        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 7, dbId: tr.id, isClaimed: tr.is_claimed && !!tr.user_id, claimedUserId: tr.user_id || null })),
       infants: (t.trip_travellers || [])
         .filter(tr => tr.role === 'infant')
-        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 0, dbId: tr.id })),
+        .map(tr => ({ name: tr.name, age: tr.age != null ? tr.age : 0, dbId: tr.id, isClaimed: tr.is_claimed && !!tr.user_id, claimedUserId: tr.user_id || null })),
     },
     stays: (t.trip_stays || []).map(s => ({
       name: s.name, type: s.type, tags: s.tags || [], rating: s.rating,
@@ -108,29 +108,37 @@ export function mapTravellersForInsert(tripData, tripId, userId) {
   const rows = [];
   if (tripData.travellers?.adults) {
     tripData.travellers.adults.forEach(a => {
-      rows.push({
+      const row = {
         trip_id: tripId,
         user_id: a.isLead ? userId : (a.claimedUserId || null),
         name: a.name || 'Adult',
         email: a.email || null,
         role: a.isLead ? 'lead' : 'adult',
         is_claimed: a.isLead ? true : (a.isClaimed && !!a.claimedUserId),
-      });
+      };
+      if (a.dbId) row.id = a.dbId; // Preserve DB ID for deduplication
+      rows.push(row);
     });
   }
   if (tripData.travellers?.olderKids) {
     tripData.travellers.olderKids.forEach(c => {
-      rows.push({ trip_id: tripId, name: c.name || 'Child', role: 'child_older', age: c.age });
+      const row = { trip_id: tripId, name: c.name || 'Child', role: 'child_older', age: c.age };
+      if (c.dbId) row.id = c.dbId;
+      rows.push(row);
     });
   }
   if (tripData.travellers?.youngerKids) {
     tripData.travellers.youngerKids.forEach(c => {
-      rows.push({ trip_id: tripId, name: c.name || 'Child', role: 'child_younger', age: c.age });
+      const row = { trip_id: tripId, name: c.name || 'Child', role: 'child_younger', age: c.age };
+      if (c.dbId) row.id = c.dbId;
+      rows.push(row);
     });
   }
   if (tripData.travellers?.infants) {
     tripData.travellers.infants.forEach(c => {
-      rows.push({ trip_id: tripId, name: c.name || 'Baby', role: 'infant', age: c.age });
+      const row = { trip_id: tripId, name: c.name || 'Baby', role: 'infant', age: c.age };
+      if (c.dbId) row.id = c.dbId;
+      rows.push(row);
     });
   }
   return rows;
