@@ -418,6 +418,7 @@ export function ChatProvider({ children }) {
 
     // ── Handle EV charger flow follow-up — user replying with connector type / car count ──
     if (tripChatFlow?.step === "ev_charger_details") {
+      const evFlowData = tripChatFlow.data || {};
       setTripChatFlow(null);
       // Merge the original query context with the follow-up reply
       const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/i);
@@ -435,6 +436,9 @@ export function ChatProvider({ children }) {
           if (lat && lng) { body.lat = lat; body.lng = lng; }
           else { body.locationName = firstLoc; }
           if (connectorType) body.connectorType = connectorType;
+          // Pass trip region for geocoding bias (prevents US results for UK trips)
+          const tripRegion = trip?.places?.length > 0 ? trip.places[0] : null;
+          if (tripRegion) body.regionHint = tripRegion;
 
           const res = await authFetch(API.EV_CHARGERS, {
             method: "POST",
@@ -471,15 +475,23 @@ export function ChatProvider({ children }) {
         return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
       };
 
-      // Use the current day's location for the flow follow-up
-      const flowDayLoc = locForDay(selectedDay);
-      const flowDayCoords = findCoords(flowDayLoc);
-      if (flowDayCoords) {
+      // Use stored location context from the original query, fall back to day location
+      const flowTargetLoc = evFlowData.evTargetLoc || locForDay(selectedDay);
+      const flowTargetCoords = evFlowData.evTargetCoords || findCoords(flowTargetLoc);
+
+      // If original query was "near me", try GPS first
+      if (evFlowData.isNearMe && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => { setTripChatTyping(false); updateEvFlow(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")); },
+          async () => { setTripChatTyping(false); updateEvFlow(await handleEvResults(flowTargetCoords?.[0] || null, flowTargetCoords?.[1] || null, flowTargetLoc || firstLoc)); },
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
+      } else if (flowTargetCoords) {
         setTripChatTyping(false);
-        updateEvFlow(await handleEvResults(flowDayCoords[0], flowDayCoords[1], flowDayLoc));
+        updateEvFlow(await handleEvResults(flowTargetCoords[0], flowTargetCoords[1], flowTargetLoc));
       } else {
         setTripChatTyping(false);
-        updateEvFlow(await handleEvResults(null, null, flowDayLoc || firstLoc));
+        updateEvFlow(await handleEvResults(null, null, flowTargetLoc || firstLoc));
       }
       return;
     }
@@ -577,7 +589,15 @@ export function ChatProvider({ children }) {
       const needsMultiCarPrompt = totalTravellers > 4 && !evDefaultConnector && !/\d+\s*car|\d+\s*vehicle|single car|one car/i.test(lower);
 
       if (needsMultiCarPrompt) {
-        setTripChatFlow({ step: "ev_charger_details", data: { query: lower } });
+        // Preserve location context so the follow-up uses the right coords
+        const isNearMe = /near me|nearby|near here|around me/i.test(lower);
+        setTripChatFlow({ step: "ev_charger_details", data: {
+          query: lower,
+          evTargetLoc: evTargetLoc || null,
+          evTargetCoords: evTargetCoords || null,
+          isNearMe,
+          isRouteQuery: /halfway|half\s*way|between|en\s*route|on\s*the\s*(way|route)|along\s*the\s*(way|route)|mid[\s-]*route|mid[\s-]*way|from\s+.+?\s+to\s+/i.test(lower),
+        } });
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: `🚗 Your trip has ${totalTravellers} travellers. How many EVs need charging? Also, what connector type do you need?\n\n• **CCS** (most common for rapid charging)\n• **CHAdeMO**\n• **Type 2** (standard AC)\n\nJust reply like: "2 cars, CCS" or "1 car, Type 2"` }]);
         return;
@@ -588,7 +608,7 @@ export function ChatProvider({ children }) {
       const carCount = carCountMatch ? parseInt(carCountMatch[1]) : 1;
 
       // ── Route-aware: detect "halfway", "between X and Y", "en route", "on the way" ──
-      const isRouteQuery = /halfway|half\s*way|between|en\s*route|on\s*the\s*way|along\s*the\s*(way|route)|mid[\s-]*route|mid[\s-]*way|from\s+.+?\s+to\s+|start.*(?:stay|accom|hotel|destination|location)|(?:stay|accom|hotel|destination).*start/i.test(lower);
+      const isRouteQuery = /halfway|half\s*way|between|en\s*route|on\s*the\s*(way|route)|along\s*the\s*(way|route)|mid[\s-]*route|mid[\s-]*way|from\s+.+?\s+to\s+|start.*(?:stay|accom|hotel|destination|location)|(?:stay|accom|hotel|destination).*start/i.test(lower);
       if (isRouteQuery) {
         // Determine from/to — extract from message or use trip context
         const betweenMatch = lower.match(/between\s+(.+?)\s+and\s+(.+?)(?:\s*$|\s*for|\s*on)/i);
@@ -716,6 +736,9 @@ export function ChatProvider({ children }) {
           if (lat && lng) { body.lat = lat; body.lng = lng; }
           else { body.locationName = firstLoc; }
           if (connectorType) body.connectorType = connectorType;
+          // Pass trip region for geocoding bias (prevents US results for UK trips)
+          const tripRegion = trip?.places?.length > 0 ? trip.places[0] : null;
+          if (tripRegion) body.regionHint = tripRegion;
 
           const res = await authFetch(API.EV_CHARGERS, {
             method: "POST",
@@ -783,7 +806,7 @@ export function ChatProvider({ children }) {
     // ── "Nearby" queries (restaurants, food, cafes, activities, petrol) — use GPS + Places API ──
     const isNearbyQuery = /nearby|nearest|near me|near here|around me|close by|closest/i.test(lower);
     const isPlaceQuery = /restaurant|food|eat|dining|cafe|coffee|pub|bar|pizza|burger|takeaway|lunch|dinner|breakfast|brunch|supermarket|petrol|fuel|pharmacy|hospital|atm|playground|park|swimming|pool|play area/i.test(lower);
-    const hasPlaceVerb = /\b(find|search|look for|where(?:'s| is| are| can))\b/i.test(lower);
+    const hasPlaceVerb = /\b(find|search|look for|where(?:'s| is| are| can)|is there|are there)\b/i.test(lower);
     if (isNearbyQuery || (isPlaceQuery && hasPlaceVerb)) {
       // Determine search type from the query
       const searchType = /cafe|coffee/i.test(lower) ? "cafe"
@@ -800,15 +823,21 @@ export function ChatProvider({ children }) {
       const searchLabel = searchType === "gas_station" ? "petrol stations" : searchType === "swimming_pool" ? "swimming pools" : searchType === "play area" ? "play areas" : searchType + "s";
       const searchIcon = /cafe|coffee/i.test(lower) ? "☕" : /pub|bar/i.test(lower) ? "🍺" : /supermarket/i.test(lower) ? "🛒" : /petrol|fuel|gas/i.test(lower) ? "⛽" : /playground|park|swimming|pool/i.test(lower) ? "🏞️" : "🍽️";
 
+      // Extract explicit location from query (e.g. "near Windermere station", "in Keswick")
+      const nearbyLocMatch = lower.match(/\b(?:near|in|at|around|of|by)\s+([a-z][\w\s'.-]+?)(?:\s*[?.!])?$/i);
+      const nearbyExplicitLoc = nearbyLocMatch ? nearbyLocMatch[1].replace(/\b(that|which|the|a|an)\b/gi, '').trim() : mentionedLoc;
+      const nearbyExplicitCoords = nearbyExplicitLoc ? findCoords(nearbyExplicitLoc) : null;
+
       setTypingContext(`Finding ${searchLabel}...`);
-      const updateNearbyChat = addPlaceholder(`📍 Finding ${searchLabel} near you...`, trip?.dbId);
+      const nearbyLocLabel = nearbyExplicitLoc || "your location";
+      const updateNearbyChat = addPlaceholder(`📍 Finding ${searchLabel} near ${nearbyLocLabel}...`, trip?.dbId);
       const finishNearby = (reply) => { setTripChatTyping(false); updateNearbyChat(reply); };
 
       const handleNearbyResults = async (lat, lng, locLabel) => {
         try {
           const body = lat && lng
             ? { location: { lat, lng }, type: searchType, radius: 5000 }
-            : { query: `${searchType} near ${firstLoc}`, radius: 5000 };
+            : { query: `${searchType} near ${locLabel || firstLoc}`, radius: 5000 };
           const res = await authFetch(API.PLACES, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -830,7 +859,12 @@ export function ChatProvider({ children }) {
         return `${searchIcon} Couldn't find ${searchLabel} via search. Try [Google Maps](https://www.google.com/maps/search/${encodeURIComponent(searchType + " near me")}) for real-time results near you.`;
       };
 
-      if (navigator.geolocation) {
+      // Use explicit location from query if available, otherwise GPS, otherwise trip location
+      if (nearbyExplicitCoords) {
+        handleNearbyResults(nearbyExplicitCoords[0], nearbyExplicitCoords[1], nearbyExplicitLoc).then(finishNearby);
+      } else if (nearbyExplicitLoc) {
+        handleNearbyResults(null, null, nearbyExplicitLoc).then(finishNearby);
+      } else if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (pos) => finishNearby(await handleNearbyResults(pos.coords.latitude, pos.coords.longitude, "your location")),
           async () => finishNearby(await handleNearbyResults(null, null, firstLoc)),
