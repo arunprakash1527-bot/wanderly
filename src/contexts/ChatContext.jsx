@@ -435,6 +435,9 @@ export function ChatProvider({ children }) {
           if (lat && lng) { body.lat = lat; body.lng = lng; }
           else { body.locationName = firstLoc; }
           if (connectorType) body.connectorType = connectorType;
+          // Pass trip region for geocoding bias (prevents US results for UK trips)
+          const tripRegion = trip?.places?.length > 0 ? trip.places[0] : null;
+          if (tripRegion) body.regionHint = tripRegion;
 
           const res = await authFetch(API.EV_CHARGERS, {
             method: "POST",
@@ -702,6 +705,9 @@ export function ChatProvider({ children }) {
           if (lat && lng) { body.lat = lat; body.lng = lng; }
           else { body.locationName = firstLoc; }
           if (connectorType) body.connectorType = connectorType;
+          // Pass trip region for geocoding bias (prevents US results for UK trips)
+          const tripRegion = trip?.places?.length > 0 ? trip.places[0] : null;
+          if (tripRegion) body.regionHint = tripRegion;
 
           const res = await authFetch(API.EV_CHARGERS, {
             method: "POST",
