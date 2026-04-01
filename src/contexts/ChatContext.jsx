@@ -418,6 +418,7 @@ export function ChatProvider({ children }) {
 
     // ── Handle EV charger flow follow-up — user replying with connector type / car count ──
     if (tripChatFlow?.step === "ev_charger_details") {
+      const evFlowData = tripChatFlow.data || {};
       setTripChatFlow(null);
       // Merge the original query context with the follow-up reply
       const connectorMatch = lower.match(/\b(ccs|chademo|type\s*2|type\s*1)\b/i);
@@ -474,15 +475,23 @@ export function ChatProvider({ children }) {
         return `⚡ I couldn't find chargers near ${locLabel}. Try [Zap-Map](https://www.zap-map.com/live/) or [Open Charge Map](https://openchargemap.org/) for real-time availability.`;
       };
 
-      // Use the current day's location for the flow follow-up
-      const flowDayLoc = locForDay(selectedDay);
-      const flowDayCoords = findCoords(flowDayLoc);
-      if (flowDayCoords) {
+      // Use stored location context from the original query, fall back to day location
+      const flowTargetLoc = evFlowData.evTargetLoc || locForDay(selectedDay);
+      const flowTargetCoords = evFlowData.evTargetCoords || findCoords(flowTargetLoc);
+
+      // If original query was "near me", try GPS first
+      if (evFlowData.isNearMe && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => { setTripChatTyping(false); updateEvFlow(await handleEvResults(pos.coords.latitude, pos.coords.longitude, "your location")); },
+          async () => { setTripChatTyping(false); updateEvFlow(await handleEvResults(flowTargetCoords?.[0] || null, flowTargetCoords?.[1] || null, flowTargetLoc || firstLoc)); },
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
+      } else if (flowTargetCoords) {
         setTripChatTyping(false);
-        updateEvFlow(await handleEvResults(flowDayCoords[0], flowDayCoords[1], flowDayLoc));
+        updateEvFlow(await handleEvResults(flowTargetCoords[0], flowTargetCoords[1], flowTargetLoc));
       } else {
         setTripChatTyping(false);
-        updateEvFlow(await handleEvResults(null, null, flowDayLoc || firstLoc));
+        updateEvFlow(await handleEvResults(null, null, flowTargetLoc || firstLoc));
       }
       return;
     }
@@ -580,7 +589,15 @@ export function ChatProvider({ children }) {
       const needsMultiCarPrompt = totalTravellers > 4 && !evDefaultConnector && !/\d+\s*car|\d+\s*vehicle|single car|one car/i.test(lower);
 
       if (needsMultiCarPrompt) {
-        setTripChatFlow({ step: "ev_charger_details", data: { query: lower } });
+        // Preserve location context so the follow-up uses the right coords
+        const isNearMe = /near me|nearby|near here|around me/i.test(lower);
+        setTripChatFlow({ step: "ev_charger_details", data: {
+          query: lower,
+          evTargetLoc: evTargetLoc || null,
+          evTargetCoords: evTargetCoords || null,
+          isNearMe,
+          isRouteQuery: /halfway|half\s*way|between|en\s*route|on\s*the\s*(way|route)|along\s*the\s*(way|route)|mid[\s-]*route|mid[\s-]*way|from\s+.+?\s+to\s+/i.test(lower),
+        } });
         setTripChatTyping(false);
         setTripChatMessages(prev => [...prev, { id: msgId(), role: "ai", text: `🚗 Your trip has ${totalTravellers} travellers. How many EVs need charging? Also, what connector type do you need?\n\n• **CCS** (most common for rapid charging)\n• **CHAdeMO**\n• **Type 2** (standard AC)\n\nJust reply like: "2 cars, CCS" or "1 car, Type 2"` }]);
         return;

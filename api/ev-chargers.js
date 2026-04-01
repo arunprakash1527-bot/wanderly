@@ -182,17 +182,18 @@ export default async function handler(req, res) {
     }
 
     // ── SINGLE-POINT MODE (existing behaviour) ──
-    const { lat, lng, locationName, maxResults = 5, connectorType } = req.body;
+    const { lat, lng, locationName, maxResults = 5, connectorType, regionHint } = req.body;
     if (!lat && !lng && !locationName) return res.status(400).json({ error: "Location required" });
 
     let searchLat = lat, searchLng = lng;
 
-    // If no coords, geocode the location name
+    // If no coords, geocode the location name (with region bias if available)
     if (!searchLat || !searchLng) {
       const geoKey = process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_MAPS_API_KEY;
       if (geoKey && locationName) {
+        const geoQuery = regionHint ? `${locationName} near ${regionHint}` : locationName;
         const geoRes = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationName)}&key=${geoKey}`
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(geoQuery)}&key=${geoKey}`
         );
         const geoData = await geoRes.json();
         if (geoData.results?.[0]?.geometry?.location) {
