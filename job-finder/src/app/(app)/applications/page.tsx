@@ -35,7 +35,7 @@ export default async function ApplicationsPage() {
     .eq("user_id", user.id)
     .order("last_status_at", { ascending: false });
 
-  const apps = (data ?? []) as Array<{
+  const apps = (data ?? []) as unknown as Array<{
     id: string; status: Status; applied_at: string | null; last_status_at: string;
     notes: string | null;
     jobs: { id: string; title: string; company: string; canonical_url: string; location: string | null };

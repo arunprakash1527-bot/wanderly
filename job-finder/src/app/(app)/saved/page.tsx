@@ -23,7 +23,7 @@ export default async function SavedPage() {
     .eq("user_id", user.id).eq("status", "saved")
     .order("last_status_at", { ascending: false });
 
-  const items = (data ?? []) as Array<{
+  const items = (data ?? []) as unknown as Array<{
     id: string; last_status_at: string;
     jobs: { id: string; title: string; company: string; canonical_url: string; location: string | null };
   }>;

@@ -9,10 +9,11 @@ export default async function JobsPage() {
   const { data: { user } } = await sb.auth.getUser();
 
   // Pull preferences (if signed in) to apply server-side default filtering.
-  let prefs: { role_keywords: string[]; locations: string[]; seniority_levels: string[]; work_models: string[] } | null = null;
+  type Prefs = { role_keywords: string[]; locations: string[]; seniority_levels: string[]; work_models: string[] };
+  let prefs: Prefs | null = null;
   if (user) {
     const { data } = await sb.from("preferences").select("*").eq("user_id", user.id).maybeSingle();
-    prefs = data as typeof prefs;
+    prefs = (data ?? null) as Prefs | null;
   }
 
   let q = sb.from("jobs")
@@ -20,7 +21,7 @@ export default async function JobsPage() {
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(200);
 
-  if (prefs?.locations?.length) q = q.or(prefs.locations.map((l) => `location.ilike.%${l}%`).join(","));
+  if (prefs?.locations?.length) q = q.or(prefs.locations.map((l: string) => `location.ilike.%${l}%`).join(","));
   if (prefs?.seniority_levels?.length) q = q.in("seniority", prefs.seniority_levels);
 
   const { data: jobs } = await q;
