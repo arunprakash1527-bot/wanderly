@@ -1,0 +1,36 @@
+{
+  "greenhouse": [
+    { "token": "monzo", "name": "Monzo", "type": "fintech" },
+    { "token": "anthropic", "name": "Anthropic", "type": "ai_lab" },
+    { "token": "figma", "name": "Figma", "type": "saas" },
+    { "token": "salaryfinance", "name": "Salary Finance", "type": "fintech" },
+    { "token": "sigtech", "name": "SigTech", "type": "fintech" },
+    { "token": "hudl", "name": "Hudl", "type": "saas" },
+    { "token": "contentful", "name": "Contentful", "type": "saas" },
+    { "token": "datacamp", "name": "DataCamp", "type": "saas" },
+    { "token": "flohealth", "name": "Flo Health", "type": "saas" },
+    { "token": "octopusmoney", "name": "Octopus Money", "type": "fintech" },
+    { "token": "blab", "name": "B Lab", "type": "other" },
+    { "token": "remotecom", "name": "Remote", "type": "saas" },
+    { "token": "cloudflare", "name": "Cloudflare", "type": "saas" },
+    { "token": "betterhelpcom", "name": "BetterHelp", "type": "saas" },
+    { "token": "deliveroo", "name": "Deliveroo", "type": "saas" },
+    { "token": "thrasio", "name": "Thrasio", "type": "other" },
+    { "token": "gocardless", "name": "GoCardless", "type": "fintech" }
+  ],
+  "lever": [
+    { "token": "spotify", "name": "Spotify", "type": "big_tech" },
+    { "token": "mistral", "name": "Mistral AI", "type": "ai_lab" },
+    { "token": "dataiku", "name": "Dataiku", "type": "ai_lab" },
+    { "token": "geckoboard", "name": "Geckoboard", "type": "saas" },
+    { "token": "cognite", "name": "Cognite", "type": "saas" }
+  ],
+  "ashby": [
+    { "token": "lendable", "name": "Lendable", "type": "fintech" },
+    { "token": "deel", "name": "Deel", "type": "saas" },
+    { "token": "hopper", "name": "Hopper", "type": "saas" },
+    { "token": "claylabs", "name": "Clay", "type": "saas" },
+    { "token": "nivoda", "name": "Nivoda", "type": "saas" },
+    { "token": "zapier", "name": "Zapier", "type": "saas" }
+  ]
+}
