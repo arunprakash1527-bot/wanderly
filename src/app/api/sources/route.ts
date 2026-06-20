@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { ok, fail, handleError } from '@/lib/api';
-import { ingestSource, listSourceDocuments, deleteSourceDocument } from '@/lib/sources';
+import { ingestSource, ingestSourceText, listSourceDocuments, deleteSourceDocument } from '@/lib/sources';
 import { requireUserId } from '@/lib/user';
 
 export const runtime = 'nodejs';
@@ -21,9 +21,23 @@ export async function POST(req: NextRequest) {
     const userId = await requireUserId();
     const form = await req.formData();
     const file = form.get('file') as File | null;
-    const title = (form.get('title') as string) || (file?.name ?? 'Untitled');
+    const pasted = ((form.get('text') as string) || '').trim();
     const categorySlug = (form.get('category') as string) || null;
-    if (!file) return fail('No file uploaded');
+
+    // Prefer pasted text when provided — it's the reliable, size-unbounded path.
+    if (pasted) {
+      const title = (form.get('title') as string) || 'Pasted reference';
+      const result = await ingestSourceText({
+        userId,
+        title,
+        text: pasted,
+        categorySlug: categorySlug || null,
+      });
+      return ok(result);
+    }
+
+    const title = (form.get('title') as string) || (file?.name ?? 'Untitled');
+    if (!file) return fail('Paste some text or choose a file first.');
     const result = await ingestSource({ userId, title, file, categorySlug: categorySlug || null });
     return ok(result);
   } catch (err) {

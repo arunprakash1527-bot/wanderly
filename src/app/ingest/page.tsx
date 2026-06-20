@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCategoriesWithSubs } from '@/lib/repo';
 import { currentUser } from '@/lib/user';
@@ -16,8 +17,23 @@ export default async function IngestPage() {
         <h1 className="text-xl font-semibold">Ingest previous-year papers</h1>
         <p className="mt-1 text-sm text-ink-soft">
           Upload a TNPSC Group 1 Prelims question paper PDF (and its official answer key if you
-          have it). The app extracts the questions verbatim — you review, correct the
-          category/answer/difficulty, then save them to your verified bank.
+          have it). The app extracts the questions <strong>verbatim</strong> — you review, correct
+          the category/answer/difficulty, then save them to your verified bank to be served as-is.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-brand-100 bg-brand-50 p-4 text-sm text-ink-soft">
+        <p className="font-medium text-brand-700">
+          Want fresh questions modelled on your papers, not the same ones repeated?
+        </p>
+        <p className="mt-1">
+          Paste them as reference material on the{' '}
+          <Link href="/sources" className="font-medium text-brand-700 underline underline-offset-2">
+            Sources
+          </Link>{' '}
+          page instead. The app keeps them as style references and writes new questions in the same
+          pattern when you practise that topic. Pasting also avoids the upload-size limit that large
+          PDFs hit on free hosting.
         </p>
       </div>
       {!hasApiKey() && (

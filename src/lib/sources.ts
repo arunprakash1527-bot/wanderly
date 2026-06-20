@@ -71,8 +71,36 @@ export async function ingestSource(args: IngestSourceArgs) {
     text = buf.toString('utf-8');
   }
 
-  const chunks = chunkText(text);
-  if (chunks.length === 0) throw new Error('No readable text found in the document.');
+  return saveSource({
+    userId: args.userId,
+    title: args.title,
+    text,
+    categorySlug: args.categorySlug,
+  });
+}
+
+// Paste path: raw text straight into the reference store. This is the reliable
+// way to add material on serverless hosting — it sidesteps the 4.5 MB request
+// limit and PDF transcription that large file uploads hit, and the stored
+// chunks ground question *generation* (they are never served verbatim).
+export async function ingestSourceText(args: {
+  userId: number;
+  title: string;
+  text: string;
+  categorySlug: string | null;
+}) {
+  return saveSource(args);
+}
+
+// Shared persistence: chunk -> (optionally auto-tag) -> store as reference.
+async function saveSource(args: {
+  userId: number;
+  title: string;
+  text: string;
+  categorySlug: string | null;
+}) {
+  const chunks = chunkText(args.text);
+  if (chunks.length === 0) throw new Error('No readable text found in the material.');
 
   const cats = await getCategories();
   const catIdBySlug = new Map(cats.map((c) => [c.slug, c.id]));

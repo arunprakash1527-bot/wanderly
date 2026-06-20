@@ -24,9 +24,19 @@ export default function IngestForm({ categories }: { categories: Cat[] }) {
   async function extract(form: HTMLFormElement) {
     setError(null);
     setMsg(null);
+    const fd = new FormData(form);
+    // Vercel rejects request bodies over ~4.5 MB before the function runs.
+    const MAX = 4 * 1024 * 1024;
+    const paper = fd.get('paper') as File | null;
+    const key = fd.get('answerKey') as File | null;
+    if ((paper?.size || 0) + (key?.size || 0) > MAX) {
+      setError(
+        'The PDF(s) total over 4 MB, which free hosting rejects on upload. Try a smaller/un-scanned PDF — or, if you just want practice questions in this style, paste the text on the Sources page instead (no size limit).'
+      );
+      return;
+    }
     setBusy('extracting');
     try {
-      const fd = new FormData(form);
       const res = await fetch('/api/ingest/extract', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Extraction failed');
