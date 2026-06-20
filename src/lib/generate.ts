@@ -1,6 +1,6 @@
 import { getDb } from './db';
 import { getCategoriesWithSubs } from './repo';
-import { callJson, hasApiKey } from './claude';
+import { callJson, hasApiKey, webSearchTool } from './claude';
 import { questionGeneratorPrompt } from './prompts';
 import { TAXONOMY } from './taxonomy';
 import type { Difficulty, GeneratedQuestion, Question } from './types';
@@ -44,6 +44,8 @@ export async function generateQuestions(args: {
   subcategorySlug?: string | null;
   difficulty: Difficulty | 'mixed';
   count: number;
+  // Ground generation in real exam-style questions + current facts via web search.
+  useWeb?: boolean;
 }): Promise<number[]> {
   if (!hasApiKey() || args.count <= 0) return [];
   const db = getDb();
@@ -84,12 +86,15 @@ export async function generateQuestions(args: {
     count: args.count,
     exemplars,
     chunks,
+    useWeb: args.useWeb,
   });
 
   const generated = await callJson<GeneratedQuestion[]>({
     system,
     user,
     maxTokens: 8192,
+    // Web grounding can run several searches; give it room and the tool.
+    ...(args.useWeb ? { tools: [webSearchTool(5)], maxTokens: 12000 } : {}),
     validate: validateGenerated,
   });
 

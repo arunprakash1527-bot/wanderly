@@ -76,8 +76,11 @@ export function questionGeneratorPrompt(args: {
   count: number;
   exemplars: { stem: string; options: string[]; correct: string | null }[];
   chunks: string[];
+  // When true, instruct the model to ground in real exam-style questions and
+  // current facts found via the web_search tool (Section 9b web grounding).
+  useWeb?: boolean;
 }) {
-  const { category, subcategorySlug, blurb, difficulty, count, exemplars, chunks } = args;
+  const { category, subcategorySlug, blurb, difficulty, count, exemplars, chunks, useWeb } = args;
 
   const exemplarText = exemplars.length
     ? exemplars
@@ -99,7 +102,11 @@ Topic: ${category.name}${subcategorySlug ? ` > ${subcategorySlug}` : ''}
 Syllabus context: ${blurb}
 Target difficulty: ${difficulty}. Match the cognitive level and phrasing style of the exemplar PYQs below — do not make questions trivially easy or artificially hard.
 
-Ground your questions in the syllabus and the provided source material. Do not present invented facts as established. Each question must be factually correct, self-contained, and have exactly one unambiguous correct option.
+Ground your questions in the syllabus and the provided source material. Do not present invented facts as established. Each question must be factually correct, self-contained, and have exactly one unambiguous correct option.${
+    useWeb
+      ? `\n\nUse the web_search tool first to (1) study the format, phrasing and difficulty of REAL TNPSC Group 1 questions on this topic, and (2) verify the underlying facts you build questions on. Then write FRESH, original questions modelled on that real exam style — do NOT copy any real question verbatim. Search a few times as needed, then output only the JSON.`
+      : ''
+  }
 
 Return ONLY a JSON array of exactly ${count} objects (no markdown fences, no commentary):
 {

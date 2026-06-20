@@ -19,6 +19,8 @@ export default function ChatIntake({ apiKey }: { apiKey: boolean }) {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'building'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [building, setBuilding] = useState<string | null>(null);
+  // Ground generated questions in real exam-style questions via web search.
+  const [useWeb, setUseWeb] = useState(true);
 
   async function parse(text: string) {
     setError(null);
@@ -54,7 +56,7 @@ export default function ChatIntake({ apiKey }: { apiKey: boolean }) {
       const res = await fetch('/api/quiz/start', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify({ config, useWeb }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to build quiz');
@@ -121,6 +123,18 @@ export default function ChatIntake({ apiKey }: { apiKey: boolean }) {
               <Chip>Subtopics: {config.subcategories.join(', ')}</Chip>
             )}
           </div>
+          {apiKey && (
+            <label className="flex items-center gap-2 text-sm text-ink-soft">
+              <input
+                type="checkbox"
+                checked={useWeb}
+                onChange={(e) => setUseWeb(e.target.checked)}
+                disabled={status === 'building'}
+              />
+              Ground new questions in real exam-style questions (web search) — more
+              realistic, slightly slower &amp; uses a little API credit
+            </label>
+          )}
           {building && <p className="text-sm text-brand-600">{building}</p>}
           <div className="flex gap-2">
             <button className="btn-primary" onClick={startQuiz} disabled={status === 'building'}>

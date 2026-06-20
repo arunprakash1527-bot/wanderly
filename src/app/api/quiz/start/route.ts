@@ -13,18 +13,20 @@ export const maxDuration = 300;
 // Build a quiz from a config and create the session.
 export async function POST(req: NextRequest) {
   try {
-    const { config, allowGeneration = true } = (await req.json()) as {
+    const { config, allowGeneration = true, useWeb = true } = (await req.json()) as {
       config: QuizConfig;
       allowGeneration?: boolean;
+      useWeb?: boolean;
     };
     if (!config || !config.mode) return fail('Missing quiz config');
 
     const gen = allowGeneration && hasApiKey();
+    const web = useWeb && hasApiKey();
 
     const result =
       config.mode === 'mock'
-        ? await buildMockQuiz({ allowGeneration: gen })
-        : await buildPracticeQuiz(config, { allowGeneration: gen });
+        ? await buildMockQuiz({ allowGeneration: gen, useWeb: web })
+        : await buildPracticeQuiz(config, { allowGeneration: gen, useWeb: web });
 
     if (result.questionIds.length === 0) {
       return fail(

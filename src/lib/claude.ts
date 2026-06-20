@@ -24,6 +24,13 @@ export function hasApiKey(): boolean {
 
 type ContentBlock = Anthropic.Messages.ContentBlockParam;
 
+// Built-in web-search server tool (Section 9b web grounding). Runs entirely on
+// Anthropic's side; the `_20260209` variant (dynamic filtering) is supported on
+// Sonnet 4.6 / Opus 4.6+ and needs no beta header.
+export function webSearchTool(maxUses = 5) {
+  return { type: 'web_search_20260209', name: 'web_search', max_uses: maxUses } as unknown;
+}
+
 interface CallOpts {
   system: string;
   // Either a plain user string, or a structured list of content blocks
@@ -32,6 +39,9 @@ interface CallOpts {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  // Optional server tools (e.g. webSearchTool()). When present, the call runs
+  // the server-side tool loop and transparently resumes on `pause_turn`.
+  tools?: unknown[];
 }
 
 async function rawCall(opts: CallOpts): Promise<string> {
@@ -39,14 +49,27 @@ async function rawCall(opts: CallOpts): Promise<string> {
   const content: ContentBlock[] =
     typeof opts.user === 'string' ? [{ type: 'text', text: opts.user }] : opts.user;
 
-  const res = await client.messages.create({
+  const messages: Anthropic.Messages.MessageParam[] = [{ role: 'user', content }];
+  const base = {
     model: opts.model || DEFAULT_MODEL,
     max_tokens: opts.maxTokens ?? 4096,
     temperature: opts.temperature ?? 0.4,
     system: opts.system,
-    messages: [{ role: 'user', content }],
-  });
+    // The installed SDK's tool types predate web_search_20260209; the object is
+    // passed straight through to the API, so cast to bypass the stale union.
+    ...(opts.tools ? { tools: opts.tools as unknown as never } : {}),
+  };
 
+  // Server tools can pause the turn when the search loop hits its cap; re-send
+  // the accumulated transcript to resume. Bounded to avoid runaway loops.
+  let res = await client.messages.create({ ...base, messages });
+  // `pause_turn` may not be in the installed SDK's stop_reason union; compare as string.
+  for (let i = 0; i < 4 && (res.stop_reason as string) === 'pause_turn'; i++) {
+    messages.push({ role: 'assistant', content: res.content });
+    res = await client.messages.create({ ...base, messages });
+  }
+
+  // The final answer (JSON or prose) is in the last message's text blocks.
   return res.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
     .map((b) => b.text)

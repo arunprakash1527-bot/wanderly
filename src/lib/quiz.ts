@@ -80,7 +80,7 @@ export interface BuildResult {
 // Build a PRACTICE quiz: fill from bank, then top up with generation.
 export async function buildPracticeQuiz(
   config: QuizConfig,
-  opts: { allowGeneration: boolean }
+  opts: { allowGeneration: boolean; useWeb?: boolean }
 ): Promise<BuildResult> {
   const { catIds, subIds } = resolveIds(config);
   let ids = selectFromBank({
@@ -103,6 +103,7 @@ export async function buildPracticeQuiz(
           subcategorySlug: config.subcategories[0] || null,
           difficulty: config.difficulty,
           count: need,
+          useWeb: opts.useWeb,
         });
         generatedCount = newIds.length;
         // Re-select to keep ordering/eligibility consistent.
@@ -130,6 +131,7 @@ export async function buildPracticeQuiz(
 // Build a FULL MOCK: 175 GS distributed by weightage + 25 Aptitude.
 export async function buildMockQuiz(opts: {
   allowGeneration: boolean;
+  useWeb?: boolean;
 }): Promise<BuildResult> {
   const cats = getCategories();
   const bySlug = new Map(cats.map((c) => [c.slug, c]));
@@ -144,7 +146,7 @@ export async function buildMockQuiz(opts: {
   for (const [slug, target] of Object.entries(targets)) {
     const cat = bySlug.get(slug);
     if (!cat) continue;
-    const picked = await fillCategory(cat.id, target, chosen, slug, opts.allowGeneration);
+    const picked = await fillCategory(cat.id, target, chosen, slug, opts.allowGeneration, opts.useWeb);
     chosen.push(...picked.ids);
     generatedCount += picked.generated;
   }
@@ -156,7 +158,8 @@ export async function buildMockQuiz(opts: {
       APTITUDE_TOTAL,
       chosen,
       aptitude.slug,
-      opts.allowGeneration
+      opts.allowGeneration,
+      opts.useWeb
     );
     chosen.push(...picked.ids);
     generatedCount += picked.generated;
@@ -189,7 +192,8 @@ async function fillCategory(
   target: number,
   exclude: number[],
   slug: string,
-  allowGeneration: boolean
+  allowGeneration: boolean,
+  useWeb?: boolean
 ): Promise<{ ids: number[]; generated: number }> {
   let ids = selectFromBank({
     categoryIds: [categoryId],
@@ -205,6 +209,7 @@ async function fillCategory(
         categorySlug: slug,
         difficulty: 'mixed',
         count: target - ids.length,
+        useWeb,
       });
       generated = newIds.length;
       const topUp = selectFromBank({
