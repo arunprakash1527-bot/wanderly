@@ -34,6 +34,7 @@ export default async function ResultsPage({ params }: { params: { sessionId: str
     category: r.category_name,
     subcategory: r.subcategory_name,
     sourceType: r.source_type,
+    source: r.source_ref,
   }));
 
   return (

@@ -115,4 +115,6 @@ export interface GeneratedQuestion {
   explanation: string;
   difficulty: Difficulty;
   confidence: 'low' | 'medium' | 'high';
+  // A concise, verifiable factual reference for the key fact (AI-suggested).
+  source?: string;
 }

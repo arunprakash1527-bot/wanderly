@@ -15,6 +15,7 @@ export interface ReviewItem {
   category: string;
   subcategory: string | null;
   sourceType: 'pyq' | 'generated';
+  source: string | null;
 }
 
 const OPTIONS: Option[] = ['A', 'B', 'C', 'D'];
@@ -139,6 +140,35 @@ function ReviewCard({ item, index }: { item: ReviewItem; index: number }) {
           </div>
         )}
       </div>
+
+      <SourceLine sourceType={item.sourceType} source={item.source} category={item.category} />
     </li>
+  );
+}
+
+// Where the question came from. PYQ rows carry a real exam citation; generated
+// questions carry an AI-suggested reference (flagged as such) plus provenance.
+function SourceLine({
+  sourceType,
+  source,
+  category,
+}: {
+  sourceType: 'pyq' | 'generated';
+  source: string | null;
+  category: string;
+}) {
+  if (sourceType === 'pyq') {
+    return (
+      <p className="mt-2 text-xs text-ink-faint">
+        <span className="font-medium text-ink-soft">Source:</span> {source || 'Previous-year question'}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2 text-xs text-ink-faint">
+      <span className="font-medium text-ink-soft">Reference:</span>{' '}
+      {source || `AI-generated · ${category}`}
+      <span className="italic"> — AI-suggested, verify before relying on it.</span>
+    </p>
   );
 }
