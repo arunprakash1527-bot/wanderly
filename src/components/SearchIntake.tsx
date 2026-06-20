@@ -33,7 +33,10 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
   const [cats, setCats] = useState<Cat[]>([]);
   const [topic, setTopic] = useState<string>(''); // category slug
   const [subtopic, setSubtopic] = useState<string>(''); // subcategory slug
-  const [count, setCount] = useState(10);
+  // Kept as text so the field can be cleared and freely typed (the old numeric
+  // state snapped back to 1 the moment you deleted the default). Clamped to a
+  // valid number only when the quiz actually starts (and on blur).
+  const [countText, setCountText] = useState('10');
   const [uiDiff, setUiDiff] = useState<'medium' | 'hard' | 'very-hard'>('medium');
   // Off by default — fast generation. Web grounding is an opt-in (slower).
   const [useWeb, setUseWeb] = useState(false);
@@ -75,7 +78,7 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
       // Prefill the follow-ups from the parse.
       setTopic(c.categories[0] || '');
       setSubtopic(c.subcategories[0] || '');
-      setCount(c.count || 10);
+      setCountText(String(c.count || 10));
       setUiDiff(c.difficulty === 'hard' ? 'hard' : 'medium');
       setShowAdvanced(false);
     } catch (e) {
@@ -124,6 +127,8 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
   const selectedCat = cats.find((c) => c.slug === topic);
   const building = status === 'building';
   const parsing = status === 'parsing';
+  // Numeric count used for the request/labels; empty or out-of-range falls back.
+  const count = Math.min(100, Math.max(1, parseInt(countText, 10) || 10));
 
   return (
     <div className="mt-6 space-y-4 text-left">
@@ -251,11 +256,20 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
                     <label className="label">Questions</label>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={1}
                       max={100}
                       className="input w-24"
-                      value={count}
-                      onChange={(e) => setCount(parseInt(e.target.value || '1', 10))}
+                      value={countText}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        // Allow empty (so the default can be cleared) and up to 3 digits.
+                        if (v === '' || /^\d{1,3}$/.test(v)) setCountText(v);
+                      }}
+                      onBlur={() => {
+                        const n = parseInt(countText, 10);
+                        setCountText(String(!n || n < 1 ? 1 : n > 100 ? 100 : n));
+                      }}
                     />
                   </div>
                   <div>
