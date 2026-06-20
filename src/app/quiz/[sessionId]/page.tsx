@@ -25,6 +25,7 @@ export default async function QuizPage({ params }: { params: { sessionId: string
     category: q.category_name,
     subcategory: q.subcategory_name,
     sourceType: q.source_type,
+    source: q.source_ref,
   }));
 
   let remainingSeconds: number | null = null;

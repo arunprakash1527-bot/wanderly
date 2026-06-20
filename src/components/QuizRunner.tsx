@@ -12,6 +12,7 @@ export interface ClientQuestion {
   category: string;
   subcategory: string | null;
   sourceType: 'pyq' | 'generated';
+  source: string | null;
 }
 
 const OPTIONS: Option[] = ['A', 'B', 'C', 'D'];
@@ -204,6 +205,23 @@ export default function QuizRunner({
               );
             })}
           </div>
+
+          {/* Source/citation shown under the question. PYQs carry a real exam
+              reference; generated questions carry an AI-suggested one (flagged). */}
+          <p className="mt-3 text-xs text-ink-faint">
+            {q.sourceType === 'pyq' ? (
+              <>
+                <span className="font-medium text-ink-soft">Source:</span>{' '}
+                {q.source || 'Previous-year question'}
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-ink-soft">Reference:</span>{' '}
+                {q.source || `AI-generated · ${q.category}`}
+                <span className="italic"> — AI-suggested, verify.</span>
+              </>
+            )}
+          </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button className="btn-ghost" onClick={() => goto(current - 1)} disabled={current === 0}>
