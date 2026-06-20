@@ -1,17 +1,20 @@
 import { NextRequest } from 'next/server';
 import { ok, fail, handleError } from '@/lib/api';
-import { all, batchWrite } from '@/lib/db';
+import { all, batchWrite, SHARED_USER_ID } from '@/lib/db';
 import { requireUserId } from '@/lib/user';
 import type { ExtractedQuestion } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Step 4 — bulk-save reviewed PYQs to this user's bank. Questions with a known
-// answer are saved 'verified'; those without are 'unverified' (excluded).
+// Step 4 — bulk-save reviewed PYQs to the SHARED reference bank. Any signed-in
+// user can contribute; the questions ground generation for everyone (and are
+// never served verbatim). Questions with a known answer are 'verified'.
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireUserId();
+    // Require sign-in (so anonymous callers can't write), but store as shared.
+    await requireUserId();
+    const userId = SHARED_USER_ID;
     const { questions } = (await req.json()) as { questions: ExtractedQuestion[] };
     if (!Array.isArray(questions) || questions.length === 0) return fail('No questions to save');
 

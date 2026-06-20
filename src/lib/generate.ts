@@ -1,4 +1,4 @@
-import { all, run, batchWrite, getOrCreateUserId } from './db';
+import { all, run, batchWrite, getOrCreateUserId, SHARED_USER_ID } from './db';
 import { getCategoriesWithSubs } from './repo';
 import { callJson, hasApiKey, webSearchTool } from './claude';
 import { questionGeneratorPrompt } from './prompts';
@@ -56,10 +56,12 @@ export async function generateQuestions(args: {
     ? category.subcategories.find((s) => s.slug === args.subcategorySlug)?.id ?? null
     : null;
 
+  // Exemplars are drawn from the user's own PYQs AND the shared reference bank
+  // (user_id = SHARED_USER_ID), so an import by anyone grounds everyone's quizzes.
   const exemplarRows = await all<Question>(
-    `SELECT * FROM questions WHERE user_id = ? AND category_id = ? AND source_type='pyq'
-     ORDER BY (verification_status='verified') DESC, RANDOM() LIMIT 5`,
-    [args.userId, category.id]
+    `SELECT * FROM questions WHERE user_id IN (?, ?) AND category_id = ? AND source_type='pyq'
+     ORDER BY (verification_status='verified') DESC, RANDOM() LIMIT 6`,
+    [args.userId, SHARED_USER_ID, category.id]
   );
   const exemplars = exemplarRows.map((e) => ({
     stem: e.stem,
@@ -68,8 +70,8 @@ export async function generateQuestions(args: {
   }));
 
   const chunkRows = await all<{ chunk_text: string }>(
-    'SELECT chunk_text FROM source_chunks WHERE user_id = ? AND category_id = ? LIMIT 4',
-    [args.userId, category.id]
+    'SELECT chunk_text FROM source_chunks WHERE user_id IN (?, ?) AND category_id = ? LIMIT 4',
+    [args.userId, SHARED_USER_ID, category.id]
   );
   const chunks = chunkRows.map((c) => c.chunk_text);
 

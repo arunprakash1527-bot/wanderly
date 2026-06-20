@@ -75,7 +75,7 @@ export default function ImportBank({ categories }: { categories: Cat[] }) {
         .map(([slug, n]) => `${categories.find((c) => c.slug === slug)?.name || slug}: ${n}`)
         .join(' · ');
       setMsg(
-        `Imported ${saved} of ${total} questions as style references.\n${breakdown}` +
+        `Imported ${saved} of ${total} questions into the shared reference bank.\n${breakdown}` +
           (skipped ? `\nSkipped ${skipped} (missing stem/options${defaultSlug ? '' : ' or unmapped topic'}).` : '') +
           (unmappedTopics.length
             ? `\nUnmapped topics sent to default: ${unmappedTopics.join(', ')}`
@@ -94,9 +94,9 @@ export default function ImportBank({ categories }: { categories: Cat[] }) {
       <div>
         <h2 className="font-semibold">Import an extracted question bank (JSON)</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Already pulled the questions out of a paper into JSON? Import them here. They become{' '}
-          <strong>style references</strong> — the app studies their format and difficulty to
-          generate fresh questions, and never repeats them verbatim.
+          Already pulled the questions out of a paper into JSON? Import them here. They go into the{' '}
+          <strong>shared reference bank</strong> — used to generate fresh questions in this style for
+          every user, and never repeated verbatim.
         </p>
       </div>
 

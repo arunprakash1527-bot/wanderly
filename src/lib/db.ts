@@ -10,6 +10,11 @@ import { TAXONOMY } from './taxonomy';
 const URL = process.env.TURSO_DATABASE_URL || 'file:./data/tnpsc.db';
 const AUTH = process.env.TURSO_AUTH_TOKEN;
 
+// Reserved id for the shared/global reference bank. Real users are AUTOINCREMENT
+// ids starting at 1, so 0 can never collide. Questions stored under this id are
+// visible to every user as generation exemplars (but never served verbatim).
+export const SHARED_USER_ID = 0;
+
 let _client: Client | null = null;
 let _ready: Promise<Client> | null = null;
 
