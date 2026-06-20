@@ -46,18 +46,18 @@ export default function NavBar() {
 
   return (
     <>
-      <Link href="/" className="flex items-center gap-2 font-semibold text-ink">
+      <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold text-ink">
         <span className="grid h-7 w-7 place-items-center rounded-md bg-brand-500 text-sm text-white">
           G1
         </span>
         <span className="hidden sm:inline">TNPSC Group 1</span>
       </Link>
-      <nav className="flex flex-wrap items-center gap-1 text-sm">
+      <nav className="flex items-center gap-0.5 text-sm sm:gap-1">
         {PRIMARY.map((l) => (
           <Link
             key={l.href}
             href={l.href}
-            className={`rounded-md px-3 py-1.5 transition ${
+            className={`rounded-md px-2.5 py-1.5 transition sm:px-3 ${
               isActive(l.href) ? 'bg-brand-50 font-medium text-brand-700' : 'text-ink-soft hover:bg-sand'
             }`}
           >
@@ -70,7 +70,7 @@ export default function NavBar() {
             type="button"
             onClick={() => setMoreOpen((v) => !v)}
             aria-expanded={moreOpen}
-            className={`rounded-md px-3 py-1.5 ${
+            className={`rounded-md px-2.5 py-1.5 sm:px-3 ${
               moreOpen ? 'bg-sand text-ink' : 'text-ink-soft hover:bg-sand'
             }`}
           >
