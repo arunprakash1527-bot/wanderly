@@ -177,6 +177,8 @@ async function seedTaxonomy(db: Client) {
 }
 
 // Resolve (and lazily create) the internal user id for a signed-in email.
+// Race-safe: on first login the layout and page both call this concurrently,
+// so use INSERT ... ON CONFLICT DO NOTHING and then read the id back.
 export async function getOrCreateUserId(
   email: string,
   name: string | null,
@@ -184,10 +186,10 @@ export async function getOrCreateUserId(
 ): Promise<number> {
   const existing = await get<{ id: number }>('SELECT id FROM users WHERE email = ?', [email]);
   if (existing) return existing.id;
-  const res = await run('INSERT INTO users (email, name, image) VALUES (?, ?, ?)', [
-    email,
-    name,
-    image,
-  ]);
-  return res.lastInsertRowid;
+  await run(
+    'INSERT INTO users (email, name, image) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING',
+    [email, name, image]
+  );
+  const row = await get<{ id: number }>('SELECT id FROM users WHERE email = ?', [email]);
+  return row!.id;
 }
