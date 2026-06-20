@@ -4,8 +4,10 @@ import { generateQuestions } from './generate';
 import { GS_WEIGHTS, GS_TOTAL, APTITUDE_TOTAL } from './weights';
 import type { QuizConfig, Difficulty } from './types';
 
-// Quiz builder (Section 10.2), per user. Verified PYQs first, then generated,
-// topping up with fresh generation when the bank can't supply enough.
+// Quiz builder (Section 10.2), per user. Ingested PYQs are reference-only — they
+// are never served verbatim; they ground generation as exemplars instead. Quizzes
+// reuse previously generated questions from the bank (fast) and top up with fresh
+// generation when the bank can't supply enough.
 
 interface SelectArgs {
   userId: number;
@@ -19,7 +21,8 @@ interface SelectArgs {
 async function selectFromBank(args: SelectArgs): Promise<number[]> {
   const where: string[] = [
     'user_id = ?',
-    "verification_status IN ('verified','unverified')",
+    // Reference-only PYQs: serve generated questions, never ingested papers verbatim.
+    "source_type = 'generated'",
     'correct_option IS NOT NULL',
   ];
   const params: (string | number)[] = [args.userId];
@@ -42,7 +45,7 @@ async function selectFromBank(args: SelectArgs): Promise<number[]> {
   }
 
   const sql = `SELECT id FROM questions WHERE ${where.join(' AND ')}
-    ORDER BY (source_type='pyq' AND verification_status='verified') DESC, RANDOM()
+    ORDER BY RANDOM()
     LIMIT ?`;
   params.push(args.count);
   const rows = await all<{ id: number }>(sql, params);
