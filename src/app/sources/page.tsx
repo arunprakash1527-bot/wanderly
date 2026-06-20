@@ -1,13 +1,17 @@
+import { redirect } from 'next/navigation';
 import { getCategoriesWithSubs } from '@/lib/repo';
+import { currentUser } from '@/lib/user';
 import { listSourceDocuments } from '@/lib/sources';
 import { hasApiKey } from '@/lib/claude';
 import SourcesManager from '@/components/SourcesManager';
 
 export const dynamic = 'force-dynamic';
 
-export default function SourcesPage() {
-  const categories = getCategoriesWithSubs().filter((c) => c.section === 'GS');
-  const documents = listSourceDocuments();
+export default async function SourcesPage() {
+  const user = await currentUser();
+  if (!user) redirect('/signin');
+  const categories = (await getCategoriesWithSubs()).filter((c) => c.section === 'GS');
+  const documents = await listSourceDocuments(user.id);
   return (
     <div className="space-y-4">
       <div>

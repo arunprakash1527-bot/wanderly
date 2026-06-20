@@ -1,13 +1,11 @@
-import { getDb } from './db';
+import { all, run, batchWrite, getOrCreateUserId } from './db';
 import { getCategoriesWithSubs } from './repo';
 import { callJson, hasApiKey, webSearchTool } from './claude';
 import { questionGeneratorPrompt } from './prompts';
 import { TAXONOMY } from './taxonomy';
 import type { Difficulty, GeneratedQuestion, Question } from './types';
 
-// Track 2 — grounded AI question generation (Section 9b/9d).
-// Pulls exemplar PYQs + source chunks by category, asks Claude for new MCQs,
-// validates the JSON shape, and stores them as unverified generated questions.
+// Track 2 — grounded AI question generation (Section 9b/9d), scoped per user.
 
 function validateGenerated(value: unknown): GeneratedQuestion[] {
   if (!Array.isArray(value)) throw new Error('Expected a JSON array of questions');
@@ -40,16 +38,15 @@ function validateGenerated(value: unknown): GeneratedQuestion[] {
 }
 
 export async function generateQuestions(args: {
+  userId: number;
   categorySlug: string;
   subcategorySlug?: string | null;
   difficulty: Difficulty | 'mixed';
   count: number;
-  // Ground generation in real exam-style questions + current facts via web search.
   useWeb?: boolean;
 }): Promise<number[]> {
   if (!hasApiKey() || args.count <= 0) return [];
-  const db = getDb();
-  const cats = getCategoriesWithSubs();
+  const cats = await getCategoriesWithSubs();
   const category = cats.find((c) => c.slug === args.categorySlug);
   if (!category) return [];
 
@@ -59,23 +56,21 @@ export async function generateQuestions(args: {
     ? category.subcategories.find((s) => s.slug === args.subcategorySlug)?.id ?? null
     : null;
 
-  // Exemplar PYQs from this category (verified preferred).
-  const exemplarRows = db
-    .prepare(
-      `SELECT * FROM questions WHERE category_id = ? AND source_type='pyq'
-       ORDER BY (verification_status='verified') DESC, RANDOM() LIMIT 5`
-    )
-    .all(category.id) as Question[];
+  const exemplarRows = await all<Question>(
+    `SELECT * FROM questions WHERE user_id = ? AND category_id = ? AND source_type='pyq'
+     ORDER BY (verification_status='verified') DESC, RANDOM() LIMIT 5`,
+    [args.userId, category.id]
+  );
   const exemplars = exemplarRows.map((e) => ({
     stem: e.stem,
     options: [e.option_a, e.option_b, e.option_c, e.option_d],
     correct: e.correct_option,
   }));
 
-  // Source chunks by category (graceful fallback when none exist — Section 9d).
-  const chunkRows = db
-    .prepare('SELECT chunk_text FROM source_chunks WHERE category_id = ? LIMIT 4')
-    .all(category.id) as { chunk_text: string }[];
+  const chunkRows = await all<{ chunk_text: string }>(
+    'SELECT chunk_text FROM source_chunks WHERE user_id = ? AND category_id = ? LIMIT 4',
+    [args.userId, category.id]
+  );
   const chunks = chunkRows.map((c) => c.chunk_text);
 
   const { system, user } = questionGeneratorPrompt({
@@ -93,21 +88,19 @@ export async function generateQuestions(args: {
     system,
     user,
     maxTokens: 8192,
-    // Web grounding can run several searches; give it room and the tool.
     ...(args.useWeb ? { tools: [webSearchTool(5)], maxTokens: 12000 } : {}),
     validate: validateGenerated,
   });
 
-  const insert = db.prepare(
-    `INSERT INTO questions
-      (source_type, stem, option_a, option_b, option_c, option_d, correct_option,
-       explanation, category_id, subcategory_id, difficulty, year, source_ref, verification_status)
-     VALUES ('generated', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'AI generated', 'unverified')`
-  );
-  const ids: number[] = [];
-  const tx = db.transaction(() => {
-    for (const q of generated) {
-      const res = insert.run(
+  if (generated.length === 0) return [];
+  await batchWrite(
+    generated.map((q) => ({
+      sql: `INSERT INTO questions
+        (user_id, source_type, stem, option_a, option_b, option_c, option_d, correct_option,
+         explanation, category_id, subcategory_id, difficulty, year, source_ref, verification_status)
+       VALUES (?, 'generated', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'AI generated', 'unverified')`,
+      args: [
+        args.userId,
         q.stem,
         q.option_a,
         q.option_b,
@@ -117,11 +110,19 @@ export async function generateQuestions(args: {
         q.explanation || null,
         category.id,
         subId,
-        q.difficulty
-      );
-      ids.push(res.lastInsertRowid as number);
-    }
-  });
-  tx();
-  return ids;
+        q.difficulty,
+      ],
+    }))
+  );
+
+  // Return the ids of this user's most recent generated rows for this category.
+  const ids = await all<{ id: number }>(
+    `SELECT id FROM questions WHERE user_id = ? AND category_id = ? AND source_type='generated'
+     ORDER BY id DESC LIMIT ?`,
+    [args.userId, category.id, generated.length]
+  );
+  return ids.map((r) => r.id);
 }
+
+// Re-exported so other modules can resolve users when needed.
+export { getOrCreateUserId };

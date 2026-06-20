@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { ok, fail, handleError } from '@/lib/api';
 import { buildPracticeQuiz, buildMockQuiz } from '@/lib/quiz';
 import { createSession } from '@/lib/repo';
+import { requireUserId } from '@/lib/user';
 import { hasApiKey } from '@/lib/claude';
 import type { QuizConfig } from '@/lib/types';
 
@@ -13,6 +14,7 @@ export const maxDuration = 300;
 // Build a quiz from a config and create the session.
 export async function POST(req: NextRequest) {
   try {
+    const userId = await requireUserId();
     const { config, allowGeneration = true, useWeb = true } = (await req.json()) as {
       config: QuizConfig;
       allowGeneration?: boolean;
@@ -25,8 +27,8 @@ export async function POST(req: NextRequest) {
 
     const result =
       config.mode === 'mock'
-        ? await buildMockQuiz({ allowGeneration: gen, useWeb: web })
-        : await buildPracticeQuiz(config, { allowGeneration: gen, useWeb: web });
+        ? await buildMockQuiz(userId, { allowGeneration: gen, useWeb: web })
+        : await buildPracticeQuiz(userId, config, { allowGeneration: gen, useWeb: web });
 
     if (result.questionIds.length === 0) {
       return fail(
@@ -35,7 +37,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const sessionId = createSession({
+    const sessionId = await createSession({
+      userId,
       mode: config.mode,
       configJson: JSON.stringify(config),
       questionIds: result.questionIds,

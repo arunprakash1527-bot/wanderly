@@ -1,26 +1,25 @@
 {
   "name": "tnpsc-group1-prep",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Single-user web app to prepare for the TNPSC Group 1 Preliminary exam.",
+  "description": "Multi-user web app to prepare for the TNPSC Group 1 Preliminary exam.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "seed": "tsx scripts/seed.ts"
+    "lint": "next lint"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "better-sqlite3": "^11.8.1",
+    "@libsql/client": "^0.14.0",
     "next": "^14.2.35",
+    "next-auth": "^5.0.0-beta.25",
     "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.15.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

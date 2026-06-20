@@ -1,29 +1,28 @@
-import { getDb } from './db';
+import { all, get } from './db';
 import { getCategories } from './repo';
 import { generateQuestions } from './generate';
 import { GS_WEIGHTS, GS_TOTAL, APTITUDE_TOTAL } from './weights';
 import type { QuizConfig, Difficulty } from './types';
 
-// Quiz builder (Section 10.2). Selects question ids from the bank (verified
-// PYQs first, then generated), topping up with fresh AI generation when the
-// bank can't supply enough for a topic.
+// Quiz builder (Section 10.2), per user. Verified PYQs first, then generated,
+// topping up with fresh generation when the bank can't supply enough.
 
 interface SelectArgs {
-  categoryIds: number[]; // empty = any
-  subcategoryIds: number[]; // empty = any
+  userId: number;
+  categoryIds: number[];
+  subcategoryIds: number[];
   difficulty: Difficulty | 'mixed';
   count: number;
   excludeIds: number[];
 }
 
-// Pick eligible question ids from the existing bank.
-function selectFromBank(args: SelectArgs): number[] {
-  const db = getDb();
+async function selectFromBank(args: SelectArgs): Promise<number[]> {
   const where: string[] = [
+    'user_id = ?',
     "verification_status IN ('verified','unverified')",
     'correct_option IS NOT NULL',
   ];
-  const params: unknown[] = [];
+  const params: (string | number)[] = [args.userId];
 
   if (args.categoryIds.length) {
     where.push(`category_id IN (${args.categoryIds.map(() => '?').join(',')})`);
@@ -42,30 +41,23 @@ function selectFromBank(args: SelectArgs): number[] {
     params.push(...args.excludeIds);
   }
 
-  // Verified PYQs first, then generated/unverified; random within each tier.
   const sql = `SELECT id FROM questions WHERE ${where.join(' AND ')}
     ORDER BY (source_type='pyq' AND verification_status='verified') DESC, RANDOM()
     LIMIT ?`;
   params.push(args.count);
-  const rows = db.prepare(sql).all(...params) as { id: number }[];
+  const rows = await all<{ id: number }>(sql, params);
   return rows.map((r) => r.id);
 }
 
-// Resolve slugs -> ids.
-function resolveIds(config: QuizConfig) {
-  const db = getDb();
+async function resolveIds(config: QuizConfig) {
   const catIds: number[] = [];
   for (const slug of config.categories) {
-    const row = db.prepare('SELECT id FROM categories WHERE slug = ?').get(slug) as
-      | { id: number }
-      | undefined;
+    const row = await get<{ id: number }>('SELECT id FROM categories WHERE slug = ?', [slug]);
     if (row) catIds.push(row.id);
   }
   const subIds: number[] = [];
   for (const slug of config.subcategories) {
-    const row = db.prepare('SELECT id FROM subcategories WHERE slug = ?').get(slug) as
-      | { id: number }
-      | undefined;
+    const row = await get<{ id: number }>('SELECT id FROM subcategories WHERE slug = ?', [slug]);
     if (row) subIds.push(row.id);
   }
   return { catIds, subIds };
@@ -74,16 +66,17 @@ function resolveIds(config: QuizConfig) {
 export interface BuildResult {
   questionIds: number[];
   generatedCount: number;
-  shortfall: number; // how many we could not supply at all
+  shortfall: number;
 }
 
-// Build a PRACTICE quiz: fill from bank, then top up with generation.
 export async function buildPracticeQuiz(
+  userId: number,
   config: QuizConfig,
   opts: { allowGeneration: boolean; useWeb?: boolean }
 ): Promise<BuildResult> {
-  const { catIds, subIds } = resolveIds(config);
-  let ids = selectFromBank({
+  const { catIds, subIds } = await resolveIds(config);
+  let ids = await selectFromBank({
+    userId,
     categoryIds: catIds,
     subcategoryIds: subIds,
     difficulty: config.difficulty,
@@ -94,11 +87,11 @@ export async function buildPracticeQuiz(
   let generatedCount = 0;
   if (ids.length < config.count && opts.allowGeneration) {
     const need = config.count - ids.length;
-    // Generate for the first requested category (or skip if "any").
     const targetSlug = config.categories[0];
     if (targetSlug) {
       try {
         const newIds = await generateQuestions({
+          userId,
           categorySlug: targetSlug,
           subcategorySlug: config.subcategories[0] || null,
           difficulty: config.difficulty,
@@ -106,8 +99,8 @@ export async function buildPracticeQuiz(
           useWeb: opts.useWeb,
         });
         generatedCount = newIds.length;
-        // Re-select to keep ordering/eligibility consistent.
-        const topUp = selectFromBank({
+        const topUp = await selectFromBank({
+          userId,
           categoryIds: catIds,
           subcategoryIds: subIds,
           difficulty: config.difficulty,
@@ -116,7 +109,7 @@ export async function buildPracticeQuiz(
         });
         ids = ids.concat(topUp).slice(0, config.count);
       } catch {
-        // Generation failed (no key / API error) — serve what we have.
+        /* serve what we have */
       }
     }
   }
@@ -128,39 +121,28 @@ export async function buildPracticeQuiz(
   };
 }
 
-// Build a FULL MOCK: 175 GS distributed by weightage + 25 Aptitude.
-export async function buildMockQuiz(opts: {
-  allowGeneration: boolean;
-  useWeb?: boolean;
-}): Promise<BuildResult> {
-  const cats = getCategories();
+export async function buildMockQuiz(
+  userId: number,
+  opts: { allowGeneration: boolean; useWeb?: boolean }
+): Promise<BuildResult> {
+  const cats = await getCategories();
   const bySlug = new Map(cats.map((c) => [c.slug, c]));
   const aptitude = cats.find((c) => c.section === 'APTITUDE');
 
   const chosen: number[] = [];
   let generatedCount = 0;
-
-  // Largest-remainder rounding of GS weights to exactly GS_TOTAL.
   const targets = computeGsTargets();
 
   for (const [slug, target] of Object.entries(targets)) {
     const cat = bySlug.get(slug);
     if (!cat) continue;
-    const picked = await fillCategory(cat.id, target, chosen, slug, opts.allowGeneration, opts.useWeb);
+    const picked = await fillCategory(userId, cat.id, target, chosen, slug, opts);
     chosen.push(...picked.ids);
     generatedCount += picked.generated;
   }
 
-  // Aptitude (25), SSLC standard.
   if (aptitude) {
-    const picked = await fillCategory(
-      aptitude.id,
-      APTITUDE_TOTAL,
-      chosen,
-      aptitude.slug,
-      opts.allowGeneration,
-      opts.useWeb
-    );
+    const picked = await fillCategory(userId, aptitude.id, APTITUDE_TOTAL, chosen, aptitude.slug, opts);
     chosen.push(...picked.ids);
     generatedCount += picked.generated;
   }
@@ -174,11 +156,12 @@ export async function buildMockQuiz(opts: {
 
 function computeGsTargets(): Record<string, number> {
   const sum = Object.values(GS_WEIGHTS).reduce((a, b) => a + b, 0);
-  const raw = Object.entries(GS_WEIGHTS).map(([slug, w]) => ({
-    slug,
-    exact: (w / sum) * GS_TOTAL,
+  const raw = Object.entries(GS_WEIGHTS).map(([slug, w]) => ({ slug, exact: (w / sum) * GS_TOTAL }));
+  const floored = raw.map((r) => ({
+    slug: r.slug,
+    n: Math.floor(r.exact),
+    frac: r.exact - Math.floor(r.exact),
   }));
-  const floored = raw.map((r) => ({ slug: r.slug, n: Math.floor(r.exact), frac: r.exact - Math.floor(r.exact) }));
   let remaining = GS_TOTAL - floored.reduce((a, b) => a + b.n, 0);
   floored.sort((a, b) => b.frac - a.frac);
   for (let i = 0; i < floored.length && remaining > 0; i++, remaining--) floored[i].n++;
@@ -188,14 +171,15 @@ function computeGsTargets(): Record<string, number> {
 }
 
 async function fillCategory(
+  userId: number,
   categoryId: number,
   target: number,
   exclude: number[],
   slug: string,
-  allowGeneration: boolean,
-  useWeb?: boolean
+  opts: { allowGeneration: boolean; useWeb?: boolean }
 ): Promise<{ ids: number[]; generated: number }> {
-  let ids = selectFromBank({
+  let ids = await selectFromBank({
+    userId,
     categoryIds: [categoryId],
     subcategoryIds: [],
     difficulty: 'mixed',
@@ -203,16 +187,18 @@ async function fillCategory(
     excludeIds: exclude,
   });
   let generated = 0;
-  if (ids.length < target && allowGeneration) {
+  if (ids.length < target && opts.allowGeneration) {
     try {
       const newIds = await generateQuestions({
+        userId,
         categorySlug: slug,
         difficulty: 'mixed',
         count: target - ids.length,
-        useWeb,
+        useWeb: opts.useWeb,
       });
       generated = newIds.length;
-      const topUp = selectFromBank({
+      const topUp = await selectFromBank({
+        userId,
         categoryIds: [categoryId],
         subcategoryIds: [],
         difficulty: 'mixed',

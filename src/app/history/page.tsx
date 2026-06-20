@@ -1,11 +1,15 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { listSessions } from '@/lib/repo';
+import { currentUser } from '@/lib/user';
 import { MARK_PER_CORRECT } from '@/lib/weights';
 
 export const dynamic = 'force-dynamic';
 
-export default function HistoryPage() {
-  const sessions = listSessions();
+export default async function HistoryPage() {
+  const user = await currentUser();
+  if (!user) redirect('/signin');
+  const sessions = await listSessions(user.id);
 
   return (
     <div className="space-y-4">

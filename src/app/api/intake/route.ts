@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { ok, fail, handleError } from '@/lib/api';
 import { getCategoriesWithSubs } from '@/lib/repo';
+import { requireUserId } from '@/lib/user';
 import { callJson, hasApiKey } from '@/lib/claude';
 import { intakeParserPrompt } from '@/lib/prompts';
 import type { QuizConfig } from '@/lib/types';
@@ -11,10 +12,11 @@ export const dynamic = 'force-dynamic';
 // Call 1 — intake parser: chat text -> structured quiz config.
 export async function POST(req: NextRequest) {
   try {
+    await requireUserId();
     const { message } = (await req.json()) as { message?: string };
     if (!message || !message.trim()) return fail('Empty message');
 
-    const cats = getCategoriesWithSubs();
+    const cats = await getCategoriesWithSubs();
     const validSlugs = new Set(cats.map((c) => c.slug));
     const validSubs = new Set(cats.flatMap((c) => c.subcategories.map((s) => s.slug)));
 

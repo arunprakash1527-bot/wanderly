@@ -13,7 +13,10 @@ export function fail(message: string, status = 400) {
 
 export function handleError(err: unknown) {
   const message = err instanceof Error ? err.message : 'Unexpected error';
-  // 401-ish hint when the key is missing so the UI can guide the owner.
+  if (message === 'UNAUTHORIZED') {
+    return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
+  }
+  // 503 hint when the key is missing so the UI can guide the owner.
   const status = /ANTHROPIC_API_KEY/.test(message) ? 503 : 500;
   return NextResponse.json({ error: message }, { status });
 }

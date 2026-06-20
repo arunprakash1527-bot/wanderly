@@ -1,19 +1,22 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSession, getSessionQuestions } from '@/lib/repo';
+import { currentUser } from '@/lib/user';
 import { MARK_PER_CORRECT } from '@/lib/weights';
 import ResultsReview, { type ReviewItem } from '@/components/ResultsReview';
 
 export const dynamic = 'force-dynamic';
 
-export default function ResultsPage({ params }: { params: { sessionId: string } }) {
+export default async function ResultsPage({ params }: { params: { sessionId: string } }) {
+  const user = await currentUser();
+  if (!user) redirect('/signin');
   const sessionId = parseInt(params.sessionId, 10);
   if (Number.isNaN(sessionId)) notFound();
-  const session = getSession(sessionId);
+  const session = await getSession(user.id, sessionId);
   if (!session) notFound();
   if (!session.completed_at) redirect(`/quiz/${sessionId}`);
 
-  const rows = getSessionQuestions(sessionId);
+  const rows = await getSessionQuestions(sessionId);
   const correct = rows.filter((r) => r.attempt_is_correct === 1).length;
   const skipped = rows.filter((r) => r.chosen_option == null).length;
   const incorrect = rows.length - correct - skipped;

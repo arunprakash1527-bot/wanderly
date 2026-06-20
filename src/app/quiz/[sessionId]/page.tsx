@@ -1,22 +1,22 @@
 import { notFound, redirect } from 'next/navigation';
 import { getSession, getSessionQuestions } from '@/lib/repo';
+import { currentUser } from '@/lib/user';
 import { MOCK_DURATION_SECONDS } from '@/lib/weights';
 import QuizRunner, { type ClientQuestion } from '@/components/QuizRunner';
 
 export const dynamic = 'force-dynamic';
 
-export default function QuizPage({ params }: { params: { sessionId: string } }) {
+export default async function QuizPage({ params }: { params: { sessionId: string } }) {
+  const user = await currentUser();
+  if (!user) redirect('/signin');
   const sessionId = parseInt(params.sessionId, 10);
   if (Number.isNaN(sessionId)) notFound();
 
-  const session = getSession(sessionId);
+  const session = await getSession(user.id, sessionId);
   if (!session) notFound();
-
-  // Already completed → jump to results.
   if (session.completed_at) redirect(`/results/${sessionId}`);
 
-  const rows = getSessionQuestions(sessionId);
-  // Strip the correct answer before sending to the client (revealed on results).
+  const rows = await getSessionQuestions(sessionId);
   const questions: ClientQuestion[] = rows.map((q) => ({
     attemptId: q.attempt_id,
     questionId: q.id,
@@ -27,7 +27,6 @@ export default function QuizPage({ params }: { params: { sessionId: string } }) 
     sourceType: q.source_type,
   }));
 
-  // Remaining time for a mock (count-down); practice counts up.
   let remainingSeconds: number | null = null;
   if (session.mode === 'mock') {
     const startedMs = new Date(session.started_at.replace(' ', 'T') + 'Z').getTime();

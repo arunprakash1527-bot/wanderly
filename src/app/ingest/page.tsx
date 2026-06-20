@@ -1,11 +1,15 @@
+import { redirect } from 'next/navigation';
 import { getCategoriesWithSubs } from '@/lib/repo';
+import { currentUser } from '@/lib/user';
 import { hasApiKey } from '@/lib/claude';
 import IngestForm from '@/components/IngestForm';
 
 export const dynamic = 'force-dynamic';
 
-export default function IngestPage() {
-  const categories = getCategoriesWithSubs();
+export default async function IngestPage() {
+  const user = await currentUser();
+  if (!user) redirect('/signin');
+  const categories = await getCategoriesWithSubs();
   return (
     <div className="space-y-4">
       <div>

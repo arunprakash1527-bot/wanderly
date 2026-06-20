@@ -9,10 +9,13 @@ function csvEscape(v: unknown): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function buildSessionCsv(sessionId: number): string | null {
-  const session = getSession(sessionId);
+export async function buildSessionCsv(
+  userId: number,
+  sessionId: number
+): Promise<string | null> {
+  const session = await getSession(userId, sessionId);
   if (!session) return null;
-  const rows = getSessionQuestions(sessionId);
+  const rows = await getSessionQuestions(sessionId);
 
   const header = [
     'session_id',
@@ -67,10 +70,13 @@ export function buildSessionCsv(sessionId: number): string | null {
   return lines.join('\n');
 }
 
-export async function buildSessionPdf(sessionId: number): Promise<Uint8Array | null> {
-  const session = getSession(sessionId);
+export async function buildSessionPdf(
+  userId: number,
+  sessionId: number
+): Promise<Uint8Array | null> {
+  const session = await getSession(userId, sessionId);
   if (!session) return null;
-  const rows = getSessionQuestions(sessionId);
+  const rows = await getSessionQuestions(sessionId);
   const correct = rows.filter((r) => r.attempt_is_correct === 1).length;
   const skipped = rows.filter((r) => r.chosen_option == null).length;
   const accuracy = rows.length ? Math.round((correct / rows.length) * 100) : 0;

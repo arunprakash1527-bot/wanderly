@@ -1,13 +1,11 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { getDb } from './db';
+import { all, run, batchWrite } from './db';
 import { getCategories } from './repo';
 import { callText, callJson, hasApiKey, pdfBlock, textBlock } from './claude';
 
-// Source-document ingestion (Section 9d): extract text, chunk (~500-800
-// tokens), tag chunks by category (AI-assisted or owner-specified), store.
+// Source-document ingestion (Section 9d), per user. No local disk: PDFs are
+// transcribed via Claude in-memory and only the chunks are persisted (works on
+// serverless / read-only filesystems).
 
-const UPLOAD_DIR = path.join(process.cwd(), 'data', 'uploads');
 const CHARS_PER_CHUNK = 2800; // ~600-700 tokens
 
 function chunkText(text: string): string[] {
@@ -37,10 +35,7 @@ async function extractPdfText(base64: string): Promise<string> {
   });
 }
 
-async function autoTagChunks(
-  chunks: string[],
-  categorySlugs: string[]
-): Promise<(string | null)[]> {
+async function autoTagChunks(chunks: string[], categorySlugs: string[]): Promise<(string | null)[]> {
   const sample = chunks.map((c, i) => `[${i}] ${c.slice(0, 300)}`).join('\n\n');
   try {
     const result = await callJson<{ index: number; slug: string | null }[]>({
@@ -59,21 +54,15 @@ async function autoTagChunks(
 }
 
 export interface IngestSourceArgs {
+  userId: number;
   title: string;
   file: File;
-  categorySlug: string | null; // null => auto-detect per chunk
+  categorySlug: string | null;
 }
 
 export async function ingestSource(args: IngestSourceArgs) {
-  const db = getDb();
-  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
   const buf = Buffer.from(await args.file.arrayBuffer());
-  const safeName = `${Date.now()}-${args.file.name.replace(/[^\w.\-]/g, '_')}`;
-  const filePath = path.join(UPLOAD_DIR, safeName);
-  fs.writeFileSync(filePath, buf);
 
-  // Extract text.
   let text: string;
   if (args.file.type === 'application/pdf' || args.file.name.toLowerCase().endsWith('.pdf')) {
     if (!hasApiKey()) throw new Error('ANTHROPIC_API_KEY is required to read PDF source material.');
@@ -85,62 +74,59 @@ export async function ingestSource(args: IngestSourceArgs) {
   const chunks = chunkText(text);
   if (chunks.length === 0) throw new Error('No readable text found in the document.');
 
-  const cats = getCategories();
+  const cats = await getCategories();
   const catIdBySlug = new Map(cats.map((c) => [c.slug, c.id]));
 
   let tags: (string | null)[];
   if (args.categorySlug) {
     tags = chunks.map(() => args.categorySlug);
   } else if (hasApiKey()) {
-    tags = await autoTagChunks(
-      chunks,
-      cats.filter((c) => c.section === 'GS').map((c) => c.slug)
-    );
+    tags = await autoTagChunks(chunks, cats.filter((c) => c.section === 'GS').map((c) => c.slug));
   } else {
     tags = chunks.map(() => null);
   }
 
   const docCatId = args.categorySlug ? catIdBySlug.get(args.categorySlug) ?? null : null;
+  const docRes = await run(
+    'INSERT INTO source_documents (user_id, title, category_id, file_path) VALUES (?, ?, ?, NULL)',
+    [args.userId, args.title, docCatId]
+  );
+  const documentId = docRes.lastInsertRowid;
 
-  const tx = db.transaction(() => {
-    const docRes = db
-      .prepare(
-        'INSERT INTO source_documents (title, category_id, file_path) VALUES (?, ?, ?)'
-      )
-      .run(args.title, docCatId, filePath);
-    const docId = docRes.lastInsertRowid as number;
-    const insChunk = db.prepare(
-      'INSERT INTO source_chunks (document_id, category_id, chunk_text) VALUES (?, ?, ?)'
-    );
-    chunks.forEach((c, i) => {
+  await batchWrite(
+    chunks.map((c, i) => {
       const slug = tags[i];
-      insChunk.run(docId, slug ? catIdBySlug.get(slug) ?? null : null, c);
-    });
-    return docId;
-  });
-  const documentId = tx();
+      return {
+        sql: 'INSERT INTO source_chunks (user_id, document_id, category_id, chunk_text) VALUES (?, ?, ?, ?)',
+        args: [args.userId, documentId, slug ? catIdBySlug.get(slug) ?? null : null, c],
+      };
+    })
+  );
 
   return { documentId, chunks: chunks.length };
 }
 
-export function listSourceDocuments() {
-  return getDb()
-    .prepare(
-      `SELECT d.id, d.title, d.ingested_at, c.name AS category_name,
-              (SELECT COUNT(*) FROM source_chunks sc WHERE sc.document_id = d.id) AS chunk_count
-       FROM source_documents d
-       LEFT JOIN categories c ON c.id = d.category_id
-       ORDER BY d.ingested_at DESC`
-    )
-    .all() as {
+export async function listSourceDocuments(userId: number) {
+  return all<{
     id: number;
     title: string;
     ingested_at: string;
     category_name: string | null;
     chunk_count: number;
-  }[];
+  }>(
+    `SELECT d.id, d.title, d.ingested_at, c.name AS category_name,
+            (SELECT COUNT(*) FROM source_chunks sc WHERE sc.document_id = d.id) AS chunk_count
+     FROM source_documents d
+     LEFT JOIN categories c ON c.id = d.category_id
+     WHERE d.user_id = ?
+     ORDER BY d.ingested_at DESC`,
+    [userId]
+  );
 }
 
-export function deleteSourceDocument(id: number) {
-  getDb().prepare('DELETE FROM source_documents WHERE id = ?').run(id);
+export async function deleteSourceDocument(userId: number, id: number) {
+  await batchWrite([
+    { sql: 'DELETE FROM source_chunks WHERE document_id = ? AND user_id = ?', args: [id, userId] },
+    { sql: 'DELETE FROM source_documents WHERE id = ? AND user_id = ?', args: [id, userId] },
+  ]);
 }

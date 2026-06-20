@@ -1,10 +1,14 @@
+import { redirect } from 'next/navigation';
 import { getFlaggedQuestions } from '@/lib/repo';
+import { currentUser } from '@/lib/user';
 import ReviewFlagged, { type FlaggedItem } from '@/components/ReviewFlagged';
 
 export const dynamic = 'force-dynamic';
 
-export default function ReviewPage() {
-  const flagged = getFlaggedQuestions();
+export default async function ReviewPage() {
+  const user = await currentUser();
+  if (!user) redirect('/signin');
+  const flagged = await getFlaggedQuestions(user.id);
   const items: FlaggedItem[] = flagged.map((q) => ({
     id: q.id,
     stem: q.stem,

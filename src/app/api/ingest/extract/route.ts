@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { ok, fail, handleError } from '@/lib/api';
 import { getCategoriesWithSubs } from '@/lib/repo';
+import { requireUserId } from '@/lib/user';
 import { callJson, hasApiKey, pdfBlock, textBlock } from '@/lib/claude';
 import { pyqExtractorPrompt } from '@/lib/prompts';
 import type { ExtractedQuestion } from '@/lib/types';
@@ -12,6 +13,7 @@ export const maxDuration = 300;
 // Call 2 — PYQ extractor: paper PDF -> structured questions (verbatim, JSON).
 export async function POST(req: NextRequest) {
   try {
+    await requireUserId();
     if (!hasApiKey()) {
       return fail('ANTHROPIC_API_KEY is required to extract questions from a PDF.', 503);
     }
@@ -23,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     if (!paper) return fail('No paper PDF uploaded');
 
-    const cats = getCategoriesWithSubs();
+    const cats = await getCategoriesWithSubs();
     const { system } = pyqExtractorPrompt(
       cats.map((c) => ({ name: c.name, slug: c.slug, subcategories: c.subcategories })),
       Boolean(answerKey),
