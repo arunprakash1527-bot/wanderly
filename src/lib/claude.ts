@@ -26,8 +26,9 @@ type ContentBlock = Anthropic.Messages.ContentBlockParam;
 
 // Built-in web-search server tool (Section 9b web grounding). Runs entirely on
 // Anthropic's side; the `_20260209` variant (dynamic filtering) is supported on
-// Sonnet 4.6 / Opus 4.6+ and needs no beta header.
-export function webSearchTool(maxUses = 5) {
+// Sonnet 4.6 / Opus 4.6+ and needs no beta header. Kept to a low max_uses so
+// grounded generation stays bounded (it can otherwise run for minutes).
+export function webSearchTool(maxUses = 2) {
   return { type: 'web_search_20260209', name: 'web_search', max_uses: maxUses } as unknown;
 }
 
@@ -50,6 +51,7 @@ async function rawCall(opts: CallOpts): Promise<string> {
     typeof opts.user === 'string' ? [{ type: 'text', text: opts.user }] : opts.user;
 
   const messages: Anthropic.Messages.MessageParam[] = [{ role: 'user', content }];
+  const usingTools = Boolean(opts.tools);
   const base = {
     model: opts.model || DEFAULT_MODEL,
     max_tokens: opts.maxTokens ?? 4096,
@@ -59,14 +61,17 @@ async function rawCall(opts: CallOpts): Promise<string> {
     // passed straight through to the API, so cast to bypass the stale union.
     ...(opts.tools ? { tools: opts.tools as unknown as never } : {}),
   };
+  // Per-request timeout so a tool call can never hang the route. Web grounding
+  // gets a bounded budget; without tools we keep the SDK default.
+  const reqOpts = usingTools ? { timeout: 90_000 } : undefined;
 
   // Server tools can pause the turn when the search loop hits its cap; re-send
-  // the accumulated transcript to resume. Bounded to avoid runaway loops.
-  let res = await client.messages.create({ ...base, messages });
+  // the accumulated transcript to resume. Bounded to keep it fast.
+  let res = await client.messages.create({ ...base, messages }, reqOpts);
   // `pause_turn` may not be in the installed SDK's stop_reason union; compare as string.
-  for (let i = 0; i < 4 && (res.stop_reason as string) === 'pause_turn'; i++) {
+  for (let i = 0; i < 2 && (res.stop_reason as string) === 'pause_turn'; i++) {
     messages.push({ role: 'assistant', content: res.content });
-    res = await client.messages.create({ ...base, messages });
+    res = await client.messages.create({ ...base, messages }, reqOpts);
   }
 
   // The final answer (JSON or prose) is in the last message's text blocks.

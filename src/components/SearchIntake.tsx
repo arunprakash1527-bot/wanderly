@@ -35,7 +35,8 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
   const [subtopic, setSubtopic] = useState<string>(''); // subcategory slug
   const [count, setCount] = useState(10);
   const [uiDiff, setUiDiff] = useState<'medium' | 'hard' | 'very-hard'>('medium');
-  const [useWeb, setUseWeb] = useState(true);
+  // Off by default — fast generation. Web grounding is an opt-in (slower).
+  const [useWeb, setUseWeb] = useState(false);
 
   // Load categories once for the topic picker.
   useEffect(() => {
@@ -270,7 +271,8 @@ function WebToggle({
   return (
     <label className="flex items-center gap-2 text-sm text-ink-soft">
       <input type="checkbox" checked={useWeb} onChange={(e) => setUseWeb(e.target.checked)} disabled={disabled} />
-      Ground new questions in real exam-style questions (web search) — more realistic, a bit slower
+      Ground in real exam-style questions via web search — more realistic, but{' '}
+      <strong>slower</strong> (may take ~30s+)
     </label>
   );
 }

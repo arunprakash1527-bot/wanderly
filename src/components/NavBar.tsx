@@ -24,7 +24,7 @@ export default function NavBar() {
         <span className="grid h-7 w-7 place-items-center rounded-md bg-brand-500 text-sm text-white">
           G1
         </span>
-        <span className="hidden sm:inline">TNPSC G1</span>
+        <span className="hidden sm:inline">TNPSC Group 1</span>
       </Link>
       <nav className="flex flex-wrap items-center gap-1 text-sm">
         {PRIMARY.map((l) => (

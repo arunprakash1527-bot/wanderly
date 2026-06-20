@@ -41,9 +41,6 @@ export default async function ResultsPage({ params }: { params: { sessionId: str
       <div className="flex items-center justify-between no-print">
         <h1 className="text-xl font-semibold">Results</h1>
         <div className="flex gap-2">
-          <a className="btn-ghost" href={`/api/export/csv?sessionId=${sessionId}`}>
-            Export CSV
-          </a>
           <a className="btn-ghost" href={`/api/export/pdf?sessionId=${sessionId}`} target="_blank">
             Export PDF
           </a>
