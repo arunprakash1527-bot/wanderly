@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { auth } from '@/auth';
 import { getOrCreateUserId } from './db';
 
@@ -11,13 +12,16 @@ export interface SessionUser {
   image: string | null;
 }
 
-export async function currentUser(): Promise<SessionUser | null> {
+// Wrapped in React cache() so the layout and the page (and any helpers) share a
+// single resolution per request — one Auth.js decode and one DB lookup instead
+// of repeating them on every server component that needs the user.
+export const currentUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
   const email = session?.user?.email;
   if (!email) return null;
   const id = await getOrCreateUserId(email, session.user?.name ?? null, session.user?.image ?? null);
   return { id, email, name: session.user?.name ?? null, image: session.user?.image ?? null };
-}
+});
 
 // Throws a recognizable error that route handlers map to a 401.
 export async function requireUserId(): Promise<number> {

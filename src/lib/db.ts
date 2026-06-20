@@ -152,7 +152,12 @@ async function migrate(db: Client) {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_chunks_cat ON source_chunks(user_id, category_id)`,
   ];
-  for (const sql of statements) await db.execute(sql);
+  // One network round-trip instead of ~12 sequential ones — this runs on every
+  // cold serverless start, so batching it noticeably cuts first-request latency.
+  await db.batch(
+    statements.map((sql) => ({ sql, args: [] as InValue[] })),
+    'write'
+  );
 }
 
 async function seedTaxonomy(db: Client) {

@@ -65,16 +65,20 @@ export default function AnalyticsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Charts only need the fast analytics query — render them as soon as it
+    // returns rather than blocking on recommendations (which calls an LLM).
     try {
-      const [a, r] = await Promise.all([
-        fetch(`/api/analytics?${qs()}`).then((x) => x.json()),
-        fetch(`/api/recommendations?${qs()}`).then((x) => x.json()),
-      ]);
+      const a = await fetch(`/api/analytics?${qs()}`).then((x) => x.json());
       setData(a);
-      setRec(r);
     } finally {
       setLoading(false);
     }
+    // Recommendations stream in separately; the section appears when ready.
+    setRec(null);
+    fetch(`/api/recommendations?${qs()}`)
+      .then((x) => x.json())
+      .then(setRec)
+      .catch(() => {});
   }, [qs]);
 
   useEffect(() => {
@@ -187,6 +191,9 @@ export default function AnalyticsPage() {
             </ChartCard>
           </div>
 
+          {!rec && (
+            <p className="card p-4 text-sm text-ink-faint">Preparing your study plan…</p>
+          )}
           {rec && (
             <section className="card p-5">
               <h2 className="mb-2 text-lg font-semibold">Recommendations</h2>
