@@ -161,6 +161,24 @@ export async function buildSessionPdf(
     if (r.explanation) {
       draw('Explanation: ' + r.explanation, { x: margin + 12, color: faint, size: 9, gap: 2 });
     }
+    // Source line: a real citation for PYQs; an AI-suggested reference (flagged)
+    // for generated questions, matching the on-screen review.
+    if (r.source_type === 'pyq') {
+      draw('Source: ' + (r.source_ref || 'Previous-year question'), {
+        x: margin + 12,
+        color: faint,
+        size: 9,
+        gap: 2,
+      });
+    } else {
+      const ref = r.source_ref || `AI-generated · ${r.category_name}`;
+      draw('Reference: ' + ref + ' (AI-suggested — verify)', {
+        x: margin + 12,
+        color: faint,
+        size: 9,
+        gap: 2,
+      });
+    }
     y -= 8;
   });
 
