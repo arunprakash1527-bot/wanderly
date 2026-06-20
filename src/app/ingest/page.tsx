@@ -4,6 +4,7 @@ import { getCategoriesWithSubs } from '@/lib/repo';
 import { currentUser } from '@/lib/user';
 import { hasApiKey } from '@/lib/claude';
 import IngestForm from '@/components/IngestForm';
+import ImportBank from '@/components/ImportBank';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,11 @@ export default async function IngestPage() {
           restart.
         </p>
       )}
+      <ImportBank categories={categories.map((c) => ({ slug: c.slug, name: c.name }))} />
+
+      <div className="pt-2">
+        <h2 className="text-sm font-semibold text-ink-faint">Or extract from a PDF</h2>
+      </div>
       <IngestForm
         categories={categories.map((c) => ({
           slug: c.slug,
