@@ -22,6 +22,7 @@ async function connect(): Promise<Client> {
   const client = createClient(AUTH ? { url: URL, authToken: AUTH } : { url: URL });
   await migrate(client);
   await seedTaxonomy(client);
+  await seedMicrotopics(client);
   return client;
 }
 
@@ -151,6 +152,13 @@ async function migrate(db: Client) {
       chunk_text TEXT NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_chunks_cat ON source_chunks(user_id, category_id)`,
+    `CREATE TABLE IF NOT EXISTS microtopics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subcategory_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      UNIQUE (subcategory_id, slug)
+    )`,
   ];
   // One network round-trip instead of ~12 sequential ones — this runs on every
   // cold serverless start, so batching it noticeably cuts first-request latency.
@@ -158,6 +166,45 @@ async function migrate(db: Client) {
     statements.map((sql) => ({ sql, args: [] as InValue[] })),
     'write'
   );
+  // Third taxonomy level added after launch — add the column to existing tables.
+  await ensureColumn(db, 'questions', 'microtopic_id', 'INTEGER');
+}
+
+// Add a column only if it's missing (SQLite has no ADD COLUMN IF NOT EXISTS).
+async function ensureColumn(db: Client, table: string, col: string, decl: string) {
+  const info = await db.execute(`PRAGMA table_info(${table})`);
+  const has = (info.rows as Row[]).some((r) => String(r.name) === col);
+  if (!has) await db.execute(`ALTER TABLE ${table} ADD COLUMN ${col} ${decl}`);
+}
+
+// Seed the micro-topics. Idempotent and independent of seedTaxonomy so it also
+// populates databases that were already seeded before this level existed.
+async function seedMicrotopics(db: Client) {
+  const res = await db.execute('SELECT COUNT(*) AS n FROM microtopics');
+  if (Number((res.rows[0] as Row).n) > 0) return;
+
+  const subs = await db.execute(
+    `SELECT sc.id AS id, sc.slug AS sub_slug, c.slug AS cat_slug
+     FROM subcategories sc JOIN categories c ON c.id = sc.category_id`
+  );
+  const idByKey = new Map(
+    (subs.rows as Row[]).map((r) => [`${r.cat_slug}/${r.sub_slug}`, Number(r.id)])
+  );
+
+  const stmts: { sql: string; args: InValue[] }[] = [];
+  for (const cat of TAXONOMY) {
+    for (const s of cat.subcategories) {
+      const subId = idByKey.get(`${cat.slug}/${s.slug}`);
+      if (!subId) continue;
+      for (const mt of s.micro) {
+        stmts.push({
+          sql: 'INSERT INTO microtopics (subcategory_id, name, slug) VALUES (?, ?, ?)',
+          args: [subId, mt.name, mt.slug],
+        });
+      }
+    }
+  }
+  if (stmts.length) await db.batch(stmts, 'write');
 }
 
 async function seedTaxonomy(db: Client) {

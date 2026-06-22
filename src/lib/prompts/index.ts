@@ -71,6 +71,8 @@ Guidance:
 export function questionGeneratorPrompt(args: {
   category: CatInfo;
   subcategorySlug: string | null;
+  // Optional micro-topic to focus on (one level below the subcategory).
+  focus?: string | null;
   blurb: string;
   difficulty: Difficulty | 'mixed';
   count: number;
@@ -80,7 +82,8 @@ export function questionGeneratorPrompt(args: {
   // current facts found via the web_search tool (Section 9b web grounding).
   useWeb?: boolean;
 }) {
-  const { category, subcategorySlug, blurb, difficulty, count, exemplars, chunks, useWeb } = args;
+  const { category, subcategorySlug, focus, blurb, difficulty, count, exemplars, chunks, useWeb } =
+    args;
 
   const exemplarText = exemplars.length
     ? exemplars
@@ -98,8 +101,8 @@ export function questionGeneratorPrompt(args: {
 
   const system = `You write fresh, exam-accurate multiple-choice questions for the TNPSC Group 1 Prelims (degree standard for General Studies, SSLC standard for Aptitude).
 
-Topic: ${category.name}${subcategorySlug ? ` > ${subcategorySlug}` : ''}
-Syllabus context: ${blurb}
+Topic: ${category.name}${subcategorySlug ? ` > ${subcategorySlug}` : ''}${focus ? ` > ${focus}` : ''}
+Syllabus context: ${blurb}${focus ? `\nFocus EVERY question specifically on: ${focus}. Do not drift to the broader topic.` : ''}
 Target difficulty: ${difficulty}. Match the cognitive level and phrasing style of the exemplar PYQs below — do not make questions trivially easy or artificially hard.
 
 Ground your questions in the syllabus and the provided source material. Treat the exemplar PYQs and source material as STYLE and DIFFICULTY references only — study their phrasing, depth and pattern, then write brand-new questions on the same syllabus. Never reproduce an exemplar or a source question verbatim or with only cosmetic edits; always create genuinely new ones. Do not present invented facts as established. Each question must be factually correct, self-contained, and have exactly one unambiguous correct option.${

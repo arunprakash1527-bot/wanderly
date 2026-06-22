@@ -23,6 +23,13 @@ export interface Subcategory {
   slug: string;
 }
 
+export interface Microtopic {
+  id: number;
+  subcategory_id: number;
+  name: string;
+  slug: string;
+}
+
 export interface Question {
   id: number;
   source_type: SourceType;
@@ -35,6 +42,7 @@ export interface Question {
   explanation: string | null;
   category_id: number;
   subcategory_id: number | null;
+  microtopic_id: number | null;
   difficulty: Difficulty;
   year: number | null;
   source_ref: string | null;
@@ -46,6 +54,7 @@ export interface QuizConfig {
   mode: QuizMode;
   categories: string[]; // category slugs
   subcategories: string[]; // subcategory slugs
+  microtopics?: string[]; // optional micro-topic slugs (one level below subcategory)
   difficulty: DifficultyFilter;
   count: number;
   // Optional human-readable note from the parser, surfaced back in the UI.

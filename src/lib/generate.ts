@@ -42,6 +42,7 @@ export async function generateQuestions(args: {
   userId: number;
   categorySlug: string;
   subcategorySlug?: string | null;
+  microtopicSlug?: string | null;
   difficulty: Difficulty | 'mixed';
   count: number;
   useWeb?: boolean;
@@ -53,9 +54,15 @@ export async function generateQuestions(args: {
 
   const seed = TAXONOMY.find((t) => t.slug === args.categorySlug);
   const blurb = seed?.blurb || category.name;
-  const subId = args.subcategorySlug
-    ? category.subcategories.find((s) => s.slug === args.subcategorySlug)?.id ?? null
-    : null;
+  const subcategory = args.subcategorySlug
+    ? category.subcategories.find((s) => s.slug === args.subcategorySlug)
+    : undefined;
+  const subId = subcategory?.id ?? null;
+  // Optional third level — focuses generation and tags the new questions.
+  const micro = args.microtopicSlug
+    ? subcategory?.microtopics.find((mt) => mt.slug === args.microtopicSlug)
+    : undefined;
+  const microId = micro?.id ?? null;
 
   // Exemplars are drawn from the user's own PYQs AND the shared reference bank
   // (user_id = SHARED_USER_ID), so an import by anyone grounds everyone's quizzes.
@@ -79,6 +86,7 @@ export async function generateQuestions(args: {
   const { system, user } = questionGeneratorPrompt({
     category: { name: category.name, slug: category.slug, subcategories: category.subcategories },
     subcategorySlug: args.subcategorySlug || null,
+    focus: micro?.name || null,
     blurb,
     difficulty: args.difficulty,
     count: args.count,
@@ -100,8 +108,8 @@ export async function generateQuestions(args: {
     generated.map((q) => ({
       sql: `INSERT INTO questions
         (user_id, source_type, stem, option_a, option_b, option_c, option_d, correct_option,
-         explanation, category_id, subcategory_id, difficulty, year, source_ref, verification_status)
-       VALUES (?, 'generated', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'unverified')`,
+         explanation, category_id, subcategory_id, microtopic_id, difficulty, year, source_ref, verification_status)
+       VALUES (?, 'generated', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'unverified')`,
       args: [
         args.userId,
         q.stem,
@@ -113,6 +121,7 @@ export async function generateQuestions(args: {
         q.explanation || null,
         category.id,
         subId,
+        microId,
         q.difficulty,
         q.source || null,
       ],

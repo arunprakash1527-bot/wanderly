@@ -13,6 +13,7 @@ export interface ClientQuestion {
   subcategory: string | null;
   sourceType: 'pyq' | 'generated';
   source: string | null;
+  isRepeat: boolean;
 }
 
 const OPTIONS: Option[] = ['A', 'B', 'C', 'D'];
@@ -175,6 +176,11 @@ export default function QuizRunner({
           <div className="mb-2 flex items-center gap-2 text-xs text-ink-faint">
             <span className="rounded bg-sand px-2 py-0.5">{q.category}</span>
             {q.subcategory && <span className="rounded bg-sand px-2 py-0.5">{q.subcategory}</span>}
+            {q.isRepeat && (
+              <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700">
+                Repeat
+              </span>
+            )}
             <span className="ml-auto rounded bg-sand px-2 py-0.5 uppercase">{q.sourceType}</span>
           </div>
           <p className="text-base font-medium leading-relaxed text-ink">{q.stem}</p>

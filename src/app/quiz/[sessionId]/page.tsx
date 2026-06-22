@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { getSession, getSessionQuestions } from '@/lib/repo';
+import { getSession, getSessionQuestions, getRepeatedQuestionIds } from '@/lib/repo';
 import { currentUser } from '@/lib/user';
 import { MOCK_DURATION_SECONDS } from '@/lib/weights';
 import QuizRunner, { type ClientQuestion } from '@/components/QuizRunner';
@@ -17,6 +17,11 @@ export default async function QuizPage({ params }: { params: { sessionId: string
   if (session.completed_at) redirect(`/results/${sessionId}`);
 
   const rows = await getSessionQuestions(sessionId);
+  const repeated = await getRepeatedQuestionIds(
+    user.id,
+    sessionId,
+    rows.map((r) => r.id)
+  );
   const questions: ClientQuestion[] = rows.map((q) => ({
     attemptId: q.attempt_id,
     questionId: q.id,
@@ -26,6 +31,7 @@ export default async function QuizPage({ params }: { params: { sessionId: string
     subcategory: q.subcategory_name,
     sourceType: q.source_type,
     source: q.source_ref,
+    isRepeat: repeated.has(q.id),
   }));
 
   let remainingSeconds: number | null = null;

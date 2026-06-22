@@ -2,6 +2,7 @@ import { all, get, run, batchWrite } from './db';
 import type {
   Category,
   Subcategory,
+  Microtopic,
   Question,
   QuizSession,
   Attempt,
@@ -11,8 +12,11 @@ import type {
 // Query helpers. All async (libSQL) and scoped by user_id where the data is
 // user-owned. Categories/subcategories are global (shared taxonomy).
 
+export interface SubcategoryWithMicro extends Subcategory {
+  microtopics: Microtopic[];
+}
 export interface CategoryWithSubs extends Category {
-  subcategories: Subcategory[];
+  subcategories: SubcategoryWithMicro[];
 }
 
 export async function getCategories(): Promise<Category[]> {
@@ -22,10 +26,34 @@ export async function getCategories(): Promise<Category[]> {
 export async function getCategoriesWithSubs(): Promise<CategoryWithSubs[]> {
   const cats = await all<Category>('SELECT * FROM categories ORDER BY id');
   const subs = await all<Subcategory>('SELECT * FROM subcategories ORDER BY id');
+  const micros = await all<Microtopic>('SELECT * FROM microtopics ORDER BY id');
   return cats.map((c) => ({
     ...c,
-    subcategories: subs.filter((s) => s.category_id === c.id),
+    subcategories: subs
+      .filter((s) => s.category_id === c.id)
+      .map((s) => ({
+        ...s,
+        microtopics: micros.filter((m) => m.subcategory_id === s.id),
+      })),
   }));
+}
+
+// Question ids the user has already attempted in OTHER (earlier) sessions, so a
+// reused question can be flagged as a "Repeat".
+export async function getRepeatedQuestionIds(
+  userId: number,
+  sessionId: number,
+  questionIds: number[]
+): Promise<Set<number>> {
+  if (questionIds.length === 0) return new Set();
+  const placeholders = questionIds.map(() => '?').join(',');
+  const rows = await all<{ question_id: number }>(
+    `SELECT DISTINCT a.question_id
+     FROM attempts a JOIN quiz_sessions s ON s.id = a.session_id
+     WHERE s.user_id = ? AND a.session_id <> ? AND a.question_id IN (${placeholders})`,
+    [userId, sessionId, ...questionIds]
+  );
+  return new Set(rows.map((r) => r.question_id));
 }
 
 export async function getQuestionById(

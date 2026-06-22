@@ -13,6 +13,7 @@ interface SelectArgs {
   userId: number;
   categoryIds: number[];
   subcategoryIds: number[];
+  microtopicIds: number[];
   difficulty: Difficulty | 'mixed';
   count: number;
   excludeIds: number[];
@@ -34,6 +35,10 @@ async function selectFromBank(args: SelectArgs): Promise<number[]> {
   if (args.subcategoryIds.length) {
     where.push(`subcategory_id IN (${args.subcategoryIds.map(() => '?').join(',')})`);
     params.push(...args.subcategoryIds);
+  }
+  if (args.microtopicIds.length) {
+    where.push(`microtopic_id IN (${args.microtopicIds.map(() => '?').join(',')})`);
+    params.push(...args.microtopicIds);
   }
   if (args.difficulty !== 'mixed') {
     where.push('difficulty = ?');
@@ -63,7 +68,12 @@ async function resolveIds(config: QuizConfig) {
     const row = await get<{ id: number }>('SELECT id FROM subcategories WHERE slug = ?', [slug]);
     if (row) subIds.push(row.id);
   }
-  return { catIds, subIds };
+  const microIds: number[] = [];
+  for (const slug of config.microtopics || []) {
+    const row = await get<{ id: number }>('SELECT id FROM microtopics WHERE slug = ?', [slug]);
+    if (row) microIds.push(row.id);
+  }
+  return { catIds, subIds, microIds };
 }
 
 export interface BuildResult {
@@ -77,11 +87,12 @@ export async function buildPracticeQuiz(
   config: QuizConfig,
   opts: { allowGeneration: boolean; useWeb?: boolean }
 ): Promise<BuildResult> {
-  const { catIds, subIds } = await resolveIds(config);
+  const { catIds, subIds, microIds } = await resolveIds(config);
   let ids = await selectFromBank({
     userId,
     categoryIds: catIds,
     subcategoryIds: subIds,
+    microtopicIds: microIds,
     difficulty: config.difficulty,
     count: config.count,
     excludeIds: [],
@@ -97,6 +108,7 @@ export async function buildPracticeQuiz(
           userId,
           categorySlug: targetSlug,
           subcategorySlug: config.subcategories[0] || null,
+          microtopicSlug: (config.microtopics || [])[0] || null,
           difficulty: config.difficulty,
           count: need,
           useWeb: opts.useWeb,
@@ -106,6 +118,7 @@ export async function buildPracticeQuiz(
           userId,
           categoryIds: catIds,
           subcategoryIds: subIds,
+          microtopicIds: microIds,
           difficulty: config.difficulty,
           count: need,
           excludeIds: ids,
@@ -185,6 +198,7 @@ async function fillCategory(
     userId,
     categoryIds: [categoryId],
     subcategoryIds: [],
+    microtopicIds: [],
     difficulty: 'mixed',
     count: target,
     excludeIds: exclude,
@@ -204,6 +218,7 @@ async function fillCategory(
         userId,
         categoryIds: [categoryId],
         subcategoryIds: [],
+        microtopicIds: [],
         difficulty: 'mixed',
         count: target - ids.length,
         excludeIds: [...exclude, ...ids],

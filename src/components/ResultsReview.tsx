@@ -16,6 +16,7 @@ export interface ReviewItem {
   subcategory: string | null;
   sourceType: 'pyq' | 'generated';
   source: string | null;
+  isRepeat: boolean;
 }
 
 const OPTIONS: Option[] = ['A', 'B', 'C', 'D'];
@@ -93,6 +94,9 @@ function ReviewCard({ item, index }: { item: ReviewItem; index: number }) {
         <span className="font-semibold text-ink-faint">Q{index}</span>
         <span className={`rounded px-2 py-0.5 font-medium ${badge.cls}`}>{badge.text}</span>
         <span className="rounded bg-sand px-2 py-0.5 text-ink-faint">{item.category}</span>
+        {item.isRepeat && (
+          <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700">Repeat</span>
+        )}
         <span className="ml-auto rounded bg-sand px-2 py-0.5 uppercase text-ink-faint">
           {item.sourceType}
         </span>

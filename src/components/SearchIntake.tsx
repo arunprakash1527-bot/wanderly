@@ -4,9 +4,14 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { QuizConfig } from '@/lib/types';
 
+interface Micro {
+  slug: string;
+  name: string;
+}
 interface Sub {
   slug: string;
   name: string;
+  microtopics?: Micro[];
 }
 interface Cat {
   slug: string;
@@ -33,6 +38,7 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
   const [cats, setCats] = useState<Cat[]>([]);
   const [topic, setTopic] = useState<string>(''); // category slug
   const [subtopic, setSubtopic] = useState<string>(''); // subcategory slug
+  const [micro, setMicro] = useState<string>(''); // micro-topic slug (optional)
   // Kept as text so the field can be cleared and freely typed (the old numeric
   // state snapped back to 1 the moment you deleted the default). Clamped to a
   // valid number only when the quiz actually starts (and on blur).
@@ -78,6 +84,7 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
       // Prefill the follow-ups from the parse.
       setTopic(c.categories[0] || '');
       setSubtopic(c.subcategories[0] || '');
+      setMicro('');
       setCountText(String(c.count || 10));
       setUiDiff(c.difficulty === 'hard' ? 'hard' : 'medium');
       setShowAdvanced(false);
@@ -105,6 +112,7 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
           mode: 'practice',
           categories: topic ? [topic] : [],
           subcategories: subtopic ? [subtopic] : [],
+          microtopics: micro ? [micro] : [],
           difficulty,
           count: Math.min(100, Math.max(1, count)),
           note: uiDiff === 'very-hard' ? 'Make these very challenging.' : undefined,
@@ -125,6 +133,7 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
   }
 
   const selectedCat = cats.find((c) => c.slug === topic);
+  const selectedSub = selectedCat?.subcategories.find((s) => s.slug === subtopic);
   const building = status === 'building';
   const parsing = status === 'parsing';
   // Numeric count used for the request/labels; empty or out-of-range falls back.
@@ -224,6 +233,7 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
                       onChange={(e) => {
                         setTopic(e.target.value);
                         setSubtopic('');
+                        setMicro('');
                       }}
                     >
                       <option value="">— choose a topic —</option>
@@ -237,7 +247,10 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
                       <select
                         className="input sm:flex-1"
                         value={subtopic}
-                        onChange={(e) => setSubtopic(e.target.value)}
+                        onChange={(e) => {
+                          setSubtopic(e.target.value);
+                          setMicro('');
+                        }}
                       >
                         <option value="">All subtopics</option>
                         {selectedCat.subcategories.map((s) => (
@@ -248,6 +261,21 @@ export default function SearchIntake({ apiKey, bankCount }: { apiKey: boolean; b
                       </select>
                     )}
                   </div>
+                  {/* Optional third level — appears once a subtopic is chosen. */}
+                  {selectedSub && (selectedSub.microtopics?.length ?? 0) > 0 && (
+                    <select
+                      className="input mt-2 sm:max-w-xs"
+                      value={micro}
+                      onChange={(e) => setMicro(e.target.value)}
+                    >
+                      <option value="">All of {selectedSub.name} (optional focus)</option>
+                      {selectedSub.microtopics!.map((mt) => (
+                        <option key={mt.slug} value={mt.slug}>
+                          {mt.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 {/* How many + difficulty on one tidy row. */}

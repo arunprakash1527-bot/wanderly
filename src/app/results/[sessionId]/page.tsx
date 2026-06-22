@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getSession, getSessionQuestions } from '@/lib/repo';
+import { getSession, getSessionQuestions, getRepeatedQuestionIds } from '@/lib/repo';
 import { currentUser } from '@/lib/user';
 import { MARK_PER_CORRECT } from '@/lib/weights';
 import ResultsReview, { type ReviewItem } from '@/components/ResultsReview';
@@ -17,6 +17,11 @@ export default async function ResultsPage({ params }: { params: { sessionId: str
   if (!session.completed_at) redirect(`/quiz/${sessionId}`);
 
   const rows = await getSessionQuestions(sessionId);
+  const repeated = await getRepeatedQuestionIds(
+    user.id,
+    sessionId,
+    rows.map((r) => r.id)
+  );
   const correct = rows.filter((r) => r.attempt_is_correct === 1).length;
   const skipped = rows.filter((r) => r.chosen_option == null).length;
   const incorrect = rows.length - correct - skipped;
@@ -35,6 +40,7 @@ export default async function ResultsPage({ params }: { params: { sessionId: str
     subcategory: r.subcategory_name,
     sourceType: r.source_type,
     source: r.source_ref,
+    isRepeat: repeated.has(r.id),
   }));
 
   return (
