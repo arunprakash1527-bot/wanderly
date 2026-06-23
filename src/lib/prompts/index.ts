@@ -117,12 +117,10 @@ Return ONLY a JSON array of exactly ${count} objects (no markdown fences, no com
   "option_a": string, "option_b": string, "option_c": string, "option_d": string,
   "correct_option": "A"|"B"|"C"|"D",
   "explanation": string,
-  "source": string,
   "difficulty": "easy"|"medium"|"hard",
   "confidence": "low"|"medium"|"high"
 }
-Set "confidence" honestly — "low" if you are unsure of the fact.
-For "source", give ONE concise, verifiable reference for the key fact tested — the specific authority or standard study source, e.g. "Article 17, Constitution of India", "Cradle Baby Scheme — Govt. of Tamil Nadu", "NCERT — Modern India", "Sangam literature — Tolkappiyam". Cite the precise document/Act/scheme/book where possible. If you are not certain of an exact citation, give the syllabus area (e.g. "Indian Polity — Fundamental Rights") rather than inventing a specific source. Never fabricate a page number, section, or URL.`;
+Set "confidence" honestly — "low" if you are unsure of the fact.`;
 
   const user = `Real PYQ exemplars (style/difficulty reference):\n\n${exemplarText}\n\n---\n\nSource material:\n\n${chunkText}\n\n---\n\nWrite ${count} new ${difficulty} questions on "${category.name}${subcategorySlug ? ` > ${subcategorySlug}` : ''}".`;
 

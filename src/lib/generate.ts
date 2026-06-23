@@ -29,7 +29,6 @@ function validateGenerated(value: unknown): GeneratedQuestion[] {
       option_d: String(q.option_d),
       correct_option: opt as 'A' | 'B' | 'C' | 'D',
       explanation: String(q.explanation || ''),
-      source: q.source ? String(q.source).slice(0, 200) : undefined,
       difficulty: diff,
       confidence: ['low', 'medium', 'high'].includes(String(q.confidence))
         ? (q.confidence as 'low' | 'medium' | 'high')
@@ -109,7 +108,7 @@ export async function generateQuestions(args: {
       sql: `INSERT INTO questions
         (user_id, source_type, stem, option_a, option_b, option_c, option_d, correct_option,
          explanation, category_id, subcategory_id, microtopic_id, difficulty, year, source_ref, verification_status)
-       VALUES (?, 'generated', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'unverified')`,
+       VALUES (?, 'generated', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'unverified')`,
       args: [
         args.userId,
         q.stem,
@@ -123,7 +122,6 @@ export async function generateQuestions(args: {
         subId,
         microId,
         q.difficulty,
-        q.source || null,
       ],
     }))
   );
