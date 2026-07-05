@@ -9,6 +9,7 @@ import {
   validateNextBatch,
   subcategoriesPendingValidation,
   computeBlueprint,
+  sampleConcepts,
 } from '@/lib/concepts';
 import { generateVariantsNextBatch } from '@/lib/generate';
 
@@ -40,9 +41,11 @@ async function remainingFor(step: string): Promise<number> {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await requireOwner();
+    const sample = req.nextUrl.searchParams.get('sample');
+    if (sample) return ok({ concepts: await sampleConcepts(parseInt(sample, 10) || 25) });
     return ok({
       status: await inventoryStatus(),
       pendingValidation: await subcategoriesPendingValidation(),

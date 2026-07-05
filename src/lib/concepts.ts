@@ -52,6 +52,29 @@ export async function inventoryStatus(): Promise<InventoryStatus> {
   };
 }
 
+// A random sample of concepts, for the owner to spot-check quality before the
+// expensive generation step.
+export async function sampleConcepts(n: number) {
+  return all<{
+    statement: string;
+    concept_type: string;
+    source: string;
+    pyq_frequency: number;
+    subcategory: string;
+    microtopic: string | null;
+    has_question: number;
+  }>(
+    `SELECT c.statement, c.concept_type, c.source, c.pyq_frequency,
+            sc.name AS subcategory, mt.name AS microtopic,
+            (SELECT COUNT(*) FROM questions q WHERE q.concept_id = c.id) AS has_question
+     FROM concepts c
+     JOIN subcategories sc ON sc.id = c.subcategory_id
+     LEFT JOIN microtopics mt ON mt.id = c.microtopic_id
+     ORDER BY RANDOM() LIMIT ?`,
+    [Math.max(1, Math.min(100, n))]
+  );
+}
+
 // ---- Source B: syllabus decomposition --------------------------------------
 
 interface MicroRow {

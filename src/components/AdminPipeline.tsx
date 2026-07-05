@@ -11,6 +11,15 @@ interface Status {
   conceptsWithoutVariant: number;
   blueprintRows: number;
 }
+interface SampleConcept {
+  statement: string;
+  concept_type: string;
+  source: string;
+  pyq_frequency: number;
+  subcategory: string;
+  microtopic: string | null;
+  has_question: number;
+}
 
 const STEPS: { key: string; label: string; batch: number; note: string }[] = [
   { key: 'mappyq', label: '1. Map PYQs → concepts', batch: 10, note: 'Maps each imported PYQ to the fact it tests.' },
@@ -25,6 +34,7 @@ export default function AdminPipeline() {
   const [hasKey, setHasKey] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
+  const [sample, setSample] = useState<SampleConcept[] | null>(null);
   const cancel = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -140,6 +150,37 @@ export default function AdminPipeline() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="card p-3">
+        <div className="mb-2 flex items-center gap-2">
+          <div className="text-xs font-semibold uppercase text-ink-faint">Spot-check concepts</div>
+          <button
+            className="btn-ghost ml-auto py-1 text-xs"
+            onClick={async () => {
+              const r = await fetch('/api/admin/inventory?sample=25');
+              const d = await r.json();
+              setSample(d.concepts || []);
+            }}
+          >
+            {sample ? 'Reshuffle sample' : 'Show 25 random'}
+          </button>
+        </div>
+        {sample && (
+          <div className="max-h-80 space-y-2 overflow-auto">
+            {sample.map((c, i) => (
+              <div key={i} className="border-b border-ink-faint/10 pb-2 text-xs">
+                <div className="text-ink">{c.statement}</div>
+                <div className="mt-0.5 text-ink-faint">
+                  {c.subcategory}
+                  {c.microtopic ? ` › ${c.microtopic}` : ''} · {c.concept_type} ·{' '}
+                  {c.source === 'pyq_mapping' ? `PYQ×${c.pyq_frequency}` : 'syllabus'}
+                  {c.has_question ? ' · ✓ has question' : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card max-h-72 overflow-auto p-3">

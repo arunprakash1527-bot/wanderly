@@ -240,10 +240,21 @@ export async function generateVariantForConcept(
 export async function generateVariantsNextBatch(
   limit: number
 ): Promise<{ processed: number; created: number }> {
+  // Breadth-first: rank concepts within each micro-topic (PYQ-relevant first),
+  // then take rank 1 across ALL micro-topics before rank 2, etc. This way a
+  // partial run still gives at least one question in every topic — even coverage
+  // rather than fully finishing a few topics and leaving others empty.
   const concepts = await all<{ id: number }>(
-    `SELECT c.id FROM concepts c
-     WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1)
-     ORDER BY c.pyq_frequency DESC, c.id LIMIT ?`,
+    `SELECT id FROM (
+       SELECT c.id AS id,
+         ROW_NUMBER() OVER (
+           PARTITION BY COALESCE(c.microtopic_id, -c.subcategory_id)
+           ORDER BY c.pyq_frequency DESC, c.id
+         ) AS rnk
+       FROM concepts c
+       WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1)
+     )
+     ORDER BY rnk, id LIMIT ?`,
     [limit]
   );
   let created = 0;
