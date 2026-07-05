@@ -159,6 +159,32 @@ async function migrate(db: Client) {
       slug TEXT NOT NULL,
       UNIQUE (subcategory_id, slug)
     )`,
+    // Concept engine: the inventory of atomic testable facts. One concept = one
+    // fact; questions are generated one-per-concept (see lib/concepts.ts).
+    `CREATE TABLE IF NOT EXISTS concepts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subcategory_id INTEGER NOT NULL,
+      microtopic_id INTEGER,
+      statement TEXT NOT NULL,
+      concept_type TEXT NOT NULL DEFAULT 'fact',
+      difficulty TEXT NOT NULL DEFAULT 'medium',
+      pyq_frequency INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'syllabus_decomposition',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (subcategory_id, statement)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_concepts_sub ON concepts(subcategory_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_concepts_micro ON concepts(microtopic_id)`,
+    // Exam blueprint: PYQ-derived weight per subcategory, used by mock sampling.
+    `CREATE TABLE IF NOT EXISTS blueprint_weights (
+      subcategory_id INTEGER PRIMARY KEY,
+      weight REAL NOT NULL DEFAULT 0
+    )`,
+    // Small key/value store for pipeline progress markers (e.g. validated subcats).
+    `CREATE TABLE IF NOT EXISTS pipeline_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )`,
   ];
   // One network round-trip instead of ~12 sequential ones — this runs on every
   // cold serverless start, so batching it noticeably cuts first-request latency.
@@ -166,8 +192,16 @@ async function migrate(db: Client) {
     statements.map((sql) => ({ sql, args: [] as InValue[] })),
     'write'
   );
-  // Third taxonomy level added after launch — add the column to existing tables.
+  // Columns added after launch. SQLite can't add NOT NULL without a default to a
+  // populated table, so concept_id is nullable and enforced in app logic.
   await ensureColumn(db, 'questions', 'microtopic_id', 'INTEGER');
+  await ensureColumn(db, 'questions', 'concept_id', 'INTEGER');
+  await ensureColumn(db, 'questions', 'variant_number', 'INTEGER NOT NULL DEFAULT 1');
+  await ensureColumn(db, 'attempts', 'concept_id', 'INTEGER');
+  // Cap variants per concept (unique per concept+variant); partial-safe.
+  await db.execute(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_concept_variant ON questions(concept_id, variant_number)'
+  );
 }
 
 // Add a column only if it's missing (SQLite has no ADD COLUMN IF NOT EXISTS).

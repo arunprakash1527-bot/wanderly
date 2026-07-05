@@ -100,8 +100,9 @@ export async function createSession(args: {
   if (args.questionIds.length) {
     await batchWrite(
       args.questionIds.map((qid) => ({
-        sql: 'INSERT INTO attempts (session_id, question_id) VALUES (?, ?)',
-        args: [sessionId, qid],
+        sql: `INSERT INTO attempts (session_id, question_id, concept_id)
+              VALUES (?, ?, (SELECT concept_id FROM questions WHERE id = ?))`,
+        args: [sessionId, qid, qid],
       }))
     );
   }

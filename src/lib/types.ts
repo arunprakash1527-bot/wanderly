@@ -30,6 +30,31 @@ export interface Microtopic {
   slug: string;
 }
 
+// ---- Concept-based content engine (spec revision) --------------------------
+export type ConceptType =
+  | 'fact'
+  | 'date'
+  | 'person'
+  | 'place'
+  | 'definition'
+  | 'process'
+  | 'relationship'
+  | 'data'
+  | 'provision';
+export type ConceptSource = 'syllabus_decomposition' | 'pyq_mapping';
+
+export interface Concept {
+  id: number;
+  subcategory_id: number;
+  microtopic_id: number | null;
+  statement: string;
+  concept_type: ConceptType;
+  difficulty: Difficulty;
+  pyq_frequency: number;
+  source: ConceptSource;
+  created_at: string;
+}
+
 export interface Question {
   id: number;
   source_type: SourceType;
@@ -43,6 +68,9 @@ export interface Question {
   category_id: number;
   subcategory_id: number | null;
   microtopic_id: number | null;
+  // Concept engine: every generated question tests exactly one concept.
+  concept_id: number | null;
+  variant_number: number;
   difficulty: Difficulty;
   year: number | null;
   source_ref: string | null;
@@ -77,6 +105,7 @@ export interface Attempt {
   id: number;
   session_id: number;
   question_id: number;
+  concept_id: number | null; // denormalized for fast coverage/mastery queries
   chosen_option: Option | null;
   is_correct: number | null; // 0/1
   time_spent_seconds: number | null;

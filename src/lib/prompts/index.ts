@@ -127,6 +127,90 @@ Set "confidence" honestly — "low" if you are unsure of the fact.`;
   return { system, user };
 }
 
+// ---- Concept-based content engine -----------------------------------------
+
+// Shared option-construction rules used by concept question generation. These
+// keep distractors fair and unambiguous (the "meta-option fix").
+export const OPTION_RULES = `Option-construction rules (follow ALL):
+- Exactly 4 options A-D; exactly one is correct.
+- No "All of the above", "None of the above", "Both A and B" style meta-options.
+- All four options must be the same kind of thing, similar length and grammatical form.
+- Distractors must be plausible, from the same domain, and factually wrong for THIS question — not absurd or off-topic.
+- No two options may be synonyms or overlap such that more than one could be argued correct.
+- Do not signal the answer by making the correct option longer, more detailed, or more hedged.
+- Vary which position (A/B/C/D) holds the correct answer.`;
+
+// C1) Syllabus decomposition — subtopic -> inventory of atomic testable facts.
+export function conceptDecompositionPrompt(microtopicName: string, parentContext: string) {
+  const system = `You build a fact inventory for TNPSC Group 1 Prelims preparation. For the given micro-topic, enumerate the distinct testable facts a well-prepared candidate must know.
+Each fact must be: (1) atomic — exactly one testable claim; (2) stated declaratively as a complete sentence; (3) verifiable against standard sources (NCERT, Tamil Nadu State Board texts, official government publications).
+Classify each as one of: fact, date, person, place, definition, process, relationship, data, provision.
+Do NOT include trivia unlikely to be examined. Do NOT include compound statements (split them).
+Return ONLY a JSON array of objects with keys "statement", "concept_type", "difficulty" ("easy"|"medium"|"hard"). Aim for 15-40 items depending on how much the micro-topic carries.`;
+  const user = `Micro-topic: ${microtopicName}
+Syllabus context: ${parentContext}
+
+Enumerate the testable facts as JSON.`;
+  return { system, user };
+}
+
+// C2) PYQ mapping — a real past question -> the atomic fact it tests.
+export function pyqConceptMappingPrompt(subcategorySlugs: string[]) {
+  const system = `You map a real TNPSC Group 1 past question to the single atomic fact it tests, stated declaratively, and to the best-fitting syllabus subcategory.
+Return ONLY a JSON object: {"subcategory_slug": string, "statement": string, "concept_type": "fact"|"date"|"person"|"place"|"definition"|"process"|"relationship"|"data"|"provision", "difficulty": "easy"|"medium"|"hard"}.
+"subcategory_slug" must be one of: ${subcategorySlugs.join(', ')}.
+"statement" is the one fact the question hinges on, as a complete declarative sentence (not the question itself).`;
+  return { system };
+}
+
+// C3) Validation pass — dedupe / split / delete within a subcategory.
+export function conceptValidationPrompt(
+  subcategoryName: string,
+  concepts: { id: number; statement: string }[]
+) {
+  const list = concepts.map((c) => `[${c.id}] ${c.statement}`).join('\n');
+  const system = `You review a list of "concepts" (atomic testable facts) for one TNPSC subcategory and flag problems.
+Return ONLY a JSON object:
+{
+  "merge": [[id, id], ...],   // pairs that test the SAME fact in different words; keep the first id, drop the second
+  "delete": [id, ...],        // ids that are NOT verifiable single facts / are trivia
+  "split": [id, ...]          // ids that are compound (contain more than one testable fact)
+}
+Only include genuine problems. Empty arrays are fine.`;
+  const user = `Subcategory: ${subcategoryName}\n\nConcepts:\n${list}`;
+  return { system, user };
+}
+
+// C4) Per-concept question generation (one question testing exactly one fact).
+export function conceptQuestionPrompt(statement: string, difficulty: Difficulty, avoidStems: string[]) {
+  const system = `You write exactly ONE multiple-choice question for TNPSC Group 1 Prelims that tests this specific fact and nothing beyond it:
+"${statement}"
+
+${OPTION_RULES}
+
+Target difficulty: ${difficulty}. The question must hinge on the stated fact only — do not test a neighbouring fact.
+Return ONLY JSON: {"stem": string, "option_a": string, "option_b": string, "option_c": string, "option_d": string, "correct_option": "A"|"B"|"C"|"D", "explanation": string}.
+The explanation states why the correct answer is right and briefly why each distractor is wrong.`;
+  const user = avoidStems.length
+    ? `Write a fresh wording that differs from these existing variants:\n${avoidStems.map((s) => `- ${s}`).join('\n')}`
+    : 'Write the question.';
+  return { system, user };
+}
+
+// C5) Concept-fidelity self-check — does the question test the assigned fact only?
+export function conceptFidelityPrompt(statement: string, stem: string, correct: string) {
+  const system = `You verify that a multiple-choice question tests a specific assigned fact and no other.
+Return ONLY JSON: {"tests_concept": boolean, "single_correct": boolean, "reason": string}.
+"tests_concept" is true only if answering correctly requires knowing exactly the assigned fact.
+"single_correct" is true only if exactly one option is defensibly correct.`;
+  const user = `Assigned fact: ${statement}
+Question stem: ${stem}
+Marked correct option: ${correct}
+
+Evaluate.`;
+  return { system, user };
+}
+
 // 4) Explanation generator — question + correct answer -> explanation.
 export function explanationPrompt(q: {
   stem: string;

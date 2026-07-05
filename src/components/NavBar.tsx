@@ -6,13 +6,15 @@ import { usePathname } from 'next/navigation';
 
 const PRIMARY = [
   { href: '/', label: 'Quiz' },
-  { href: '/history', label: 'History' },
+  { href: '/coverage', label: 'Coverage' },
   { href: '/analytics', label: 'Analytics' },
 ];
 const SECONDARY = [
+  { href: '/history', label: 'History' },
   { href: '/ingest', label: 'Reference bank' },
   { href: '/sources', label: 'Sources' },
   { href: '/review', label: 'Review flagged' },
+  { href: '/admin', label: 'Admin (owner)' },
 ];
 
 export default function NavBar() {

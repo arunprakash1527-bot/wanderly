@@ -1,9 +1,9 @@
-import { all, run, batchWrite, getOrCreateUserId, SHARED_USER_ID } from './db';
+import { all, get, run, batchWrite, getOrCreateUserId, SHARED_USER_ID } from './db';
 import { getCategoriesWithSubs } from './repo';
 import { callJson, hasApiKey, webSearchTool } from './claude';
-import { questionGeneratorPrompt } from './prompts';
+import { questionGeneratorPrompt, conceptQuestionPrompt, conceptFidelityPrompt } from './prompts';
 import { TAXONOMY } from './taxonomy';
-import type { Difficulty, GeneratedQuestion, Question } from './types';
+import type { Concept, Difficulty, GeneratedQuestion, Option, Question } from './types';
 
 // Track 2 — grounded AI question generation (Section 9b/9d), scoped per user.
 
@@ -133,6 +133,125 @@ export async function generateQuestions(args: {
     [args.userId, category.id, generated.length]
   );
   return ids.map((r) => r.id);
+}
+
+// ---- Concept-based generation (spec §3): one question per concept ----------
+
+interface OneQ {
+  stem: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_option: Option;
+  explanation: string;
+}
+
+function validateOneQuestion(value: unknown): OneQ {
+  const q = value as Record<string, unknown>;
+  const opt = String(q.correct_option || '').toUpperCase();
+  if (!['A', 'B', 'C', 'D'].includes(opt)) throw new Error('bad correct_option');
+  if (!q.stem || !q.option_a || !q.option_b || !q.option_c || !q.option_d) throw new Error('missing fields');
+  return {
+    stem: String(q.stem),
+    option_a: String(q.option_a),
+    option_b: String(q.option_b),
+    option_c: String(q.option_c),
+    option_d: String(q.option_d),
+    correct_option: opt as Option,
+    explanation: String(q.explanation || ''),
+  };
+}
+
+// Generate one variant for a concept, running the concept-fidelity self-check.
+// Returns the new question id, or null if it couldn't produce a faithful one.
+export async function generateVariantForConcept(
+  conceptId: number,
+  variantNumber = 1
+): Promise<number | null> {
+  if (!hasApiKey()) return null;
+  const concept = await get<Concept>('SELECT * FROM concepts WHERE id = ?', [conceptId]);
+  if (!concept) return null;
+  const sub = await get<{ category_id: number }>('SELECT category_id FROM subcategories WHERE id = ?', [
+    concept.subcategory_id,
+  ]);
+  if (!sub) return null;
+
+  const existing = await all<{ stem: string }>('SELECT stem FROM questions WHERE concept_id = ?', [
+    conceptId,
+  ]);
+  const { system, user } = conceptQuestionPrompt(
+    concept.statement,
+    concept.difficulty,
+    existing.map((e) => e.stem)
+  );
+
+  let q: OneQ | undefined;
+  for (let attempt = 0; attempt < 2 && !q; attempt++) {
+    let candidate: OneQ;
+    try {
+      candidate = await callJson<OneQ>({ system, user, maxTokens: 1500, validate: validateOneQuestion });
+    } catch {
+      continue;
+    }
+    // Concept-fidelity self-check (§3.3).
+    try {
+      const fp = conceptFidelityPrompt(concept.statement, candidate.stem, candidate.correct_option);
+      const fid = await callJson<{ tests_concept: boolean; single_correct: boolean }>({
+        system: fp.system,
+        user: fp.user,
+        maxTokens: 400,
+      });
+      if (fid.tests_concept && fid.single_correct) q = candidate;
+    } catch {
+      q = candidate; // if the checker itself fails, accept the candidate
+    }
+  }
+  if (!q) return null;
+
+  const r = await run(
+    `INSERT OR IGNORE INTO questions
+       (user_id, source_type, stem, option_a, option_b, option_c, option_d, correct_option,
+        explanation, category_id, subcategory_id, microtopic_id, concept_id, variant_number,
+        difficulty, year, source_ref, verification_status)
+     VALUES (?, 'generated', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'verified')`,
+    [
+      SHARED_USER_ID,
+      q.stem,
+      q.option_a,
+      q.option_b,
+      q.option_c,
+      q.option_d,
+      q.correct_option,
+      q.explanation || null,
+      sub.category_id,
+      concept.subcategory_id,
+      concept.microtopic_id,
+      conceptId,
+      variantNumber,
+      concept.difficulty,
+    ]
+  );
+  return r.lastInsertRowid || null;
+}
+
+// Generate variant 1 for the next `limit` concepts that have none (exam-favoured
+// concepts first). Used by the admin pipeline and lazily by quiz building.
+export async function generateVariantsNextBatch(
+  limit: number
+): Promise<{ processed: number; created: number }> {
+  const concepts = await all<{ id: number }>(
+    `SELECT c.id FROM concepts c
+     WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1)
+     ORDER BY c.pyq_frequency DESC, c.id LIMIT ?`,
+    [limit]
+  );
+  let created = 0;
+  for (const c of concepts) {
+    const id = await generateVariantForConcept(c.id, 1);
+    if (id) created++;
+  }
+  return { processed: concepts.length, created };
 }
 
 // Re-exported so other modules can resolve users when needed.

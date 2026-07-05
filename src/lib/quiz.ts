@@ -1,6 +1,6 @@
 import { all, get } from './db';
 import { getCategories } from './repo';
-import { generateQuestions } from './generate';
+import { generateQuestions, generateVariantForConcept } from './generate';
 import { GS_WEIGHTS, GS_TOTAL, APTITUDE_TOTAL } from './weights';
 import type { QuizConfig, Difficulty } from './types';
 
@@ -82,7 +82,26 @@ export interface BuildResult {
   shortfall: number;
 }
 
+// Public entry: prefer the concept engine; fall back to the legacy topic builder
+// while the concept inventory is still empty for the requested scope.
 export async function buildPracticeQuiz(
+  userId: number,
+  config: QuizConfig,
+  opts: { allowGeneration: boolean; useWeb?: boolean }
+): Promise<BuildResult> {
+  const { catIds, subIds, microIds } = await resolveIds(config);
+  const scope = conceptScopeClause(catIds, subIds, microIds);
+  const conceptCount = Number(
+    (await get<{ n: number }>(`SELECT COUNT(*) AS n FROM concepts c WHERE ${scope.clause}`, scope.params))
+      ?.n ?? 0
+  );
+  if (conceptCount > 0) {
+    return buildConceptQuiz(userId, config.count, scope, opts.allowGeneration);
+  }
+  return legacyBuildPractice(userId, config, opts);
+}
+
+async function legacyBuildPractice(
   userId: number,
   config: QuizConfig,
   opts: { allowGeneration: boolean; useWeb?: boolean }
@@ -137,7 +156,240 @@ export async function buildPracticeQuiz(
   };
 }
 
+// ---- Concept-based selection (spec §4) -------------------------------------
+
+interface ScopeClause {
+  clause: string;
+  params: (string | number)[];
+}
+
+function conceptScopeClause(catIds: number[], subIds: number[], microIds: number[]): ScopeClause {
+  if (microIds.length) {
+    return { clause: `c.microtopic_id IN (${microIds.map(() => '?').join(',')})`, params: [...microIds] };
+  }
+  if (subIds.length) {
+    return { clause: `c.subcategory_id IN (${subIds.map(() => '?').join(',')})`, params: [...subIds] };
+  }
+  if (catIds.length) {
+    return {
+      clause: `c.subcategory_id IN (SELECT id FROM subcategories WHERE category_id IN (${catIds
+        .map(() => '?')
+        .join(',')}))`,
+      params: [...catIds],
+    };
+  }
+  return { clause: '1=1', params: [] };
+}
+
+interface ConceptStat {
+  id: number;
+  pyq_frequency: number;
+  attempts: number;
+  last_correct: number | null;
+  last_session: number | null;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  // Index-based jitter (Math.random is fine here; not in workflow scripts).
+  return arr
+    .map((v) => ({ v, k: Math.random() }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.v);
+}
+
+// Pick one servable question id for a concept: an unseen variant if any; else
+// lazily generate the next variant (cap 3); else any existing variant.
+async function questionForConcept(
+  userId: number,
+  conceptId: number,
+  allowGeneration: boolean,
+  counters: { generated: number }
+): Promise<number | null> {
+  const variants = await all<{ id: number; variant_number: number }>(
+    'SELECT id, variant_number FROM questions WHERE concept_id = ? ORDER BY variant_number',
+    [conceptId]
+  );
+  const seen = new Set(
+    (
+      await all<{ question_id: number }>(
+        `SELECT a.question_id FROM attempts a JOIN quiz_sessions s ON s.id = a.session_id
+         WHERE s.user_id = ? AND a.concept_id = ?`,
+        [userId, conceptId]
+      )
+    ).map((r) => r.question_id)
+  );
+  const unseen = variants.find((v) => !seen.has(v.id));
+  if (unseen) return unseen.id;
+
+  if (variants.length === 0) {
+    if (!allowGeneration) return null;
+    const id = await generateVariantForConcept(conceptId, 1);
+    if (id) counters.generated++;
+    return id;
+  }
+  if (variants.length < 3 && allowGeneration) {
+    const next = Math.max(...variants.map((v) => v.variant_number)) + 1;
+    const id = await generateVariantForConcept(conceptId, next);
+    if (id) {
+      counters.generated++;
+      return id;
+    }
+  }
+  return variants[0].id; // fall back to the least-recently-seen variant
+}
+
+async function buildConceptQuiz(
+  userId: number,
+  count: number,
+  scope: ScopeClause,
+  allowGeneration: boolean
+): Promise<BuildResult> {
+  const latest = Number(
+    (await get<{ m: number }>('SELECT MAX(id) AS m FROM quiz_sessions WHERE user_id = ?', [userId]))?.m ?? 0
+  );
+  const rows = await all<ConceptStat>(
+    `SELECT c.id, c.pyq_frequency AS pyq_frequency,
+       (SELECT COUNT(*) FROM attempts a JOIN quiz_sessions s ON s.id=a.session_id
+         WHERE s.user_id=? AND a.concept_id=c.id) AS attempts,
+       (SELECT a2.is_correct FROM attempts a2 JOIN quiz_sessions s2 ON s2.id=a2.session_id
+         WHERE s2.user_id=? AND a2.concept_id=c.id ORDER BY a2.id DESC LIMIT 1) AS last_correct,
+       (SELECT MAX(a3.session_id) FROM attempts a3 JOIN quiz_sessions s3 ON s3.id=a3.session_id
+         WHERE s3.user_id=? AND a3.concept_id=c.id) AS last_session
+     FROM concepts c WHERE ${scope.clause}`,
+    [userId, userId, userId, ...scope.params]
+  );
+
+  // §4.2 exclusion: skip concepts attempted in the most recent session.
+  const pool = rows.filter((r) => latest === 0 || r.last_session !== latest);
+
+  const never = pool
+    .filter((r) => Number(r.attempts) === 0)
+    .sort((a, b) => Number(b.pyq_frequency) - Number(a.pyq_frequency) || Math.random() - 0.5);
+  const wrongDue = shuffle(pool.filter((r) => Number(r.attempts) > 0 && r.last_correct === 0));
+  const agingCorrect = shuffle(
+    pool.filter(
+      (r) => Number(r.attempts) > 0 && r.last_correct === 1 && latest - Number(r.last_session) >= 10
+    )
+  );
+
+  let picked = [...never, ...wrongDue, ...agingCorrect].slice(0, count);
+  if (picked.length < count) {
+    // Scope nearly exhausted — fill from anything left (including recent), so the
+    // quiz still reaches N. Callers can surface "this scope is nearly exhausted".
+    const chosen = new Set(picked.map((p) => p.id));
+    picked = picked.concat(rows.filter((r) => !chosen.has(r.id))).slice(0, count);
+  }
+
+  const counters = { generated: 0 };
+  const questionIds: number[] = [];
+  for (const c of picked) {
+    const qid = await questionForConcept(userId, c.id, allowGeneration, counters);
+    if (qid) questionIds.push(qid);
+  }
+
+  return {
+    questionIds,
+    generatedCount: counters.generated,
+    shortfall: Math.max(0, count - questionIds.length),
+  };
+}
+
 export async function buildMockQuiz(
+  userId: number,
+  opts: { allowGeneration: boolean; useWeb?: boolean }
+): Promise<BuildResult> {
+  // Concept-based, blueprint-weighted mock when the inventory exists.
+  const haveConcepts = Number(
+    (await get<{ n: number }>('SELECT COUNT(*) AS n FROM concepts'))?.n ?? 0
+  );
+  const haveBlueprint = Number(
+    (await get<{ n: number }>('SELECT COUNT(*) AS n FROM blueprint_weights'))?.n ?? 0
+  );
+  if (haveConcepts > 0 && haveBlueprint > 0) {
+    return buildBlueprintMock(userId, opts.allowGeneration);
+  }
+  return legacyBuildMock(userId, opts);
+}
+
+// §6 blueprint-weighted mock: 175 GS proportional to PYQ weights + 25 Aptitude,
+// no two questions share a concept.
+async function buildBlueprintMock(userId: number, allowGeneration: boolean): Promise<BuildResult> {
+  const subs = await all<{ id: number; section: string; weight: number }>(
+    `SELECT sc.id AS id, c.section AS section, COALESCE(b.weight, 0) AS weight
+     FROM subcategories sc JOIN categories c ON c.id = sc.category_id
+     LEFT JOIN blueprint_weights b ON b.subcategory_id = sc.id`
+  );
+  const gsSubs = subs.filter((s) => s.section === 'GS');
+  const aptSubs = subs.filter((s) => s.section === 'APTITUDE');
+
+  const alloc = allocate(gsSubs, GS_TOTAL);
+  const aptAlloc = allocate(
+    aptSubs.map((s) => ({ ...s, weight: 1 })),
+    APTITUDE_TOTAL
+  );
+  for (const [sid, n] of aptAlloc) alloc.set(sid, (alloc.get(sid) || 0) + n);
+
+  const counters = { generated: 0 };
+  const questionIds: number[] = [];
+  const usedConcepts = new Set<number>();
+  const latest = Number(
+    (await get<{ m: number }>('SELECT MAX(id) AS m FROM quiz_sessions WHERE user_id = ?', [userId]))?.m ?? 0
+  );
+
+  for (const [subId, target] of alloc) {
+    if (target <= 0) continue;
+    const rows = await all<ConceptStat>(
+      `SELECT c.id, c.pyq_frequency AS pyq_frequency,
+         (SELECT COUNT(*) FROM attempts a JOIN quiz_sessions s ON s.id=a.session_id WHERE s.user_id=? AND a.concept_id=c.id) AS attempts,
+         (SELECT a2.is_correct FROM attempts a2 JOIN quiz_sessions s2 ON s2.id=a2.session_id WHERE s2.user_id=? AND a2.concept_id=c.id ORDER BY a2.id DESC LIMIT 1) AS last_correct,
+         (SELECT MAX(a3.session_id) FROM attempts a3 JOIN quiz_sessions s3 ON s3.id=a3.session_id WHERE s3.user_id=? AND a3.concept_id=c.id) AS last_session
+       FROM concepts c WHERE c.subcategory_id = ?`,
+      [userId, userId, userId, subId]
+    );
+    // Breadth first: never-tested, then aging-correct, then wrong-due.
+    const never = shuffle(rows.filter((r) => Number(r.attempts) === 0));
+    const aging = shuffle(rows.filter((r) => Number(r.attempts) > 0 && r.last_correct === 1));
+    const wrong = shuffle(rows.filter((r) => Number(r.attempts) > 0 && r.last_correct === 0));
+    const ordered = [...never, ...aging, ...wrong].filter((r) => latest === 0 || r.last_session !== latest);
+    let taken = 0;
+    for (const c of ordered) {
+      if (taken >= target) break;
+      if (usedConcepts.has(c.id)) continue;
+      const qid = await questionForConcept(userId, c.id, allowGeneration, counters);
+      if (qid) {
+        usedConcepts.add(c.id);
+        questionIds.push(qid);
+        taken++;
+      }
+    }
+  }
+
+  return {
+    questionIds,
+    generatedCount: counters.generated,
+    shortfall: Math.max(0, GS_TOTAL + APTITUDE_TOTAL - questionIds.length),
+  };
+}
+
+// Largest-remainder allocation of `total` across weighted rows.
+function allocate(rows: { id: number; weight: number }[], total: number): Map<number, number> {
+  const sum = rows.reduce((a, r) => a + Math.max(0, r.weight), 0) || 1;
+  const raw = rows.map((r) => ({ id: r.id, exact: (Math.max(0, r.weight) / sum) * total }));
+  const out = new Map<number, number>();
+  let used = 0;
+  for (const r of raw) {
+    const n = Math.floor(r.exact);
+    out.set(r.id, n);
+    used += n;
+  }
+  raw.sort((a, b) => b.exact - Math.floor(b.exact) - (a.exact - Math.floor(a.exact)));
+  for (let i = 0; i < raw.length && used < total; i++, used++) {
+    out.set(raw[i].id, (out.get(raw[i].id) || 0) + 1);
+  }
+  return out;
+}
+
+async function legacyBuildMock(
   userId: number,
   opts: { allowGeneration: boolean; useWeb?: boolean }
 ): Promise<BuildResult> {
