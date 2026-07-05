@@ -265,15 +265,40 @@ export async function generateVariantForConcept(
   }
 }
 
+// Optionally restrict generation to one category (by slug).
+function categoryFilter(categorySlug?: string | null): { clause: string; param: string[] } {
+  return categorySlug
+    ? {
+        clause:
+          'AND c.subcategory_id IN (SELECT id FROM subcategories WHERE category_id = (SELECT id FROM categories WHERE slug = ?))',
+        param: [categorySlug],
+      }
+    : { clause: '', param: [] };
+}
+
+// How many concepts still lack a question (optionally within one category).
+export async function conceptsWithoutVariantCount(categorySlug?: string | null): Promise<number> {
+  const f = categoryFilter(categorySlug);
+  const r = await get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM concepts c
+     WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1) ${f.clause}`,
+    f.param
+  );
+  return Number(r?.n ?? 0);
+}
+
 // Generate variant 1 for the next `limit` concepts that have none (exam-favoured
 // concepts first). Used by the admin pipeline and lazily by quiz building.
+// Pass categorySlug to scope generation to one subject.
 export async function generateVariantsNextBatch(
-  limit: number
+  limit: number,
+  categorySlug?: string | null
 ): Promise<{ processed: number; created: number; note: string }> {
   // Breadth-first: rank concepts within each micro-topic (PYQ-relevant first),
   // then take rank 1 across ALL micro-topics before rank 2, etc. This way a
   // partial run still gives at least one question in every topic — even coverage
   // rather than fully finishing a few topics and leaving others empty.
+  const f = categoryFilter(categorySlug);
   const concepts = await all<{ id: number }>(
     `SELECT id FROM (
        SELECT c.id AS id,
@@ -283,9 +308,10 @@ export async function generateVariantsNextBatch(
          ) AS rnk
        FROM concepts c
        WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1)
+       ${f.clause}
      )
      ORDER BY rnk, id LIMIT ?`,
-    [limit]
+    [...f.param, limit]
   );
   let created = 0;
   for (const c of concepts) {

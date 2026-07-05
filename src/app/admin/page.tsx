@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { currentUser } from '@/lib/user';
+import { getCategories } from '@/lib/repo';
 import AdminPipeline from '@/components/AdminPipeline';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,7 @@ export default async function AdminPage() {
   if (user.email.toLowerCase() !== OWNER) {
     return <p className="card p-6 text-sm text-ink-faint">This page is for the app owner only.</p>;
   }
+  const categories = (await getCategories()).map((c) => ({ slug: c.slug, name: c.name }));
   return (
     <div className="space-y-4">
       <div>
@@ -21,7 +23,7 @@ export default async function AdminPage() {
           order (or “Run all”). Everything is idempotent and resumable.
         </p>
       </div>
-      <AdminPipeline />
+      <AdminPipeline categories={categories} />
     </div>
   );
 }

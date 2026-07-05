@@ -29,12 +29,17 @@ const STEPS: { key: string; label: string; batch: number; note: string }[] = [
   { key: 'generate', label: '5. Generate 1 question / concept', batch: 3, note: 'The big one — one question per concept.' },
 ];
 
-export default function AdminPipeline() {
+export default function AdminPipeline({
+  categories,
+}: {
+  categories: { slug: string; name: string }[];
+}) {
   const [status, setStatus] = useState<Status | null>(null);
   const [hasKey, setHasKey] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [sample, setSample] = useState<SampleConcept[] | null>(null);
+  const [genCategory, setGenCategory] = useState(''); // '' = all categories
   const cancel = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -54,18 +59,19 @@ export default function AdminPipeline() {
 
   const line = (s: string) => setLog((l) => [s, ...l].slice(0, 200));
 
-  async function runStep(step: string, batch: number) {
+  async function runStep(step: string, batch: number, category?: string) {
     if (running) return;
     cancel.current = false;
     setRunning(step);
-    line(`▶ ${step} started`);
+    const scopeLabel = category ? ` (${category})` : '';
+    line(`▶ ${step}${scopeLabel} started`);
     try {
       // Loop until this step reports nothing remaining (or the user stops).
       for (let i = 0; i < 5000 && !cancel.current; i++) {
         const res = await fetch('/api/admin/inventory', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ step, batch }),
+          body: JSON.stringify({ step, batch, category: category ?? null }),
         });
         const d = await res.json();
         if (!res.ok) {
@@ -74,8 +80,10 @@ export default function AdminPipeline() {
         }
         line(`… ${step}: ${JSON.stringify(d.result)} · remaining ${d.remaining}`);
         await refresh();
-        if (step === 'blueprint' || d.remaining <= 0) {
-          line(`✓ ${step} complete`);
+        // Stop when the step (or the scoped category) is exhausted; also guard
+        // against a stall where a batch can make no further progress.
+        if (step === 'blueprint' || d.remaining <= 0 || d.result?.processed === 0) {
+          line(`✓ ${step}${scopeLabel} complete`);
           break;
         }
       }
@@ -139,7 +147,7 @@ export default function AdminPipeline() {
           <div key={s.key} className="card flex flex-wrap items-center gap-3 p-3">
             <button
               className="btn-ghost"
-              onClick={() => runStep(s.key, s.batch)}
+              onClick={() => runStep(s.key, s.batch, s.key === 'generate' ? genCategory || undefined : undefined)}
               disabled={!!running || !hasKey}
             >
               {running === s.key ? 'Running…' : 'Run'}
@@ -148,6 +156,21 @@ export default function AdminPipeline() {
               <div className="text-sm font-medium text-ink">{s.label}</div>
               <div className="text-xs text-ink-faint">{s.note}</div>
             </div>
+            {s.key === 'generate' && (
+              <select
+                className="input ml-auto w-full sm:w-64"
+                value={genCategory}
+                onChange={(e) => setGenCategory(e.target.value)}
+                disabled={!!running}
+              >
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c.slug} value={c.slug}>
+                    {c.name} only
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         ))}
       </div>

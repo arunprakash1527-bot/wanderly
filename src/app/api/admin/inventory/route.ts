@@ -11,7 +11,7 @@ import {
   computeBlueprint,
   sampleConcepts,
 } from '@/lib/concepts';
-import { generateVariantsNextBatch } from '@/lib/generate';
+import { generateVariantsNextBatch, conceptsWithoutVariantCount } from '@/lib/generate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,30 +61,40 @@ export async function POST(req: NextRequest) {
   try {
     await requireOwner();
     if (!hasApiKey()) return fail('ANTHROPIC_API_KEY is required to build the inventory.', 503);
-    const { step, batch = 3 } = (await req.json()) as { step: string; batch?: number };
+    const { step, batch = 3, category = null } = (await req.json()) as {
+      step: string;
+      batch?: number;
+      category?: string | null;
+    };
     const n = Math.max(1, Math.min(20, Number(batch) || 3));
 
     let result: unknown;
+    let remaining: number;
     switch (step) {
       case 'decompose':
         result = await decomposeNextBatch(n);
+        remaining = await remainingFor(step);
         break;
       case 'mappyq':
         result = await mapPyqNextBatch(Math.max(n, 8));
+        remaining = await remainingFor(step);
         break;
       case 'validate':
         result = await validateNextBatch(Math.min(4, n));
+        remaining = await remainingFor(step);
         break;
       case 'blueprint':
         result = await computeBlueprint();
+        remaining = 0;
         break;
       case 'generate':
-        result = await generateVariantsNextBatch(n);
+        result = await generateVariantsNextBatch(n, category);
+        remaining = await conceptsWithoutVariantCount(category); // scoped to the chosen category
         break;
       default:
         return fail('Unknown step.');
     }
-    return ok({ step, result, remaining: await remainingFor(step) });
+    return ok({ step, result, remaining });
   } catch (err) {
     if (err instanceof Error && err.message === 'FORBIDDEN') return fail('Owner only.', 403);
     return handleError(err);
