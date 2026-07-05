@@ -242,8 +242,11 @@ export async function validateNextBatch(limit: number): Promise<{ processed: num
         /* leave concepts as-is on validation failure */
       }
     }
-    await run("INSERT OR REPLACE INTO pipeline_state (key, value) VALUES ('validated:' || ?, '1')", [
-      sub.id,
+    // Build the key in JS: binding a JS number and concatenating in SQL stores
+    // it as '5.0' (libSQL binds numbers as REAL), which never matches the
+    // 'validated:' || sc.id (integer -> '5') check below → infinite loop.
+    await run("INSERT OR REPLACE INTO pipeline_state (key, value) VALUES (?, '1')", [
+      'validated:' + sub.id,
     ]);
   }
   return { processed: subs.length, changes };
