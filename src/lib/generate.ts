@@ -163,19 +163,38 @@ function validateOneQuestion(value: unknown): OneQ {
   };
 }
 
-// Generate one variant for a concept, running the concept-fidelity self-check.
-// Returns the new question id, or null if it couldn't produce a faithful one.
+// Optional concept-fidelity self-check (§3.3). Off by default: it doubles the
+// generation cost and, if its JSON isn't shaped as expected, silently rejects
+// everything. Enable with CONCEPT_FIDELITY_CHECK=1 once generation is verified.
+const FIDELITY_CHECK = process.env.CONCEPT_FIDELITY_CHECK === '1';
+
+// Last reason a generation attempt ended (surfaced in the admin log for debugging).
+let lastGenNote = 'idle';
+export function generationNote(): string {
+  return lastGenNote;
+}
+
+// Generate one variant for a concept. Returns the new question id, or null.
 export async function generateVariantForConcept(
   conceptId: number,
   variantNumber = 1
 ): Promise<number | null> {
-  if (!hasApiKey()) return null;
+  if (!hasApiKey()) {
+    lastGenNote = 'no-api-key';
+    return null;
+  }
   const concept = await get<Concept>('SELECT * FROM concepts WHERE id = ?', [conceptId]);
-  if (!concept) return null;
+  if (!concept) {
+    lastGenNote = 'no-concept';
+    return null;
+  }
   const sub = await get<{ category_id: number }>('SELECT category_id FROM subcategories WHERE id = ?', [
     concept.subcategory_id,
   ]);
-  if (!sub) return null;
+  if (!sub) {
+    lastGenNote = 'no-subcategory';
+    return null;
+  }
 
   const existing = await all<{ stem: string }>('SELECT stem FROM questions WHERE concept_id = ?', [
     conceptId,
@@ -191,10 +210,14 @@ export async function generateVariantForConcept(
     let candidate: OneQ;
     try {
       candidate = await callJson<OneQ>({ system, user, maxTokens: 1500, validate: validateOneQuestion });
-    } catch {
+    } catch (e) {
+      lastGenNote = 'gen-fail: ' + String(e instanceof Error ? e.message : e).slice(0, 160);
       continue;
     }
-    // Concept-fidelity self-check (§3.3).
+    if (!FIDELITY_CHECK) {
+      q = candidate;
+      break;
+    }
     try {
       const fp = conceptFidelityPrompt(concept.statement, candidate.stem, candidate.correct_option);
       const fid = await callJson<{ tests_concept: boolean; single_correct: boolean }>({
@@ -203,13 +226,15 @@ export async function generateVariantForConcept(
         maxTokens: 400,
       });
       if (fid.tests_concept && fid.single_correct) q = candidate;
+      else lastGenNote = 'fidelity-rejected';
     } catch {
       q = candidate; // if the checker itself fails, accept the candidate
     }
   }
   if (!q) return null;
 
-  const r = await run(
+  try {
+    const r = await run(
     `INSERT OR IGNORE INTO questions
        (user_id, source_type, stem, option_a, option_b, option_c, option_d, correct_option,
         explanation, category_id, subcategory_id, microtopic_id, concept_id, variant_number,
@@ -231,15 +256,20 @@ export async function generateVariantForConcept(
       variantNumber,
       concept.difficulty,
     ]
-  );
-  return r.lastInsertRowid || null;
+    );
+    lastGenNote = r.lastInsertRowid ? 'ok' : 'insert-ignored';
+    return r.lastInsertRowid || null;
+  } catch (e) {
+    lastGenNote = 'insert-fail: ' + String(e instanceof Error ? e.message : e).slice(0, 160);
+    return null;
+  }
 }
 
 // Generate variant 1 for the next `limit` concepts that have none (exam-favoured
 // concepts first). Used by the admin pipeline and lazily by quiz building.
 export async function generateVariantsNextBatch(
   limit: number
-): Promise<{ processed: number; created: number }> {
+): Promise<{ processed: number; created: number; note: string }> {
   // Breadth-first: rank concepts within each micro-topic (PYQ-relevant first),
   // then take rank 1 across ALL micro-topics before rank 2, etc. This way a
   // partial run still gives at least one question in every topic — even coverage
@@ -262,7 +292,7 @@ export async function generateVariantsNextBatch(
     const id = await generateVariantForConcept(c.id, 1);
     if (id) created++;
   }
-  return { processed: concepts.length, created };
+  return { processed: concepts.length, created, note: lastGenNote };
 }
 
 // Re-exported so other modules can resolve users when needed.
