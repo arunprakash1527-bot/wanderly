@@ -40,6 +40,7 @@ export default function AdminPipeline({
   const [log, setLog] = useState<string[]>([]);
   const [sample, setSample] = useState<SampleConcept[] | null>(null);
   const [genCategory, setGenCategory] = useState(''); // '' = all categories
+  const [replaceExisting, setReplaceExisting] = useState(false);
   const cancel = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -101,6 +102,27 @@ export default function AdminPipeline({
     }
   }
 
+  // Step 5 runner: optionally wipe the category's generated questions first, then
+  // generate (so improved prompts fully replace older-format questions).
+  async function runGenerate() {
+    if (running) return;
+    const cat = genCategory || undefined;
+    if (replaceExisting) {
+      const label = cat || 'all categories';
+      if (!confirm(`Delete existing generated questions for ${label} and regenerate them?`)) return;
+      line(`▶ clearing generated questions (${label})…`);
+      const res = await fetch('/api/admin/inventory', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ step: 'cleargen', category: genCategory || null }),
+      });
+      const d = await res.json();
+      line(res.ok ? `✓ cleared ${d.result?.deleted ?? 0}` : `✕ ${d.error}`);
+      await refresh();
+    }
+    await runStep('generate', 3, cat);
+  }
+
   const pct = status && status.conceptsTotal > 0
     ? Math.round(((status.conceptsTotal - status.conceptsWithoutVariant) / status.conceptsTotal) * 100)
     : 0;
@@ -147,7 +169,7 @@ export default function AdminPipeline({
           <div key={s.key} className="card flex flex-wrap items-center gap-3 p-3">
             <button
               className="btn-ghost"
-              onClick={() => runStep(s.key, s.batch, s.key === 'generate' ? genCategory || undefined : undefined)}
+              onClick={() => (s.key === 'generate' ? runGenerate() : runStep(s.key, s.batch))}
               disabled={!!running || !hasKey}
             >
               {running === s.key ? 'Running…' : 'Run'}
@@ -157,19 +179,30 @@ export default function AdminPipeline({
               <div className="text-xs text-ink-faint">{s.note}</div>
             </div>
             {s.key === 'generate' && (
-              <select
-                className="input ml-auto w-full sm:w-64"
-                value={genCategory}
-                onChange={(e) => setGenCategory(e.target.value)}
-                disabled={!!running}
-              >
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.slug} value={c.slug}>
-                    {c.name} only
-                  </option>
-                ))}
-              </select>
+              <div className="ml-auto flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+                <select
+                  className="input w-full sm:w-64"
+                  value={genCategory}
+                  onChange={(e) => setGenCategory(e.target.value)}
+                  disabled={!!running}
+                >
+                  <option value="">All categories</option>
+                  {categories.map((c) => (
+                    <option key={c.slug} value={c.slug}>
+                      {c.name} only
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+                  <input
+                    type="checkbox"
+                    checked={replaceExisting}
+                    onChange={(e) => setReplaceExisting(e.target.checked)}
+                    disabled={!!running}
+                  />
+                  Replace existing (wipe &amp; regenerate this scope)
+                </label>
+              </div>
             )}
           </div>
         ))}

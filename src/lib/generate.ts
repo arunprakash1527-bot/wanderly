@@ -289,6 +289,21 @@ function categoryFilter(categorySlug?: string | null): { clause: string; param: 
     : { clause: '', param: [] };
 }
 
+// Delete generated questions (optionally within one category) so they can be
+// regenerated — e.g. after improving the generation prompt. PYQ rows are kept.
+export async function clearGeneratedForCategory(categorySlug?: string | null): Promise<number> {
+  if (!categorySlug) {
+    const r = await run("DELETE FROM questions WHERE source_type='generated'");
+    return r.rowsAffected;
+  }
+  const r = await run(
+    `DELETE FROM questions WHERE source_type='generated'
+     AND category_id = (SELECT id FROM categories WHERE slug = ?)`,
+    [categorySlug]
+  );
+  return r.rowsAffected;
+}
+
 // How many concepts still lack a question (optionally within one category).
 export async function conceptsWithoutVariantCount(categorySlug?: string | null): Promise<number> {
   const f = categoryFilter(categorySlug);

@@ -11,7 +11,11 @@ import {
   computeBlueprint,
   sampleConcepts,
 } from '@/lib/concepts';
-import { generateVariantsNextBatch, conceptsWithoutVariantCount } from '@/lib/generate';
+import {
+  generateVariantsNextBatch,
+  conceptsWithoutVariantCount,
+  clearGeneratedForCategory,
+} from '@/lib/generate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -85,6 +89,10 @@ export async function POST(req: NextRequest) {
         break;
       case 'blueprint':
         result = await computeBlueprint();
+        remaining = 0;
+        break;
+      case 'cleargen':
+        result = { deleted: await clearGeneratedForCategory(category) };
         remaining = 0;
         break;
       case 'generate':
