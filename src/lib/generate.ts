@@ -309,7 +309,7 @@ export async function conceptsWithoutVariantCount(categorySlug?: string | null):
   const f = categoryFilter(categorySlug);
   const r = await get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM concepts c
-     WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1) ${f.clause}`,
+     WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.source_type='generated') ${f.clause}`,
     f.param
   );
   return Number(r?.n ?? 0);
@@ -335,7 +335,7 @@ export async function generateVariantsNextBatch(
            ORDER BY c.pyq_frequency DESC, c.id
          ) AS rnk
        FROM concepts c
-       WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1)
+       WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.source_type='generated')
        ${f.clause}
      )
      ORDER BY rnk, id LIMIT ?`,

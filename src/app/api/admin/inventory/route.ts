@@ -10,6 +10,7 @@ import {
   subcategoriesPendingValidation,
   computeBlueprint,
   sampleConcepts,
+  cleanupInventory,
 } from '@/lib/concepts';
 import {
   generateVariantsNextBatch,
@@ -89,6 +90,10 @@ export async function POST(req: NextRequest) {
         break;
       case 'blueprint':
         result = await computeBlueprint();
+        remaining = 0;
+        break;
+      case 'cleanup':
+        result = await cleanupInventory();
         remaining = 0;
         break;
       case 'cleargen':

@@ -162,6 +162,23 @@ export default function AdminPipeline({
         <button className="btn-ghost" onClick={refresh} disabled={!!running}>
           Refresh
         </button>
+        <button
+          className="btn-ghost"
+          disabled={!!running}
+          onClick={async () => {
+            if (!confirm('Remove duplicate PYQs and junk placeholder concepts?')) return;
+            const res = await fetch('/api/admin/inventory', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ step: 'cleanup' }),
+            });
+            const d = await res.json();
+            line(res.ok ? `✓ cleanup: ${JSON.stringify(d.result)}` : `✕ ${d.error}`);
+            await refresh();
+          }}
+        >
+          Clean up inventory
+        </button>
       </div>
 
       <div className="space-y-2">

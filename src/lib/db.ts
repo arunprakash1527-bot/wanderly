@@ -202,6 +202,9 @@ async function migrate(db: Client) {
   await db.execute(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_concept_variant ON questions(concept_id, variant_number)'
   );
+  // PYQs are reference-only (never served). Move them out of variant slot 1 so a
+  // generated variant 1 for the same concept doesn't collide with the unique index.
+  await db.execute("UPDATE questions SET variant_number = 0 WHERE source_type = 'pyq' AND variant_number <> 0");
 }
 
 // Add a column only if it's missing (SQLite has no ADD COLUMN IF NOT EXISTS).

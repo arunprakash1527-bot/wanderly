@@ -205,8 +205,10 @@ async function questionForConcept(
   allowGeneration: boolean,
   counters: { generated: number }
 ): Promise<number | null> {
+  // Only GENERATED questions are servable. Ingested PYQs are reference-only —
+  // they ground generation but are never shown verbatim in a quiz.
   const variants = await all<{ id: number; variant_number: number }>(
-    'SELECT id, variant_number FROM questions WHERE concept_id = ? ORDER BY variant_number',
+    "SELECT id, variant_number FROM questions WHERE concept_id = ? AND source_type = 'generated' ORDER BY variant_number",
     [conceptId]
   );
   const seen = new Set(

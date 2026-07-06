@@ -46,10 +46,36 @@ export async function inventoryStatus(): Promise<InventoryStatus> {
     ),
     conceptsWithoutVariant: await one(
       `SELECT COUNT(*) AS n FROM concepts c
-       WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.variant_number = 1)`
+       WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.source_type='generated')`
     ),
     blueprintRows: await one('SELECT COUNT(*) AS n FROM blueprint_weights'),
   };
+}
+
+// One-off cleanup: remove duplicate PYQ rows (from double-imports) and junk
+// placeholder concepts created by pipeline fallbacks, plus any questions on them.
+export async function cleanupInventory(): Promise<{
+  duplicatePyqRemoved: number;
+  junkConceptsRemoved: number;
+}> {
+  // 1. Duplicate PYQ rows — keep the lowest id per identical stem.
+  const dup = await run(
+    `DELETE FROM questions
+     WHERE source_type='pyq'
+       AND id NOT IN (SELECT MIN(id) FROM questions WHERE source_type='pyq' GROUP BY stem)`
+  );
+  // 2. Junk/placeholder concepts and their questions.
+  const patterns = ['Fact tested by PYQ #%', 'Unmapped PYQ fact%', 'Key facts about %'];
+  let junk = 0;
+  for (const p of patterns) {
+    const ids = await all<{ id: number }>('SELECT id FROM concepts WHERE statement LIKE ?', [p]);
+    for (const { id } of ids) {
+      await run('DELETE FROM questions WHERE concept_id = ?', [id]);
+      await run('DELETE FROM concepts WHERE id = ?', [id]);
+      junk++;
+    }
+  }
+  return { duplicatePyqRemoved: dup.rowsAffected, junkConceptsRemoved: junk };
 }
 
 // A random sample of concepts, for the owner to spot-check quality before the
@@ -204,7 +230,8 @@ Correct: ${q.correct_option ?? 'unknown'}`;
         );
         conceptId = r.lastInsertRowid;
       }
-      await run('UPDATE questions SET concept_id = ?, variant_number = 1 WHERE id = ?', [conceptId, q.id]);
+      // variant_number 0 = reference-only PYQ (not a servable quiz variant).
+      await run('UPDATE questions SET concept_id = ?, variant_number = 0 WHERE id = ?', [conceptId, q.id]);
     } catch {
       // Link to a fallback concept so it isn't retried endlessly.
       const subId = fallbackSub(q);
