@@ -181,19 +181,51 @@ Only include genuine problems. Empty arrays are fine.`;
   return { system, user };
 }
 
-// C4) Per-concept question generation (one question testing exactly one fact).
-export function conceptQuestionPrompt(statement: string, difficulty: Difficulty, avoidStems: string[]) {
-  const system = `You write exactly ONE multiple-choice question for TNPSC Group 1 Prelims that tests this specific fact and nothing beyond it:
+// C4) Per-concept question generation (one question testing exactly one fact),
+// modelled on the format/phrasing of real TNPSC past questions (exemplars).
+export function conceptQuestionPrompt(
+  statement: string,
+  difficulty: Difficulty,
+  avoidStems: string[],
+  exemplars: { stem: string; options: string[]; correct: string | null }[] = []
+) {
+  const exemplarText = exemplars.length
+    ? exemplars
+        .map(
+          (e, i) =>
+            `Real PYQ ${i + 1}: ${e.stem}\n  A) ${e.options[0]}\n  B) ${e.options[1]}\n  C) ${e.options[2]}\n  D) ${e.options[3]}`
+        )
+        .join('\n\n')
+    : '(no real past questions available for this topic — use the standard TNPSC style)';
+
+  const system = `You write exactly ONE multiple-choice question for the TNPSC Group 1 Prelims that tests this specific fact and nothing beyond it:
 "${statement}"
+
+Model the FORMAT, phrasing and difficulty on real TNPSC Group 1 past questions. TNPSC commonly uses these forms — pick whichever best fits the fact:
+- a direct single-answer question;
+- "Which of the following statement(s) is/are correct?" with numbered statements (I, II, III...) where options are combinations (e.g. "I and II only");
+- "Match the following" (List I with List II);
+- assertion-and-reason.
+Write in that exam register — but the question must hinge ONLY on the assigned fact above; do not test a neighbouring fact, and do not copy any exemplar.
 
 ${OPTION_RULES}
 
-Target difficulty: ${difficulty}. The question must hinge on the stated fact only — do not test a neighbouring fact.
+Target difficulty: ${difficulty}.
 Return ONLY JSON: {"stem": string, "option_a": string, "option_b": string, "option_c": string, "option_d": string, "correct_option": "A"|"B"|"C"|"D", "explanation": string}.
-The explanation states why the correct answer is right and briefly why each distractor is wrong.`;
-  const user = avoidStems.length
-    ? `Write a fresh wording that differs from these existing variants:\n${avoidStems.map((s) => `- ${s}`).join('\n')}`
-    : 'Write the question.';
+For statement/match questions, put the statements or lists inside "stem". The explanation states why the correct answer is right and briefly why each distractor is wrong.`;
+
+  const user = `Real TNPSC past questions for this topic (copy their STYLE and format, not their content):
+
+${exemplarText}
+
+---
+${
+    avoidStems.length
+      ? `Write a fresh wording that differs from these existing variants:\n${avoidStems
+          .map((s) => `- ${s}`)
+          .join('\n')}`
+      : 'Write the question in the TNPSC style above.'
+  }`;
   return { system, user };
 }
 

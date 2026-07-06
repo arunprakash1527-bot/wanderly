@@ -199,10 +199,23 @@ export async function generateVariantForConcept(
   const existing = await all<{ stem: string }>('SELECT stem FROM questions WHERE concept_id = ?', [
     conceptId,
   ]);
+  // Real PYQ exemplars from the same subject, so the generated question mirrors
+  // the actual TNPSC format/phrasing (statement-evaluation, match-the-following…).
+  const exemplarRows = await all<Question>(
+    `SELECT * FROM questions WHERE source_type='pyq' AND category_id = ?
+     ORDER BY RANDOM() LIMIT 3`,
+    [sub.category_id]
+  );
+  const exemplars = exemplarRows.map((e) => ({
+    stem: e.stem,
+    options: [e.option_a, e.option_b, e.option_c, e.option_d],
+    correct: e.correct_option,
+  }));
   const { system, user } = conceptQuestionPrompt(
     concept.statement,
     concept.difficulty,
-    existing.map((e) => e.stem)
+    existing.map((e) => e.stem),
+    exemplars
   );
 
   let q: OneQ | undefined;
