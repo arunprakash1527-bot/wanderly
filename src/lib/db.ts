@@ -216,10 +216,9 @@ async function ensureColumn(db: Client, table: string, col: string, decl: string
 
 // Seed the micro-topics. Idempotent and independent of seedTaxonomy so it also
 // populates databases that were already seeded before this level existed.
+// Idempotent: INSERT OR IGNORE means new micro-topics added to TAXONOMY get
+// created on deploy, while existing ones (and their concepts) are untouched.
 async function seedMicrotopics(db: Client) {
-  const res = await db.execute('SELECT COUNT(*) AS n FROM microtopics');
-  if (Number((res.rows[0] as Row).n) > 0) return;
-
   const subs = await db.execute(
     `SELECT sc.id AS id, sc.slug AS sub_slug, c.slug AS cat_slug
      FROM subcategories sc JOIN categories c ON c.id = sc.category_id`
@@ -235,7 +234,7 @@ async function seedMicrotopics(db: Client) {
       if (!subId) continue;
       for (const mt of s.micro) {
         stmts.push({
-          sql: 'INSERT INTO microtopics (subcategory_id, name, slug) VALUES (?, ?, ?)',
+          sql: 'INSERT OR IGNORE INTO microtopics (subcategory_id, name, slug) VALUES (?, ?, ?)',
           args: [subId, mt.name, mt.slug],
         });
       }
@@ -244,25 +243,24 @@ async function seedMicrotopics(db: Client) {
   if (stmts.length) await db.batch(stmts, 'write');
 }
 
+// Idempotent: categories/subcategories are upserted, so new sub-topics added to
+// TAXONOMY appear on deploy without disturbing existing rows or their concepts.
 async function seedTaxonomy(db: Client) {
-  const res = await db.execute('SELECT COUNT(*) AS n FROM categories');
-  if (Number((res.rows[0] as Row).n) > 0) return;
-
-  const stmts: { sql: string; args: InValue[] }[] = [];
-  // Insert categories first, then subcategories (resolve ids in a second pass).
-  for (const cat of TAXONOMY) {
-    await db.execute({
-      sql: 'INSERT INTO categories (name, slug, section) VALUES (?, ?, ?)',
-      args: [cat.name, cat.slug, cat.section],
-    });
-  }
+  await db.batch(
+    TAXONOMY.map((cat) => ({
+      sql: 'INSERT OR IGNORE INTO categories (name, slug, section) VALUES (?, ?, ?)',
+      args: [cat.name, cat.slug, cat.section] as InValue[],
+    })),
+    'write'
+  );
   const cats = await db.execute('SELECT id, slug FROM categories');
   const idBySlug = new Map((cats.rows as Row[]).map((r) => [String(r.slug), Number(r.id)]));
+  const stmts: { sql: string; args: InValue[] }[] = [];
   for (const cat of TAXONOMY) {
     const catId = idBySlug.get(cat.slug)!;
     for (const s of cat.subcategories) {
       stmts.push({
-        sql: 'INSERT INTO subcategories (category_id, name, slug) VALUES (?, ?, ?)',
+        sql: 'INSERT OR IGNORE INTO subcategories (category_id, name, slug) VALUES (?, ?, ?)',
         args: [catId, s.name, s.slug],
       });
     }

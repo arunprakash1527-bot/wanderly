@@ -276,6 +276,42 @@ export const TAXONOMY: TaxonomySeed[] = [
         m('Finance Commission', 'finance-commission'),
         m('Attorney General', 'attorney-general'),
       ]),
+      // --- Added to match the official TNPSC Unit 4 syllabus ---
+      sub('Union & Territory', 'union-territory', [
+        m('Union and its Territory (Art 1-4)', 'union-territory-articles'),
+        m('States & Union Territories', 'states-uts'),
+        m('Reorganisation of States', 'states-reorganisation'),
+      ]),
+      sub('Citizenship', 'citizenship', [
+        m('Constitutional Provisions (Art 5-11)', 'citizenship-provisions'),
+        m('Acquisition & Loss of Citizenship', 'citizenship-acquisition-loss'),
+        m('OCI & PIO', 'oci-pio'),
+      ]),
+      sub('Federalism & Centre-State Relations', 'federalism', [
+        m('Federal Features of the Constitution', 'federal-features'),
+        m('Legislative Relations', 'legislative-relations'),
+        m('Administrative Relations', 'administrative-relations'),
+        m('Financial Relations', 'financial-relations'),
+        m('Inter-State Relations & Disputes', 'inter-state-relations'),
+      ]),
+      sub('Elections & Rule of Law', 'elections-rule-of-law', [
+        m('Electoral System & RPA', 'electoral-system-rpa'),
+        m('Electoral Reforms', 'electoral-reforms'),
+        m('Rule of Law', 'rule-of-law'),
+      ]),
+      sub('Governance & Accountability', 'governance-accountability', [
+        m('Corruption & Anti-corruption Measures', 'corruption-anti-corruption'),
+        m('Lokpal & Lokayukta', 'lokpal-lokayukta'),
+        m('Right to Information (RTI)', 'rti'),
+        m('Empowerment of Women', 'empowerment-women'),
+        m('Consumer Protection Forums', 'consumer-protection'),
+        m('Human Rights Charter & NHRC', 'human-rights-nhrc'),
+      ]),
+      sub('Political System', 'political-system', [
+        m('Political Parties', 'political-parties'),
+        m('Party System in India', 'party-system'),
+        m('Pressure Groups', 'pressure-groups'),
+      ]),
     ],
   },
   {
