@@ -163,10 +163,11 @@ function validateOneQuestion(value: unknown): OneQ {
   };
 }
 
-// Optional concept-fidelity self-check (§3.3). Off by default: it doubles the
-// generation cost and, if its JSON isn't shaped as expected, silently rejects
-// everything. Enable with CONCEPT_FIDELITY_CHECK=1 once generation is verified.
-const FIDELITY_CHECK = process.env.CONCEPT_FIDELITY_CHECK === '1';
+// Answer-verification self-check (§3.3). ON by default — for exam prep a wrong
+// answer key is unacceptable, so we independently re-solve each question and
+// reject it if the marked answer is wrong (or ambiguous / off-concept). It
+// roughly doubles generation cost; set CONCEPT_FIDELITY_CHECK=0 to disable.
+const FIDELITY_CHECK = process.env.CONCEPT_FIDELITY_CHECK !== '0';
 
 // Last reason a generation attempt ended (surfaced in the admin log for debugging).
 let lastGenNote = 'idle';
@@ -232,16 +233,21 @@ export async function generateVariantForConcept(
       break;
     }
     try {
-      const fp = conceptFidelityPrompt(concept.statement, candidate.stem, candidate.correct_option);
-      const fid = await callJson<{ tests_concept: boolean; single_correct: boolean }>({
-        system: fp.system,
-        user: fp.user,
-        maxTokens: 400,
-      });
-      if (fid.tests_concept && fid.single_correct) q = candidate;
-      else lastGenNote = 'fidelity-rejected';
+      const fp = conceptFidelityPrompt(concept.statement, candidate);
+      const fid = await callJson<{
+        answer_correct: boolean;
+        single_correct: boolean;
+        tests_concept: boolean;
+      }>({ system: fp.system, user: fp.user, maxTokens: 600 });
+      if (fid.answer_correct && fid.single_correct && fid.tests_concept) q = candidate;
+      else
+        lastGenNote =
+          'verify-rejected: ' +
+          (!fid.answer_correct ? 'wrong-answer' : !fid.single_correct ? 'ambiguous' : 'off-concept');
     } catch {
-      q = candidate; // if the checker itself fails, accept the candidate
+      // If the checker itself errors (infra), accept the candidate rather than
+      // lose the question — a rare hiccup, not a correctness signal.
+      q = candidate;
     }
   }
   if (!q) return null;

@@ -230,14 +230,25 @@ ${
 }
 
 // C5) Concept-fidelity self-check — does the question test the assigned fact only?
-export function conceptFidelityPrompt(statement: string, stem: string, correct: string) {
-  const system = `You verify that a multiple-choice question tests a specific assigned fact and no other.
-Return ONLY JSON: {"tests_concept": boolean, "single_correct": boolean, "reason": string}.
-"tests_concept" is true only if answering correctly requires knowing exactly the assigned fact.
-"single_correct" is true only if exactly one option is defensibly correct.`;
+export function conceptFidelityPrompt(
+  statement: string,
+  q: { stem: string; option_a: string; option_b: string; option_c: string; option_d: string; correct_option: string }
+) {
+  const system = `You are a strict examiner checking ONE TNPSC multiple-choice question before it enters a question bank.
+FIRST, independently solve the question yourself from scratch — determine which option is actually correct. For "which of the following statements is/are correct" questions, evaluate the truth of EACH numbered statement, then find the option whose combination matches exactly. THEN compare with the marked answer.
+Return ONLY JSON: {"answer_correct": boolean, "single_correct": boolean, "tests_concept": boolean, "your_answer": "A"|"B"|"C"|"D", "reason": string}.
+- "answer_correct": true ONLY if the marked option equals the option you independently determined to be correct.
+- "single_correct": true ONLY if exactly one option is defensibly correct (no two options both correct, no zero correct).
+- "tests_concept": true ONLY if answering requires knowing the assigned fact.
+Be rigorous and do not rubber-stamp — if the marked answer is wrong, say so.`;
   const user = `Assigned fact: ${statement}
-Question stem: ${stem}
-Marked correct option: ${correct}
+
+Question: ${q.stem}
+A) ${q.option_a}
+B) ${q.option_b}
+C) ${q.option_c}
+D) ${q.option_d}
+Marked correct option: ${q.correct_option}
 
 Evaluate.`;
   return { system, user };
