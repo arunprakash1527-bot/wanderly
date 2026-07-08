@@ -142,10 +142,11 @@ export const OPTION_RULES = `Option-construction rules (follow ALL):
 
 // C1) Syllabus decomposition — subtopic -> inventory of atomic testable facts.
 export function conceptDecompositionPrompt(microtopicName: string, parentContext: string) {
-  const system = `You build a fact inventory for TNPSC Group 1 Prelims preparation. For the given micro-topic, enumerate the distinct testable facts a well-prepared candidate must know.
-Each fact must be: (1) atomic — exactly one testable claim; (2) stated declaratively as a complete sentence; (3) verifiable against standard sources (NCERT, Tamil Nadu State Board texts, official government publications).
-Classify each as one of: fact, date, person, place, definition, process, relationship, data, provision.
-Do NOT include trivia unlikely to be examined. Do NOT include compound statements (split them).
+  const system = `You build a fact inventory for TNPSC Group 1 Prelims — a tough, DEGREE-STANDARD exam. For the given micro-topic, enumerate the distinct testable facts a well-prepared candidate must know.
+Each fact must be: (1) atomic — exactly one testable claim; (2) stated declaratively as a complete sentence; (3) verifiable against standard sources (NCERT, Tamil Nadu State Board texts, official government publications); (4) EXAM-WORTHY at degree standard.
+Prefer specific, precise, less-obvious facts — exact provisions/articles, numbers and thresholds, exceptions, comparisons, and lesser-known details that distinguish a well-prepared candidate. AVOID trivially basic general knowledge that any school student already knows (e.g. "The President appoints the Prime Minister", "India's capital is New Delhi").
+Classify each as one of: fact, date, person, place, definition, process, relationship, data, provision. Set "difficulty" honestly, leaning "medium"/"hard" — this is Group 1.
+Do NOT include compound statements (split them).
 Return ONLY a JSON array of objects with keys "statement", "concept_type", "difficulty" ("easy"|"medium"|"hard"). Aim for 15-40 items depending on how much the micro-topic carries.`;
   const user = `Micro-topic: ${microtopicName}
 Syllabus context: ${parentContext}
@@ -210,7 +211,13 @@ Write in that exam register — but the question must hinge ONLY on the assigned
 
 ${OPTION_RULES}
 
-Target difficulty: ${difficulty}.
+DIFFICULTY — this is the PRELIMS at DEGREE STANDARD, and Group 1 is one of the toughest state exams. Pitch every question hard:
+- Do NOT write trivial, direct, one-line recall a school student could answer (e.g. "Who appoints the Prime Minister?", "What is the capital of X?"). Such questions are unacceptable.
+- Prefer statement-evaluation (multiple numbered statements to judge) or matching, so more than one fact/distinction must be known.
+- Use precise, closely-competing distractors — near-correct options (adjacent articles, similar schemes, close dates/numbers, common misconceptions) that require exact knowledge to eliminate.
+- Test the finer, less-obvious edge of the fact (exceptions, specific provisions/numbers, comparisons, application), not the headline.
+- Even when the underlying fact is basic, raise the challenge through framing and distractors. Target difficulty: ${difficulty} — treat it as a FLOOR, never a ceiling.
+
 Return ONLY JSON: {"stem": string, "option_a": string, "option_b": string, "option_c": string, "option_d": string, "correct_option": "A"|"B"|"C"|"D", "explanation": string}.
 For statement/match questions, put the statements or lists inside "stem". The explanation states why the correct answer is right and briefly why each distractor is wrong.`;
 
