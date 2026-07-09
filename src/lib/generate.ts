@@ -353,6 +353,36 @@ export async function conceptsWithoutVariantCount(categorySlug?: string | null):
   return Number(r?.n ?? 0);
 }
 
+// The capped generation target: how many concepts will actually get a question
+// (top-K per micro-topic), so the UI can show ~1,100 rather than the full
+// inventory. With no cap this equals the total concept count.
+export async function cappedGenerationTarget(categorySlug?: string | null): Promise<number> {
+  const f = categoryFilter(categorySlug);
+  if (MAX_PER_MICRO === 0) {
+    const r = await get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM concepts c WHERE 1=1 ${f.clause}`,
+      f.param
+    );
+    return Number(r?.n ?? 0);
+  }
+  const r = await get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM (
+       SELECT c.id AS id,
+         ROW_NUMBER() OVER (
+           PARTITION BY COALESCE(c.microtopic_id, -c.subcategory_id)
+           ORDER BY c.pyq_frequency DESC, c.id
+         ) AS rnk
+       FROM concepts c
+       WHERE 1=1 ${f.clause}
+     )
+     WHERE rnk <= ?`,
+    [...f.param, MAX_PER_MICRO]
+  );
+  return Number(r?.n ?? 0);
+}
+
+export const maxConceptsPerMicrotopic = MAX_PER_MICRO;
+
 // Generate variant 1 for the next `limit` concepts that have none (exam-favoured
 // concepts first). Used by the admin pipeline and lazily by quiz building.
 // Pass categorySlug to scope generation to one subject.

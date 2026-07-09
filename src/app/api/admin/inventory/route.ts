@@ -16,6 +16,8 @@ import {
   generateVariantsNextBatch,
   conceptsWithoutVariantCount,
   clearGeneratedForCategory,
+  cappedGenerationTarget,
+  maxConceptsPerMicrotopic,
 } from '@/lib/generate';
 
 export const runtime = 'nodejs';
@@ -51,8 +53,14 @@ export async function GET(req: NextRequest) {
     await requireOwner();
     const sample = req.nextUrl.searchParams.get('sample');
     if (sample) return ok({ concepts: await sampleConcepts(parseInt(sample, 10) || 25) });
+    const status = await inventoryStatus();
     return ok({
-      status: await inventoryStatus(),
+      status: {
+        ...status,
+        generationTarget: await cappedGenerationTarget(),
+        generationRemaining: await conceptsWithoutVariantCount(),
+        maxPerMicro: maxConceptsPerMicrotopic,
+      },
       pendingValidation: await subcategoriesPendingValidation(),
       hasApiKey: hasApiKey(),
     });

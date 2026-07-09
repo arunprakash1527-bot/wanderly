@@ -10,6 +10,9 @@ interface Status {
   pyqUnmapped: number;
   conceptsWithoutVariant: number;
   blueprintRows: number;
+  generationTarget: number; // capped target (top-K per micro-topic)
+  generationRemaining: number; // capped remaining (within target, no question yet)
+  maxPerMicro: number; // 0 = no cap
 }
 interface SampleConcept {
   statement: string;
@@ -26,7 +29,7 @@ const STEPS: { key: string; label: string; batch: number; note: string }[] = [
   { key: 'decompose', label: '2. Decompose syllabus', batch: 3, note: 'Enumerates concepts per micro-topic (~178).' },
   { key: 'validate', label: '3. Validate (dedupe)', batch: 3, note: 'Merges/deletes duplicate or bad concepts.' },
   { key: 'blueprint', label: '4. Compute blueprint', batch: 1, note: 'PYQ weight per subcategory for mocks.' },
-  { key: 'generate', label: '5. Generate 1 question / concept', batch: 3, note: 'The big one — one question per concept.' },
+  { key: 'generate', label: '5. Generate questions', batch: 3, note: 'One question for the top concepts per micro-topic (see target above). The tail generates lazily on demand.' },
 ];
 
 export default function AdminPipeline({
@@ -123,8 +126,11 @@ export default function AdminPipeline({
     await runStep('generate', 3, cat);
   }
 
-  const pct = status && status.conceptsTotal > 0
-    ? Math.round(((status.conceptsTotal - status.conceptsWithoutVariant) / status.conceptsTotal) * 100)
+  // Progress is measured against the capped target (the concepts we actually
+  // intend to generate), not the full inventory — so 100% means "done", not
+  // "generated a question for every one of thousands of atomic facts".
+  const pct = status && status.generationTarget > 0
+    ? Math.round(((status.generationTarget - status.generationRemaining) / status.generationTarget) * 100)
     : 0;
 
   return (
@@ -138,11 +144,14 @@ export default function AdminPipeline({
       {status && (
         <div className="card grid grid-cols-2 gap-3 p-4 text-sm sm:grid-cols-3">
           <Stat label="Micro-topics decomposed" value={`${status.microtopicsDecomposed}/${status.microtopicsTotal}`} />
-          <Stat label="Concepts" value={status.conceptsTotal} />
-          <Stat label="PYQs unmapped" value={`${status.pyqUnmapped}/${status.pyqTotal}`} />
-          <Stat label="Concepts w/o question" value={status.conceptsWithoutVariant} />
+          <Stat label="Concepts (inventory)" value={status.conceptsTotal} />
+          <Stat
+            label={status.maxPerMicro > 0 ? `Generation target (top ${status.maxPerMicro}/topic)` : 'Generation target (all)'}
+            value={status.generationTarget}
+          />
+          <Stat label="Remaining to generate" value={status.generationRemaining} />
           <Stat label="Blueprint rows" value={status.blueprintRows} />
-          <Stat label="Questions generated" value={`${pct}%`} />
+          <Stat label="Generated" value={`${pct}%`} />
         </div>
       )}
 
