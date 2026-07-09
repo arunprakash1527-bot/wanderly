@@ -210,6 +210,20 @@ export async function generateVariantForConcept(
     return null;
   }
 
+  // Defence-in-depth: never pay for generate+verify if this concept already has
+  // a generated question. The unique (concept_id, variant_number) index would
+  // reject the insert anyway, so without this guard an over-selection bug would
+  // silently burn API calls every loop (as happened when a correlated NOT EXISTS
+  // bound to questions.id instead of the concept id).
+  const already = await get<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM questions WHERE concept_id = ? AND source_type='generated'",
+    [conceptId]
+  );
+  if (Number(already?.n ?? 0) > 0) {
+    lastGenNote = 'already-generated';
+    return null;
+  }
+
   const existing = await all<{ stem: string }>('SELECT stem FROM questions WHERE concept_id = ?', [
     conceptId,
   ]);
@@ -336,9 +350,12 @@ export async function conceptsWithoutVariantCount(categorySlug?: string | null):
   }
   // Only the top-K concepts per micro-topic count as "remaining" so the pipeline
   // loop terminates at the capped target rather than the full inventory.
+  // NOTE: alias the concept id as `cid` (a name the `questions` table lacks) so
+  // the correlated NOT EXISTS binds to the concept, not to `q.id`. Using bare
+  // `id` silently resolves to questions.id and matches nothing.
   const r = await get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM (
-       SELECT c.id AS id,
+       SELECT c.id AS cid,
          ROW_NUMBER() OVER (
            PARTITION BY COALESCE(c.microtopic_id, -c.subcategory_id)
            ORDER BY c.pyq_frequency DESC, c.id
@@ -347,7 +364,7 @@ export async function conceptsWithoutVariantCount(categorySlug?: string | null):
        WHERE 1=1 ${f.clause}
      )
      WHERE rnk <= ?
-       AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = id AND q.source_type='generated')`,
+       AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = cid AND q.source_type='generated')`,
     [...f.param, MAX_PER_MICRO]
   );
   return Number(r?.n ?? 0);
@@ -401,9 +418,11 @@ export async function generateVariantsNextBatch(
   // question in every topic before deepening any single one.
   const capClause = MAX_PER_MICRO === 0 ? '' : 'WHERE rnk <= ?';
   const capParam = MAX_PER_MICRO === 0 ? [] : [MAX_PER_MICRO];
+  // `cid` (not `id`) so the correlated NOT EXISTS binds to the concept, not to
+  // questions.id — see conceptsWithoutVariantCount for the same subtlety.
   const concepts = await all<{ id: number }>(
-    `SELECT id FROM (
-       SELECT c.id AS id,
+    `SELECT cid AS id FROM (
+       SELECT c.id AS cid,
          ROW_NUMBER() OVER (
            PARTITION BY COALESCE(c.microtopic_id, -c.subcategory_id)
            ORDER BY c.pyq_frequency DESC, c.id
@@ -412,8 +431,8 @@ export async function generateVariantsNextBatch(
        WHERE 1=1 ${f.clause}
      )
      ${capClause} ${capClause ? 'AND' : 'WHERE'} NOT EXISTS
-       (SELECT 1 FROM questions q WHERE q.concept_id = id AND q.source_type='generated')
-     ORDER BY rnk, id LIMIT ?`,
+       (SELECT 1 FROM questions q WHERE q.concept_id = cid AND q.source_type='generated')
+     ORDER BY rnk, cid LIMIT ?`,
     [...f.param, ...capParam, limit]
   );
   let created = 0;
