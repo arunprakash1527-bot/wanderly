@@ -5,6 +5,14 @@ import Anthropic from '@anthropic-ai/sdk';
 
 export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
+// Per-role models so the expensive generation step and the cheap verification
+// step can use different tiers. Generating an exam-worthy question benefits from
+// Sonnet; the verifier only re-solves one MCQ and checks the key, which Haiku
+// 4.5 ($1/$5, ~3x cheaper than Sonnet) does well. Both are env-overridable so
+// you can push generation to Haiku too and compare quality vs cost.
+export const GEN_MODEL = process.env.ANTHROPIC_GEN_MODEL || DEFAULT_MODEL;
+export const VERIFY_MODEL = process.env.ANTHROPIC_VERIFY_MODEL || 'claude-haiku-4-5';
+
 let _client: Anthropic | null = null;
 
 export function getClient(): Anthropic {

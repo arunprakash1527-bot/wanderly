@@ -1,6 +1,6 @@
 import { all, get, run, batchWrite, getOrCreateUserId, SHARED_USER_ID } from './db';
 import { getCategoriesWithSubs } from './repo';
-import { callJson, hasApiKey, webSearchTool } from './claude';
+import { callJson, hasApiKey, webSearchTool, GEN_MODEL, VERIFY_MODEL } from './claude';
 import { questionGeneratorPrompt, conceptQuestionPrompt, conceptFidelityPrompt } from './prompts';
 import { TAXONOMY } from './taxonomy';
 import type { Concept, Difficulty, GeneratedQuestion, Option, Question } from './types';
@@ -169,6 +169,19 @@ function validateOneQuestion(value: unknown): OneQ {
 // roughly doubles generation cost; set CONCEPT_FIDELITY_CHECK=0 to disable.
 const FIDELITY_CHECK = process.env.CONCEPT_FIDELITY_CHECK !== '0';
 
+// Cost control (§token-budget): generate at most this many questions per
+// micro-topic, choosing the concepts TNPSC tests most (highest pyq_frequency).
+// This caps a ~6,500-concept inventory down to a bounded, exam-focused set
+// (K=6 over ~178 micro-topics ≈ ~1,100 questions) instead of one question for
+// every atomic fact. The long tail still generates lazily if a quiz needs it.
+// Tune with MAX_CONCEPTS_PER_MICROTOPIC (0 = no cap, generate everything).
+const MAX_PER_MICRO = (() => {
+  const raw = process.env.MAX_CONCEPTS_PER_MICROTOPIC;
+  if (raw === undefined) return 6;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 6;
+})();
+
 // Last reason a generation attempt ended (surfaced in the admin log for debugging).
 let lastGenNote = 'idle';
 export function generationNote(): string {
@@ -223,7 +236,7 @@ export async function generateVariantForConcept(
   for (let attempt = 0; attempt < 2 && !q; attempt++) {
     let candidate: OneQ;
     try {
-      candidate = await callJson<OneQ>({ system, user, maxTokens: 1500, validate: validateOneQuestion });
+      candidate = await callJson<OneQ>({ system, user, model: GEN_MODEL, maxTokens: 1500, validate: validateOneQuestion });
     } catch (e) {
       lastGenNote = 'gen-fail: ' + String(e instanceof Error ? e.message : e).slice(0, 160);
       continue;
@@ -238,7 +251,7 @@ export async function generateVariantForConcept(
         answer_correct: boolean;
         single_correct: boolean;
         tests_concept: boolean;
-      }>({ system: fp.system, user: fp.user, maxTokens: 600 });
+      }>({ system: fp.system, user: fp.user, model: VERIFY_MODEL, maxTokens: 600 });
       if (fid.answer_correct && fid.single_correct && fid.tests_concept) q = candidate;
       else
         lastGenNote =
@@ -313,10 +326,29 @@ export async function clearGeneratedForCategory(categorySlug?: string | null): P
 // How many concepts still lack a question (optionally within one category).
 export async function conceptsWithoutVariantCount(categorySlug?: string | null): Promise<number> {
   const f = categoryFilter(categorySlug);
+  if (MAX_PER_MICRO === 0) {
+    const r = await get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM concepts c
+       WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.source_type='generated') ${f.clause}`,
+      f.param
+    );
+    return Number(r?.n ?? 0);
+  }
+  // Only the top-K concepts per micro-topic count as "remaining" so the pipeline
+  // loop terminates at the capped target rather than the full inventory.
   const r = await get<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM concepts c
-     WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.source_type='generated') ${f.clause}`,
-    f.param
+    `SELECT COUNT(*) AS n FROM (
+       SELECT c.id AS id,
+         ROW_NUMBER() OVER (
+           PARTITION BY COALESCE(c.microtopic_id, -c.subcategory_id)
+           ORDER BY c.pyq_frequency DESC, c.id
+         ) AS rnk
+       FROM concepts c
+       WHERE 1=1 ${f.clause}
+     )
+     WHERE rnk <= ?
+       AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = id AND q.source_type='generated')`,
+    [...f.param, MAX_PER_MICRO]
   );
   return Number(r?.n ?? 0);
 }
@@ -333,6 +365,12 @@ export async function generateVariantsNextBatch(
   // partial run still gives at least one question in every topic — even coverage
   // rather than fully finishing a few topics and leaving others empty.
   const f = categoryFilter(categorySlug);
+  // Rank ALL concepts within each micro-topic by PYQ frequency, then keep the
+  // top-K (the exam-worthy head) and, among those, the ones still lacking a
+  // question. Breadth-first (rnk, id) so a partial run gives at least one
+  // question in every topic before deepening any single one.
+  const capClause = MAX_PER_MICRO === 0 ? '' : 'WHERE rnk <= ?';
+  const capParam = MAX_PER_MICRO === 0 ? [] : [MAX_PER_MICRO];
   const concepts = await all<{ id: number }>(
     `SELECT id FROM (
        SELECT c.id AS id,
@@ -341,11 +379,12 @@ export async function generateVariantsNextBatch(
            ORDER BY c.pyq_frequency DESC, c.id
          ) AS rnk
        FROM concepts c
-       WHERE NOT EXISTS (SELECT 1 FROM questions q WHERE q.concept_id = c.id AND q.source_type='generated')
-       ${f.clause}
+       WHERE 1=1 ${f.clause}
      )
+     ${capClause} ${capClause ? 'AND' : 'WHERE'} NOT EXISTS
+       (SELECT 1 FROM questions q WHERE q.concept_id = id AND q.source_type='generated')
      ORDER BY rnk, id LIMIT ?`,
-    [...f.param, limit]
+    [...f.param, ...capParam, limit]
   );
   let created = 0;
   for (const c of concepts) {
