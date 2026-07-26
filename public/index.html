@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-    <meta name="theme-color" content="#3060D4" />
-    <meta name="description" content="Dump anything. AI sorts it by category and priority. You clear it." />
+    <meta name="theme-color" content="#1B8F6A" />
+    <meta name="description" content="Plan group trips together with AI-powered itineraries, expense splitting, and shared memories" />
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
@@ -13,30 +13,28 @@
     <!-- Apple PWA meta -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Braindump" />
+    <meta name="apple-mobile-web-app-title" content="TripWithMe" />
     <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
 
+    <!-- Splash screen colour while loading -->
     <style>
-      html, body { margin: 0; padding: 0; background: #F5F4F1; }
-      @media (prefers-color-scheme: dark) { html, body { background: #111215; } }
-      #splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; z-index: 99999; transition: opacity .3s; }
-      #splash svg { opacity: 0.6; }
-      #splash p { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; color: #8B8D94; }
+      html, body { margin: 0; padding: 0; background: #FAF9F6; }
+      #splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; background: #FAF9F6; z-index: 99999; transition: opacity .3s; }
+      #splash h1 { font-family: Georgia, serif; font-size: 22px; font-weight: 400; color: #1A1A18; }
+      #splash p { font-size: 11px; color: #767570; }
     </style>
 
-    <title>Braindump</title>
+    <title>Trip With Me</title>
   </head>
   <body>
     <div id="splash">
-      <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-        <rect width="36" height="36" rx="10" fill="#3060D4"/>
-        <path d="M10 12h16M10 18h12M10 24h8" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>
+      <h1>Trip With Me</h1>
       <p>Loading...</p>
     </div>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script>
+      // Remove splash once React mounts
       window.addEventListener('load', function() {
         setTimeout(function() {
           var splash = document.getElementById('splash');
