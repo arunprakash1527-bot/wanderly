@@ -35,14 +35,14 @@ registerRoute(
   })
 );
 
-// Cache uploaded trip photos (Supabase storage)
+// Cache Supabase storage assets
 registerRoute(
   ({ url }) => url.hostname.includes('supabase') && url.pathname.includes('/storage/'),
   new CacheFirst({
-    cacheName: 'trip-photos',
+    cacheName: 'supabase-storage',
     plugins: [
       new CacheableResponsePlugin({ statuses: [0, 200] }),
-      new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 }), // 30 days
+      new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 }),
     ],
   })
 );

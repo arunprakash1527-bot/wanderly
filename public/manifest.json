@@ -1,12 +1,12 @@
 {
-  "short_name": "TripWithMe",
-  "name": "Trip With Me — Travel Concierge",
-  "description": "Plan group trips together with AI-powered itineraries, expense splitting, and shared memories",
+  "short_name": "Braindump",
+  "name": "Braindump — AI-Sorted Notes",
+  "description": "Dump anything. AI sorts it. You clear it.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#1B8F6A",
-  "background_color": "#FAF9F6",
+  "theme_color": "#3060D4",
+  "background_color": "#F5F4F1",
   "icons": [
     {
       "src": "/icons/icon-192.svg",
@@ -33,6 +33,6 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["travel", "lifestyle"],
+  "categories": ["productivity", "utilities"],
   "prefer_related_applications": false
 }
