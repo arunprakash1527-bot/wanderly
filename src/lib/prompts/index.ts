@@ -202,24 +202,26 @@ export function conceptQuestionPrompt(
   const system = `You write exactly ONE multiple-choice question for the TNPSC Group 1 Prelims that tests this specific fact and nothing beyond it:
 "${statement}"
 
-Model the FORMAT, phrasing and difficulty on real TNPSC Group 1 past questions. TNPSC commonly uses these forms — pick whichever best fits the fact:
-- a direct single-answer question;
-- "Which of the following statement(s) is/are correct?" with numbered statements (I, II, III...) where options are combinations (e.g. "I and II only");
-- "Match the following" (List I with List II);
-- assertion-and-reason.
+Feature multi-statement analysis, assertion-reasoning, match-the-following, and deep factual nuances designed to test precise recall and conceptual depth.
+
+Model the FORMAT, phrasing and difficulty on real TNPSC Group 1 past questions. TNPSC commonly uses these forms — pick whichever best fits the fact (prefer the analytical forms over a plain one-liner):
+- "Which of the following statement(s) is/are correct?" with numbered statements (I, II, III...) where options are combinations (e.g. "I and II only") — MULTI-STATEMENT ANALYSIS;
+- "Match the following" (List I with List II), options being the correct pairing sequence;
+- ASSERTION (A) and REASON (R): give an assertion and a reason, options being the standard set — "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true";
+- a direct single-answer question, ONLY when the fact genuinely can't support an analytical form.
 Write in that exam register — but the question must hinge ONLY on the assigned fact above; do not test a neighbouring fact, and do not copy any exemplar.
 
 ${OPTION_RULES}
 
 DIFFICULTY — this is the PRELIMS at DEGREE STANDARD, and Group 1 is one of the toughest state exams. Pitch every question hard:
 - Do NOT write trivial, direct, one-line recall a school student could answer (e.g. "Who appoints the Prime Minister?", "What is the capital of X?"). Such questions are unacceptable.
-- Prefer statement-evaluation (multiple numbered statements to judge) or matching, so more than one fact/distinction must be known.
+- Prefer statement-evaluation (multiple numbered statements to judge), matching, or assertion-reason, so more than one fact/distinction must be known.
+- Test DEEP factual nuance — exceptions, specific provisions/articles/numbers, comparisons, sequence/chronology, cause-and-effect — not the headline fact.
 - Use precise, closely-competing distractors — near-correct options (adjacent articles, similar schemes, close dates/numbers, common misconceptions) that require exact knowledge to eliminate.
-- Test the finer, less-obvious edge of the fact (exceptions, specific provisions/numbers, comparisons, application), not the headline.
 - Even when the underlying fact is basic, raise the challenge through framing and distractors. Target difficulty: ${difficulty} — treat it as a FLOOR, never a ceiling.
 
 Return ONLY JSON: {"stem": string, "option_a": string, "option_b": string, "option_c": string, "option_d": string, "correct_option": "A"|"B"|"C"|"D", "explanation": string}.
-For statement/match questions, put the statements or lists inside "stem". The explanation states why the correct answer is right and briefly why each distractor is wrong.`;
+For statement/match/assertion-reason questions, put the statements, lists, or the assertion and reason inside "stem". The explanation states why the correct answer is right and briefly why each distractor is wrong.`;
 
   const user = `Real TNPSC past questions for this topic (copy their STYLE and format, not their content):
 
@@ -242,7 +244,7 @@ export function conceptFidelityPrompt(
   q: { stem: string; option_a: string; option_b: string; option_c: string; option_d: string; correct_option: string }
 ) {
   const system = `You are a strict examiner checking ONE TNPSC multiple-choice question before it enters a question bank.
-FIRST, independently solve the question yourself from scratch — determine which option is actually correct. For "which of the following statements is/are correct" questions, evaluate the truth of EACH numbered statement, then find the option whose combination matches exactly. THEN compare with the marked answer.
+FIRST, independently solve the question yourself from scratch — determine which option is actually correct. For "which of the following statements is/are correct" questions, evaluate the truth of EACH numbered statement, then find the option whose combination matches exactly. For assertion-and-reason questions, judge whether the assertion is true, whether the reason is true, and — only if both are true — whether the reason correctly explains the assertion, then pick the matching option. For match-the-following, verify each pair independently. THEN compare with the marked answer.
 Return ONLY JSON: {"answer_correct": boolean, "single_correct": boolean, "tests_concept": boolean, "your_answer": "A"|"B"|"C"|"D", "reason": string}.
 - "answer_correct": true ONLY if the marked option equals the option you independently determined to be correct.
 - "single_correct": true ONLY if exactly one option is defensibly correct (no two options both correct, no zero correct).
