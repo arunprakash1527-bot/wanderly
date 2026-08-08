@@ -158,6 +158,29 @@ async function legacyBuildPractice(
 
 // ---- Concept-based selection (spec §4) -------------------------------------
 
+// Inline generation budget. Quizzes serve the pre-generated bank instantly and
+// may top up with fresh generation, but each fresh question is a synchronous
+// generate+verify (2 Claude calls, several seconds). Without a bound a quiz over
+// a sparse scope fires dozens of sequential calls and blows past Vercel's 60s
+// function limit — the page then just spins and never renders. Cap both the
+// count and the wall-clock time so the request ALWAYS returns well under 60s;
+// any shortfall is surfaced to the caller instead of hanging. Pre-generate the
+// bank via the admin pipeline (Step 5) so top-up is rarely needed.
+const INLINE_GEN_DEADLINE_MS = Number(process.env.QUIZ_INLINE_GEN_DEADLINE_MS) || 30000;
+const MAX_INLINE_GEN = Number(process.env.QUIZ_MAX_INLINE_GEN) || 10;
+
+interface GenBudget {
+  generated: number;
+  max: number;
+  deadline: number;
+}
+function newBudget(): GenBudget {
+  return { generated: 0, max: MAX_INLINE_GEN, deadline: Date.now() + INLINE_GEN_DEADLINE_MS };
+}
+function canGenerate(b: GenBudget): boolean {
+  return b.generated < b.max && Date.now() < b.deadline;
+}
+
 interface ScopeClause {
   clause: string;
   params: (string | number)[];
@@ -203,7 +226,7 @@ async function questionForConcept(
   userId: number,
   conceptId: number,
   allowGeneration: boolean,
-  counters: { generated: number }
+  budget: GenBudget
 ): Promise<number | null> {
   // Only GENERATED questions are servable. Ingested PYQs are reference-only —
   // they ground generation but are never shown verbatim in a quiz.
@@ -224,16 +247,16 @@ async function questionForConcept(
   if (unseen) return unseen.id;
 
   if (variants.length === 0) {
-    if (!allowGeneration) return null;
+    if (!allowGeneration || !canGenerate(budget)) return null;
     const id = await generateVariantForConcept(conceptId, 1);
-    if (id) counters.generated++;
+    if (id) budget.generated++;
     return id;
   }
-  if (variants.length < 3 && allowGeneration) {
+  if (variants.length < 3 && allowGeneration && canGenerate(budget)) {
     const next = Math.max(...variants.map((v) => v.variant_number)) + 1;
     const id = await generateVariantForConcept(conceptId, next);
     if (id) {
-      counters.generated++;
+      budget.generated++;
       return id;
     }
   }
@@ -282,16 +305,16 @@ async function buildConceptQuiz(
     picked = picked.concat(rows.filter((r) => !chosen.has(r.id))).slice(0, count);
   }
 
-  const counters = { generated: 0 };
+  const budget = newBudget();
   const questionIds: number[] = [];
   for (const c of picked) {
-    const qid = await questionForConcept(userId, c.id, allowGeneration, counters);
+    const qid = await questionForConcept(userId, c.id, allowGeneration, budget);
     if (qid) questionIds.push(qid);
   }
 
   return {
     questionIds,
-    generatedCount: counters.generated,
+    generatedCount: budget.generated,
     shortfall: Math.max(0, count - questionIds.length),
   };
 }
@@ -331,7 +354,7 @@ async function buildBlueprintMock(userId: number, allowGeneration: boolean): Pro
   );
   for (const [sid, n] of aptAlloc) alloc.set(sid, (alloc.get(sid) || 0) + n);
 
-  const counters = { generated: 0 };
+  const budget = newBudget();
   const questionIds: number[] = [];
   const usedConcepts = new Set<number>();
   const latest = Number(
@@ -357,7 +380,7 @@ async function buildBlueprintMock(userId: number, allowGeneration: boolean): Pro
     for (const c of ordered) {
       if (taken >= target) break;
       if (usedConcepts.has(c.id)) continue;
-      const qid = await questionForConcept(userId, c.id, allowGeneration, counters);
+      const qid = await questionForConcept(userId, c.id, allowGeneration, budget);
       if (qid) {
         usedConcepts.add(c.id);
         questionIds.push(qid);
@@ -368,7 +391,7 @@ async function buildBlueprintMock(userId: number, allowGeneration: boolean): Pro
 
   return {
     questionIds,
-    generatedCount: counters.generated,
+    generatedCount: budget.generated,
     shortfall: Math.max(0, GS_TOTAL + APTITUDE_TOTAL - questionIds.length),
   };
 }
